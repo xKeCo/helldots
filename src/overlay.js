@@ -17,8 +17,10 @@ class CommentOverlay {
         this.toolbar = document.createElement("div");
         this.toolbar.id = "comment-toolbar";
         this.toolbar.innerHTML = `
-            <button id="toggle-comment-mode">Comment</button>
-            <span class="shortcut-hint">${this.isMac ? '⌥' : 'Alt'}+C</span>
+            <div class="toolbar-content">
+                <span class="toolbar-text">Comment</span>
+                <span class="shortcut-hint">⌥ + C</span>
+            </div>
         `;
         document.body.appendChild(this.toolbar);
 
@@ -36,13 +38,13 @@ class CommentOverlay {
         document.body.appendChild(this.commentBox);
 
         // Get references to DOM elements
-        this.toggleButton = document.getElementById("toggle-comment-mode");
+        this.toolbarContent = this.toolbar.querySelector('.toolbar-content');
         this.submitButton = document.getElementById("submit-comment");
         this.cancelButton = document.getElementById("cancel-comment");
         this.commentInput = document.getElementById("comment-input");
 
         // Event listeners - using bind to ensure 'this' context is preserved
-        this.toggleButton.addEventListener("click", this.toggleCommentMode.bind(this));
+        this.toolbarContent.addEventListener("click", this.toggleCommentMode.bind(this));
         this.submitButton.addEventListener("click", this.saveComment.bind(this));
         this.cancelButton.addEventListener("click", this.hideCommentBox.bind(this));
         
@@ -62,10 +64,6 @@ class CommentOverlay {
 
         // Inject styles
         this.injectStyles();
-        
-        // Log initialization for debugging
-        console.log("CommentOverlay initialized successfully", this);
-        console.log(`Keyboard shortcut: ${this.isMac ? 'Option' : 'Alt'}+C to toggle comment mode`);
     }
     
     setupKeyboardShortcut() {
@@ -76,17 +74,13 @@ class CommentOverlay {
         
         // Create a new handler with proper binding
         this.keydownHandler = (e) => {
-            console.log("Key pressed:", e.key, "Alt key:", e.altKey);
-            
             // Check if Alt+C is pressed (Option+C on Mac)
             if (e.altKey && (e.key === 'ç' || e.key === 'Ç')) {
-                console.log("Shortcut detected: Alt+C");
                 e.preventDefault(); // Prevent default browser behavior
                 e.stopPropagation(); // Stop event propagation
                 
                 // Toggle comment mode
                 this.toggleCommentMode();
-                console.log(`Comment mode toggled with keyboard shortcut (${this.isMac ? 'Option' : 'Alt'}+C)`);
                 
                 // Flash the button to provide visual feedback
                 this.flashButton();
@@ -97,29 +91,15 @@ class CommentOverlay {
         
         // Add the event listener
         document.addEventListener("keydown", this.keydownHandler);
-        
-        // Add a test button to the toolbar for debugging
-        const testButton = document.createElement("button");
-        testButton.id = "test-shortcut";
-        testButton.textContent = "Test Alt+C";
-        testButton.style.fontSize = "10px";
-        testButton.style.padding = "3px 6px";
-        testButton.style.background = "#7f8c8d";
-        testButton.addEventListener("click", () => {
-            console.log("Simulating Alt+C shortcut");
-            this.toggleCommentMode();
-            this.flashButton();
-        });
-        this.toolbar.appendChild(testButton);
     }
     
     flashButton() {
         // Add a flash class to the button
-        this.toggleButton.classList.add("flash");
+        this.toolbarContent.classList.add("flash");
         
         // Remove it after animation completes
         setTimeout(() => {
-            this.toggleButton.classList.remove("flash");
+            this.toolbarContent.classList.remove("flash");
         }, 300);
     }
     
@@ -142,7 +122,6 @@ class CommentOverlay {
         const x = e.pageX;
         const y = e.pageY;
         
-        console.log("Placing comment at:", x, y);
         this.showCommentBox(x, y);
     }
 
@@ -150,14 +129,12 @@ class CommentOverlay {
         this.commentMode = !this.commentMode;
         
         if (this.commentMode) {
-            this.toggleButton.classList.add("active");
+            this.toolbarContent.classList.add("active");
             document.body.classList.add("comment-cursor");
-            console.log("Comment mode activated");
         } else {
-            this.toggleButton.classList.remove("active");
+            this.toolbarContent.classList.remove("active");
             document.body.classList.remove("comment-cursor");
             this.hideCommentBox();
-            console.log("Comment mode deactivated");
         }
     }
 
@@ -215,11 +192,8 @@ class CommentOverlay {
         this.renderCommentCircle(comment);
         this.hideCommentBox();
         
-        console.log("Comment saved at position:", comment.x, comment.y);
-        
         // Turn off comment mode after saving a comment
         this.toggleCommentMode();
-        console.log("Comment mode automatically turned off after saving");
     }
 
     renderCommentCircle(comment) {
@@ -246,7 +220,7 @@ class CommentOverlay {
                 if (tooltip && !tooltip.matches(':hover')) {
                     tooltip.remove();
                 }
-            }, 300);
+            }, 250);
         });
         
         // Keep click event for mobile devices
@@ -372,10 +346,12 @@ class CommentOverlay {
             #comment-toolbar {
                 position: fixed;
                 bottom: 20px;
-                right: 20px;
-                background: #2c3e50;
-                padding: 10px;
-                border-radius: 5px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0, 0, 0, 0.8);
+                backdrop-filter: blur(8px);
+                padding: 8px 12px;
+                border-radius: 8px;
                 box-shadow: 0 2px 10px rgba(0,0,0,0.2);
                 z-index: 9998;
                 display: flex;
@@ -383,63 +359,74 @@ class CommentOverlay {
                 gap: 10px;
             }
             
-            #toggle-comment-mode {
-                background: #3498db;
+            .toolbar-content {
+                display: flex;
+                align-items: center;
+                gap: 8px;
                 color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 4px;
                 cursor: pointer;
-                font-weight: bold;
-                transition: background 0.3s;
+                padding: 4px;
+                border-radius: 6px;
+                transition: background-color 0.2s;
             }
             
-            #toggle-comment-mode:hover {
-                background: #2980b9;
+            .toolbar-content:hover {
+                background: rgba(255, 255, 255, 0.1);
             }
             
-            #toggle-comment-mode.active {
-                background: #e74c3c;
+            .toolbar-content.active {
+                background: rgba(255, 255, 255, 0.2);
             }
             
-            #toggle-comment-mode.flash {
-                animation: button-flash 0.3s ease;
-            }
-            
-            @keyframes button-flash {
-                0% { transform: scale(1); }
-                50% { transform: scale(1.1); background: #f39c12; }
-                100% { transform: scale(1); }
+            .toolbar-text {
+                font-size: 14px;
+                font-weight: 500;
             }
             
             .shortcut-hint {
-                color: #ecf0f1;
+                color: #ffffff;
                 font-size: 12px;
-                background: rgba(0,0,0,0.2);
-                padding: 3px 6px;
-                border-radius: 3px;
+                background: rgba(255, 255, 255, 0.2);
+                padding: 2px 6px;
+                border-radius: 4px;
                 white-space: nowrap;
+            }
+            
+            #toggle-comment-mode {
+                display: none;
             }
             
             #comment-box {
                 position: absolute;
-                background: white;
-                border-radius: 5px;
-                box-shadow: 0 3px 15px rgba(0,0,0,0.2);
-                padding: 10px;
+                background: #1C1C1E;
+                border-radius: 12px;
+                box-shadow: 0 3px 15px rgba(0,0,0,0.3);
+                padding: 12px;
                 z-index: 9999;
-                width: 250px;
+                width: 300px;
             }
             
             #comment-input {
                 width: 100%;
-                height: 80px;
-                border: 1px solid #ddd;
-                border-radius: 4px;p
-                padding: 8px;
+                min-height: 40px;
+                background: #2C2C2E;
+                border: none;
+                border-radius: 8px;
+                padding: 12px;
                 resize: none;
                 margin-bottom: 10px;
                 font-family: inherit;
+                color: white;
+                font-size: 14px;
+            }
+
+            #comment-input::placeholder {
+                color: rgba(255, 255, 255, 0.6);
+            }
+            
+            #comment-input:focus {
+                outline: none;
+                box-shadow: 0 0 0 2px rgba(46, 144, 250, 0.5);
             }
             
             .comment-actions {
@@ -449,29 +436,40 @@ class CommentOverlay {
             }
             
             .comment-actions button {
-                padding: 5px 12px;
+                padding: 8px 16px;
                 border: none;
-                border-radius: 4px;
+                border-radius: 8px;
                 cursor: pointer;
-                font-weight: bold;
+                font-size: 14px;
+                font-weight: 500;
+                transition: all 0.2s ease;
             }
             
             #submit-comment {
-                background: #2ecc71;
+                background: #2E90FA;
                 color: white;
+            }
+
+            #submit-comment:hover {
+                background: #1570D6;
             }
             
             #cancel-comment {
-                background: #ecf0f1;
-                color: #34495e;
+                background: #3A3A3C;
+                color: white;
+            }
+
+            #cancel-comment:hover {
+                background: #2C2C2E;
             }
             
             .comment-circle {
                 position: absolute;
-                width: 16px;
-                height: 16px;
-                background: #f39c12;
-                border-radius: 50%;
+                width: 28px;
+                height: 28px;
+                background: #2E90FA;
+                border-radius: 0% 100% 100% 100%;
+                border: 2px solid #FFF;
                 cursor: pointer;
                 z-index: 9997;
                 box-shadow: 0 1px 5px rgba(0,0,0,0.2);
@@ -482,7 +480,7 @@ class CommentOverlay {
             
             .comment-circle:hover {
                 transform: translate(-50%, -50%) scale(1.2);
-                background: #e67e22;
+                background:rgb(0, 123, 255);
             }
             
             .comment-tooltip {
@@ -534,7 +532,7 @@ class CommentOverlay {
             }
             
             .comment-cursor {
-                cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="%23f39c12" stroke="%23000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>') 12 12, auto !important;
+                cursor: url('data:image/svg+xml;utf8,<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><g filter="url(%23filter0_d_4_97)"><path d="M6 8C6 6.89543 6.89543 6 8 6H20C27.732 6 34 12.268 34 20V20C34 27.732 27.732 34 20 34V34C12.268 34 6 27.732 6 20V8Z" fill="%232E90FA"/><path d="M8 7H20C27.1797 7 33 12.8203 33 20C33 27.1797 27.1797 33 20 33C12.8203 33 7 27.1797 7 20V8C7 7.44772 7.44772 7 8 7Z" stroke="white" stroke-width="2"/></g><filter id="filter0_d_4_97" x="0" y="0" width="48" height="48" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dx="4" dy="4"/><feGaussianBlur stdDeviation="5"/><feComposite in2="hardAlpha" operator="out"/><feColorMatrix type="matrix" values="0 0 0 0 0.180392 0 0 0 0 0.564706 0 0 0 0 0.980392 0 0 0 0.16 0"/><feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_4_97"/><feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_4_97" result="shape"/></filter></svg>') 20 20, auto !important;
             }
         `;
         document.head.appendChild(style);

@@ -324,62 +324,11 @@
             </div>
         </div>
 </body>
-<script type="module">
-        // Import the CommentOverlay class
-        import CommentOverlay from "./index.js";
-
-        // Wait for DOM to be fully loaded
-        document.addEventListener('DOMContentLoaded', function() {
-            console.clear();
-            console.log('DOM fully loaded, initializing overlay...');
-            
-            // Initialize the overlay
-            const overlay = new CommentOverlay();
-            window.commentOverlay = overlay; // Make it accessible from console for debugging
-            
-            // Set up status monitoring
-            const statusElement = document.getElementById('status');
-            const debugInfo = document.getElementById('debug-info');
-            
-            // Test button for toggling comment mode
-            document.getElementById('test-toggle').addEventListener('click', function() {
-                if (overlay.toggleCommentMode) {
-                    overlay.toggleCommentMode();
-                    console.log('Comment mode toggled via test button');
-                }
-            });
-            
-            // Clear console button
-            document.getElementById('clear-console').addEventListener('click', function() {
-                console.clear();
-                console.log('Console cleared');
-            });
-            
-            // Monitor comment mode toggle
-            document.addEventListener('click', function(e) {
-                if (e.target.id === 'toggle-comment-mode') {
-                    setTimeout(() => {
-                        if (overlay.commentMode) {
-                            statusElement.textContent = 'Status: Comment mode activated';
-                            statusElement.style.background = '#e8f8e8';
-                        } else {
-                            statusElement.textContent = 'Status: Comment mode deactivated';
-                            statusElement.style.background = '#f8e8e8';
-                        }
-                    }, 10);
-                }
-            });
-            
-            // Track mouse position for debugging
-            document.addEventListener('mousemove', function(e) {
-                debugInfo.textContent = `Mouse position: ${e.pageX}, ${e.pageY}
-Comment mode: ${overlay.commentMode ? 'ON' : 'OFF'}
-Comments: ${overlay.comments ? overlay.comments.length : 0}
-Scroll: ${window.scrollX}, ${window.scrollY}`;
-            });
-            
-            // Debug info
-            console.log('Comment Overlay test page initialized');
+    <script type="module">
+        import { createCommentOverlay } from './index.js';
+        
+        const overlay = createCommentOverlay({ 
+            autoInit: true
         });
     </script>
 
