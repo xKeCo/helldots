@@ -182,12 +182,13 @@ export const getStyles = () => `
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(0, 0, 0, 0.1);
+        background: transparent;
         pointer-events: none;
         z-index: ${Z_INDEX.TOOLBAR - 1};
     }
 
     .${CLASSES.COMMENT_OVERLAY}.${CLASSES.ACTIVE} {
         pointer-events: auto;
+        background: rgba(0, 0, 0, 0.1);
     }
 `;

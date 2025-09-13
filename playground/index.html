@@ -352,5 +352,20 @@
     const overlay = createCommentOverlay({
       autoInit: true,
     });
+
+    // Add some test content to demonstrate dynamic positioning
+    console.log('Comment overlay initialized with dynamic positioning validation');
+    console.log('Press Alt + C (or ⌥ + C on Mac) to activate comment mode');
+    console.log('Click anywhere to place comments - check console for position debug info');
+    console.log('Try resizing the window to see how comments maintain their relative positions');
+
+    // Add a resize indicator for testing
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        console.log('Window resized - comment positions should be recalculated');
+      }, 100);
+    });
   </script>
 </html>
