@@ -3,6 +3,7 @@ class CommentOverlay {
         this.comments = [];
         this.commentMode = false;
         this.isMac = /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
+        this.resizeTimeout = null;
         
         // Ensure the DOM is fully loaded before initializing
         if (document.readyState === 'loading') {
@@ -61,9 +62,18 @@ class CommentOverlay {
 
         // Click event for placing comments - using mousedown for better precision
         document.addEventListener("mousedown", this.handleDocumentClick.bind(this));
+        
+        // Add resize listener to recalculate comment positions
+        window.addEventListener("resize", this.handleResize.bind(this));
+        
+        // Load any existing comments and render them
+        this.loadExistingComments();
 
         // Inject styles
         this.injectStyles();
+        
+        // Load saved comments after initialization
+        this.loadCommentsFromStorage();
     }
     
     setupKeyboardShortcut() {
@@ -124,6 +134,62 @@ class CommentOverlay {
         
         this.showCommentBox(x, y);
     }
+    
+    handleResize() {
+        // Debounce resize events for better performance
+        clearTimeout(this.resizeTimeout);
+        this.resizeTimeout = setTimeout(() => {
+            this.recalculateCommentPositions();
+        }, 250);
+    }
+    
+    recalculateCommentPositions() {
+        // Update all comment circle positions based on their relative coordinates
+        const circles = document.querySelectorAll('.comment-circle');
+        circles.forEach(circle => {
+            const commentId = circle.dataset.commentId;
+            const comment = this.comments.find(c => c.id == commentId);
+            if (comment) {
+                const newPosition = this.calculateAbsolutePosition(comment.relativeX, comment.relativeY);
+                circle.style.left = `${newPosition.x}px`;
+                circle.style.top = `${newPosition.y}px`;
+            }
+        });
+    }
+    
+    calculateRelativePosition(absoluteX, absoluteY) {
+        // Calculate relative position as percentage of document dimensions
+        const docWidth = document.documentElement.scrollWidth;
+        const docHeight = document.documentElement.scrollHeight;
+        
+        // Ensure values are between 0 and 1
+        const relativeX = Math.max(0, Math.min(1, absoluteX / docWidth));
+        const relativeY = Math.max(0, Math.min(1, absoluteY / docHeight));
+        
+        return { relativeX, relativeY };
+    }
+    
+    calculateAbsolutePosition(relativeX, relativeY) {
+        // Convert relative position back to absolute pixels
+        const docWidth = document.documentElement.scrollWidth;
+        const docHeight = document.documentElement.scrollHeight;
+        
+        const x = relativeX * docWidth;
+        const y = relativeY * docHeight;
+        
+        // Validate boundaries
+        const validatedX = Math.max(15, Math.min(docWidth - 15, x));
+        const validatedY = Math.max(15, Math.min(docHeight - 15, y));
+        
+        return { x: validatedX, y: validatedY };
+    }
+    
+    loadExistingComments() {
+        // Re-render all existing comments with correct positions
+        this.comments.forEach(comment => {
+            this.renderCommentCircle(comment);
+        });
+    }
 
     toggleCommentMode() {
         this.commentMode = !this.commentMode;
@@ -181,55 +247,156 @@ class CommentOverlay {
     saveComment() {
         if (!this.commentInput.value.trim() || !this.currentPosition) return;
 
+        // Calculate relative position for storage
+        const relativePos = this.calculateRelativePosition(
+            this.currentPosition.x, 
+            this.currentPosition.y
+        );
+        
         const comment = {
             text: this.commentInput.value,
-            x: this.currentPosition.x,
-            y: this.currentPosition.y,
-            id: Date.now() // Add unique ID for each comment
+            x: this.currentPosition.x,  // Keep absolute for immediate rendering
+            y: this.currentPosition.y,  // Keep absolute for immediate rendering
+            relativeX: relativePos.relativeX,  // Store relative for persistence
+            relativeY: relativePos.relativeY,  // Store relative for persistence
+            id: Date.now(), // Add unique ID for each comment
+            timestamp: new Date().toISOString()
         };
 
         this.comments.push(comment);
         this.renderCommentCircle(comment);
         this.hideCommentBox();
         
+        // Save to localStorage for persistence
+        this.saveCommentsToStorage();
+        
         // Turn off comment mode after saving a comment
         this.toggleCommentMode();
     }
+    
+    saveCommentsToStorage() {
+        try {
+            localStorage.setItem('helldots_comments', JSON.stringify(this.comments));
+        } catch (e) {
+            console.warn('Could not save comments to localStorage:', e);
+        }
+    }
+    
+    loadCommentsFromStorage() {
+        try {
+            const stored = localStorage.getItem('helldots_comments');
+            if (stored) {
+                const comments = JSON.parse(stored);
+                // Validate and update absolute positions based on relative ones
+                this.comments = comments.map(comment => {
+                    if (comment.relativeX !== undefined && comment.relativeY !== undefined) {
+                        const absolutePos = this.calculateAbsolutePosition(
+                            comment.relativeX,
+                            comment.relativeY
+                        );
+                        return {
+                            ...comment,
+                            x: absolutePos.x,
+                            y: absolutePos.y
+                        };
+                    }
+                    // Fallback for old comments without relative positions
+                    const relativePos = this.calculateRelativePosition(comment.x, comment.y);
+                    return {
+                        ...comment,
+                        relativeX: relativePos.relativeX,
+                        relativeY: relativePos.relativeY
+                    };
+                });
+                this.loadExistingComments();
+            }
+        } catch (e) {
+            console.warn('Could not load comments from localStorage:', e);
+        }
+    }
 
     renderCommentCircle(comment) {
-        const circle = document.createElement("div");
-        circle.className = "comment-circle";
-        circle.dataset.commentId = comment.id;
+        // Check if circle already exists (for re-rendering)
+        let circle = document.querySelector(`[data-comment-id="${comment.id}"]`);
+        if (!circle) {
+            circle = document.createElement("div");
+            circle.className = "comment-circle";
+            circle.dataset.commentId = comment.id;
+        }
         
-        // Position exactly at the click point
-        circle.style.left = `${comment.x}px`;
-        circle.style.top = `${comment.y}px`;
+        // Use absolute position if available, otherwise calculate from relative
+        let x = comment.x;
+        let y = comment.y;
+        
+        if (x === undefined || y === undefined) {
+            const absolutePos = this.calculateAbsolutePosition(
+                comment.relativeX,
+                comment.relativeY
+            );
+            x = absolutePos.x;
+            y = absolutePos.y;
+        }
+        
+        // Position exactly at the calculated point
+        circle.style.left = `${x}px`;
+        circle.style.top = `${y}px`;
         
         // Create data attributes to store the comment text
         circle.dataset.commentText = comment.text;
         
-        // Add hover events to show/hide the comment tooltip
-        circle.addEventListener("mouseenter", (e) => {
-            this.showCommentTooltip(circle, comment);
-        });
-        
-        circle.addEventListener("mouseleave", (e) => {
-            // Add a small delay to allow moving cursor to tooltip
-            setTimeout(() => {
-                const tooltip = document.querySelector(`.comment-tooltip[data-for="${comment.id}"]`);
-                if (tooltip && !tooltip.matches(':hover')) {
-                    tooltip.remove();
+        // Only add event listeners if this is a new circle
+        if (!circle.parentElement) {
+            // Add hover events to show/hide the comment tooltip
+            circle.addEventListener("mouseenter", (e) => {
+                this.showCommentTooltip(circle, comment);
+            });
+            
+            circle.addEventListener("mouseleave", (e) => {
+                // Add a small delay to allow moving cursor to tooltip
+                setTimeout(() => {
+                    const tooltip = document.querySelector(`.comment-tooltip[data-for="${comment.id}"]`);
+                    if (tooltip && !tooltip.matches(':hover')) {
+                        tooltip.remove();
+                    }
+                }, 250);
+            });
+            
+            // Keep click event for mobile devices
+            circle.addEventListener("click", (e) => {
+                e.stopPropagation();
+                this.showCommentTooltip(circle, comment);
+            });
+            
+            // Add right-click to delete
+            circle.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+                if (confirm('Delete this comment?')) {
+                    this.deleteComment(comment.id);
                 }
-            }, 250);
-        });
+            });
+            
+            document.body.appendChild(circle);
+        }
+    }
+    
+    deleteComment(commentId) {
+        // Remove from comments array
+        this.comments = this.comments.filter(c => c.id != commentId);
         
-        // Keep click event for mobile devices
-        circle.addEventListener("click", (e) => {
-            e.stopPropagation();
-            this.showCommentTooltip(circle, comment);
-        });
+        // Remove from DOM
+        const circle = document.querySelector(`[data-comment-id="${commentId}"]`);
+        if (circle) {
+            circle.remove();
+        }
         
-        document.body.appendChild(circle);
+        // Remove any open tooltip
+        const tooltip = document.querySelector(`.comment-tooltip[data-for="${commentId}"]`);
+        if (tooltip) {
+            tooltip.remove();
+        }
+        
+        // Save updated comments
+        this.saveCommentsToStorage();
     }
 
     showCommentTooltip(circle, comment) {
