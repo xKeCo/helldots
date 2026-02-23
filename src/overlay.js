@@ -289,15 +289,19 @@ class CommentOverlay {
 
     const boxWidth = 300;
     const circleBaseSize = 28;
-    const offset = circleBaseSize / 2 + 10;
+    const circleRadius = circleBaseSize / 2;
+    const offset = circleRadius + 10;
     const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;
 
-    let adjustedX = x + offset;
-    let adjustedY = y - circleBaseSize / 2;
+    const centerX = x + circleRadius;
+    const centerY = y + circleRadius;
+
+    let adjustedX = centerX + offset;
+    let adjustedY = centerY - circleRadius;
 
     if (adjustedX + boxWidth > windowWidth) {
-      adjustedX = x - offset - boxWidth;
+      adjustedX = centerX - offset - boxWidth;
     }
     adjustedX = Math.max(10, adjustedX);
 
@@ -316,6 +320,7 @@ class CommentOverlay {
 
   hideCommentBox() {
     this.commentBox.style.display = "none";
+    this.commentInput.style.height = "auto";
     this.currentPosition = null;
     this.removePreviewCircle();
     this._clearScreenshotPreview();
@@ -353,7 +358,7 @@ class CommentOverlay {
       relativeY: this.currentPosition.relativeY,
       id: Date.now(),
       replies: [],
-      author: 'Anonymous',
+      author: "Anonymous",
       createdAt: new Date().toISOString(),
       screenshot: this._pendingScreenshot || null,
     };
@@ -372,19 +377,25 @@ class CommentOverlay {
   renderCommentCircle(comment) {
     const circle = createCommentCircle(comment);
 
-    circle.addEventListener('mouseenter', () => this.showCommentTooltip(circle, comment));
-    circle.addEventListener('mouseleave', () => {
+    circle.addEventListener("mouseenter", () =>
+      this.showCommentTooltip(circle, comment)
+    );
+    circle.addEventListener("mouseleave", () => {
       setTimeout(() => {
-        const tooltip = document.querySelector(`.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`);
-        if (tooltip && !tooltip.matches(':hover')) {
+        const tooltip = document.querySelector(
+          `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
+        );
+        if (tooltip && !tooltip.matches(":hover")) {
           tooltip.remove();
         }
       }, 250);
     });
 
-    circle.addEventListener('click', (e) => {
+    circle.addEventListener("click", (e) => {
       e.stopPropagation();
-      const tooltip = document.querySelector(`.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`);
+      const tooltip = document.querySelector(
+        `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
+      );
       if (tooltip) tooltip.remove();
       this.showThreadPopover(circle, comment);
     });
@@ -591,8 +602,9 @@ class CommentOverlay {
     const circle = document.createElement("div");
     circle.className = `${CLASSES.CIRCLE} ${CLASSES.PREVIEW_CIRCLE}`;
     circle.style.position = "absolute";
-    circle.style.left = `${x}px`;
-    circle.style.top = `${y}px`;
+    const circleRadius = 14;
+    circle.style.left = `${x + circleRadius}px`;
+    circle.style.top = `${y + circleRadius}px`;
     circle.style.transform = "translate(-50%, -50%)";
     circle.style.pointerEvents = "none";
 
@@ -643,15 +655,14 @@ class CommentOverlay {
     const absoluteX = comment.relativeX * containerWidth;
     const absoluteY = comment.relativeY * containerHeight;
 
-    // Ensure position stays within container bounds with small margin for circle size
-    const circleRadius = 14; // Half of circle width (28px)
+    const circleSize = 28;
     const validatedX = Math.max(
-      circleRadius,
-      Math.min(absoluteX, containerWidth - circleRadius)
+      0,
+      Math.min(absoluteX, containerWidth - circleSize)
     );
     const validatedY = Math.max(
-      circleRadius,
-      Math.min(absoluteY, containerHeight - circleRadius)
+      0,
+      Math.min(absoluteY, containerHeight - circleSize)
     );
 
     // Recalculate relative position for future calculations
@@ -680,17 +691,18 @@ class CommentOverlay {
 
     if (!positionData) return;
 
-    // Compute viewport-based position inside the fixed overlay
-    const viewportX = positionData.containerLeft + positionData.absoluteX;
-    const viewportY = positionData.containerTop + positionData.absoluteY;
+    // Offset so the circle's top-left tip (sharp corner) aligns with the stored position
+    const circleRadius = 14;
+    const viewportX =
+      positionData.containerLeft + positionData.absoluteX + circleRadius;
+    const viewportY =
+      positionData.containerTop + positionData.absoluteY + circleRadius;
 
-    // Update the circle position using absolute positioning within overlay
     circle.style.left = `${viewportX}px`;
     circle.style.top = `${viewportY}px`;
     circle.style.transform = "translate(-50%, -50%)";
     circle.style.position = "absolute";
 
-    // Update the comment's relative position if it was adjusted
     comment.relativeX = positionData.relativeX;
     comment.relativeY = positionData.relativeY;
   }

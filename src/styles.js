@@ -57,31 +57,29 @@ export const getStyles = () => `
         box-shadow: 0 4px 20px rgba(0,0,0,0.4);
         padding: 16px;
         z-index: ${Z_INDEX.COMMENT_BOX};
-        width: 300px;
+        width: 400px;
         display: none;
         box-sizing: border-box;
     }
     
     #${IDS.COMMENT_BOX} .${CLASSES.COMMENT_INPUT_AREA} {
         display: flex;
-        align-items: flex-end;
+        align-items: center;
         gap: 8px;
     }
 
     #${IDS.COMMENT_INPUT} {
         flex: 1;
         min-height: 20px;
-        max-height: 120px;
-        background: #2C2C2E;
+        background: #1C1C1E;
         border: none;
-        border-radius: 8px;
-        padding: 8px 12px;
         resize: none;
         font-family: inherit;
         color: white;
         font-size: 14px;
         line-height: 1.4;
         box-sizing: border-box;
+        field-sizing: content;
     }
 
     #${IDS.COMMENT_INPUT}::placeholder {
@@ -90,7 +88,7 @@ export const getStyles = () => `
     
     #${IDS.COMMENT_INPUT}:focus {
         outline: none;
-        box-shadow: 0 0 0 2px rgba(46, 144, 250, 0.5);
+        box-shadow: none;
     }
     
     .${CLASSES.CIRCLE} {
@@ -268,7 +266,7 @@ export const getStyles = () => `
         border: none;
         color: #2E90FA;
         cursor: pointer;
-        padding: 6px;
+        padding: 4px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -302,7 +300,7 @@ export const getStyles = () => `
     }
 
     .${CLASSES.COMMENT_CURSOR} {
-        cursor: url('${CURSOR_SVG}') 20 20, auto !important;
+        cursor: url('${CURSOR_SVG}') 6 6, auto !important;
     }
 
     .${CLASSES.COMMENT_OVERLAY} {
