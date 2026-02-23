@@ -5,6 +5,8 @@ import {
   createCommentBox,
   createCommentCircle,
   createTooltip,
+  createThreadPopover,
+  createReplyElement,
 } from './components.js';
 
 class CommentOverlay {
@@ -48,7 +50,6 @@ class CommentOverlay {
     // Get references to DOM elements
     this.toolbarContent = this.toolbar.querySelector(`.${CLASSES.TOOLBAR_CONTENT}`);
     this.submitButton = document.getElementById(IDS.SUBMIT_COMMENT);
-    this.cancelButton = document.getElementById(IDS.CANCEL_COMMENT);
     this.commentInput = document.getElementById(IDS.COMMENT_INPUT);
 
     // Bind event listeners
@@ -61,7 +62,6 @@ class CommentOverlay {
   bindEventListeners() {
     this.toolbarContent.addEventListener('click', () => this.toggleCommentMode());
     this.submitButton.addEventListener('click', () => this.saveComment());
-    this.cancelButton.addEventListener('click', () => this.hideCommentBox());
 
     this.commentInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -81,6 +81,19 @@ class CommentOverlay {
 
     // Create a new handler with proper binding
     this.keydownHandler = (e) => {
+      if (e.key === 'Escape') {
+        if (this.activeThreadPopover) {
+          this.closeThreadPopover();
+        } else if (this.commentBox.style.display !== 'none') {
+          this.hideCommentBox();
+          this.toggleCommentMode();
+        } else if (this.commentMode) {
+          this.toggleCommentMode();
+          this.flashButton();
+        }
+        return;
+      }
+
       const isMacOptionC = this.isMac && e.altKey && (e.key === 'ç' || e.key === 'Ç');
       const isWindowsAltC = !this.isMac && e.altKey && e.key.toLowerCase() === 'c';
       const isCustomShortcut =
@@ -107,27 +120,33 @@ class CommentOverlay {
 
     if (
       this.toolbar.contains(e.target) ||
-      this.commentBox.contains(e.target) ||
       e.target.closest(`.${CLASSES.CIRCLE}`) ||
-      e.target.closest(`.${CLASSES.TOOLTIP}`)
+      e.target.closest(`.${CLASSES.TOOLTIP}`) ||
+      e.target.closest(`.${CLASSES.THREAD_POPOVER}`)
     ) {
       return;
     }
 
-    // Only prevent default for left clicks to avoid interfering with scroll
+    if (this.commentBox.contains(e.target)) {
+      return;
+    }
+
+    if (this.commentBox.style.display !== 'none') {
+      this.hideCommentBox();
+      this.toggleCommentMode();
+      return;
+    }
+
     if (e.button === 0) {
       e.preventDefault();
     }
 
-    // Determine the underlying element at the click point, even if overlay is on top
     const clientX = e.clientX;
     const clientY = e.clientY;
 
-    // Temporarily disable overlay pointer events to detect underlying element
     const prevPointerEvents = this.overlay.style.pointerEvents;
     this.overlay.style.pointerEvents = 'none';
     const underlying = document.elementFromPoint(clientX, clientY);
-    // restore
     this.overlay.style.pointerEvents = prevPointerEvents || '';
 
     const container =
@@ -135,18 +154,17 @@ class CommentOverlay {
       document.body;
     const containerRect = container.getBoundingClientRect();
 
-    // Calculate precise relative position
     const relativeX = (clientX - containerRect.left) / containerRect.width;
     const relativeY = (clientY - containerRect.top) / containerRect.height;
 
-    // Store position data
     this.currentPosition = {
       container,
       relativeX,
       relativeY,
     };
 
-    // Use viewport coordinates for comment box positioning
+    this.createPreviewCircle(clientX, clientY);
+    document.body.classList.remove(CLASSES.COMMENT_CURSOR);
     this.showCommentBox(clientX, clientY);
   }
 
@@ -154,19 +172,25 @@ class CommentOverlay {
     this.commentBox.style.display = 'block';
 
     const boxWidth = 300;
-    const boxHeight = 150;
+    const circleBaseSize = 28;
+    const offset = circleBaseSize / 2 + 10;
     const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;
 
-    // Calculate position relative to viewport (considering scroll)
-    let adjustedX = Math.min(x, windowWidth - boxWidth);
-    let adjustedY = Math.min(y, windowHeight - boxHeight);
+    let adjustedX = x + offset;
+    let adjustedY = y - circleBaseSize / 2;
 
-    // Ensure the box stays within viewport bounds
-    adjustedX = Math.max(0, adjustedX);
-    adjustedY = Math.max(0, adjustedY);
+    if (adjustedX + boxWidth > windowWidth) {
+      adjustedX = x - offset - boxWidth;
+    }
+    adjustedX = Math.max(10, adjustedX);
 
-    // Position the comment box using fixed positioning
+    const boxRect = this.commentBox.getBoundingClientRect();
+    if (adjustedY + boxRect.height > windowHeight) {
+      adjustedY = windowHeight - boxRect.height - 10;
+    }
+    adjustedY = Math.max(10, adjustedY);
+
     this.commentBox.style.left = `${adjustedX}px`;
     this.commentBox.style.top = `${adjustedY}px`;
 
@@ -177,6 +201,11 @@ class CommentOverlay {
   hideCommentBox() {
     this.commentBox.style.display = 'none';
     this.currentPosition = null;
+    this.removePreviewCircle();
+
+    if (this.commentMode) {
+      document.body.classList.add(CLASSES.COMMENT_CURSOR);
+    }
   }
 
   toggleCommentMode() {
@@ -206,18 +235,25 @@ class CommentOverlay {
       relativeX: this.currentPosition.relativeX,
       relativeY: this.currentPosition.relativeY,
       id: Date.now(),
+      replies: [],
+      author: 'Anonymous',
+      createdAt: new Date().toISOString(),
     };
 
     this.comments.push(comment);
     this.renderCommentCircle(comment);
     this.hideCommentBox();
     this.toggleCommentMode();
+
+    const circle = document.querySelector(`[data-comment-id="${comment.id}"]`);
+    if (circle) {
+      this.showThreadPopover(circle, comment);
+    }
   }
 
   renderCommentCircle(comment) {
     const circle = createCommentCircle(comment);
 
-    // Add event listeners
     circle.addEventListener('mouseenter', () => this.showCommentTooltip(circle, comment));
     circle.addEventListener('mouseleave', () => {
       setTimeout(() => {
@@ -230,7 +266,9 @@ class CommentOverlay {
 
     circle.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.showCommentTooltip(circle, comment);
+      const tooltip = document.querySelector(`.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`);
+      if (tooltip) tooltip.remove();
+      this.showThreadPopover(circle, comment);
     });
 
     // Render circle inside the fixed viewport overlay layer
@@ -250,34 +288,151 @@ class CommentOverlay {
   }
 
   showCommentTooltip(circle, comment) {
+    const existingPopover = document.querySelector(
+      `.${CLASSES.THREAD_POPOVER}[data-for="${comment.id}"]`,
+    );
+    if (existingPopover) return;
+
     const existingTooltip = document.querySelector(`.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`);
     if (existingTooltip) return;
 
-    const tooltip = createTooltip(comment, circle);
-
-    // Add tooltip to DOM first
+    const tooltip = createTooltip(comment);
     document.body.appendChild(tooltip);
 
-    // Position tooltip after a small delay to ensure circle is rendered
     setTimeout(() => {
-      const circleRect = circle.getBoundingClientRect();
-
-      // Simple positioning: place tooltip next to the circle
-      const tooltipX = circleRect.right + 10;
-      const tooltipY = circleRect.top;
-
-      // Position tooltip using fixed positioning
-      tooltip.style.left = `${tooltipX}px`;
-      tooltip.style.top = `${tooltipY}px`;
+      this.positionPopoverAtCircle(tooltip, circle);
     }, 10);
 
-    // Add close functionality
     tooltip.querySelector(`.${CLASSES.CLOSE_TOOLTIP}`).addEventListener('click', (e) => {
       e.stopPropagation();
       tooltip.remove();
     });
 
     tooltip.addEventListener('mouseleave', () => tooltip.remove());
+  }
+
+  showThreadPopover(circle, comment) {
+    this.closeThreadPopover();
+
+    const existingTooltip = document.querySelector(`.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`);
+    if (existingTooltip) existingTooltip.remove();
+
+    const popover = createThreadPopover(comment);
+    document.body.appendChild(popover);
+
+    setTimeout(() => {
+      this.positionPopoverAtCircle(popover, circle);
+    }, 10);
+
+    popover.querySelector(`.${CLASSES.CLOSE_TOOLTIP}`).addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.closeThreadPopover();
+    });
+
+    const input = popover.querySelector(`.${CLASSES.THREAD_INPUT}`);
+    const submitBtn = popover.querySelector(`.${CLASSES.THREAD_SUBMIT}`);
+
+    const submitReply = () => {
+      const text = input.value.trim();
+      if (!text) return;
+
+      const reply = this.addReply(comment, text);
+
+      const repliesContainer = popover.querySelector(`.${CLASSES.THREAD_REPLIES}`);
+      repliesContainer.appendChild(createReplyElement(reply));
+
+      input.value = '';
+      input.focus();
+    };
+
+    submitBtn.addEventListener('click', submitReply);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        submitReply();
+      }
+    });
+
+    this.activeThreadPopover = popover;
+
+    setTimeout(() => input.focus(), 50);
+
+    setTimeout(() => {
+      this._threadClickHandler = (e) => {
+        if (!popover.contains(e.target) && !circle.contains(e.target)) {
+          this.closeThreadPopover();
+        }
+      };
+      document.addEventListener('mousedown', this._threadClickHandler);
+    }, 0);
+  }
+
+  closeThreadPopover() {
+    if (this.activeThreadPopover) {
+      this.activeThreadPopover.remove();
+      this.activeThreadPopover = null;
+    }
+    if (this._threadClickHandler) {
+      document.removeEventListener('mousedown', this._threadClickHandler);
+      this._threadClickHandler = null;
+    }
+  }
+
+  addReply(comment, text) {
+    if (!comment.replies) comment.replies = [];
+    const reply = {
+      id: Date.now(),
+      text,
+      author: 'Anonymous',
+      timestamp: new Date().toISOString(),
+    };
+    comment.replies.push(reply);
+    return reply;
+  }
+
+  positionPopoverAtCircle(el, circle) {
+    const circleRect = circle.getBoundingClientRect();
+    const centerX = circleRect.left + circleRect.width / 2;
+    const centerY = circleRect.top + circleRect.height / 2;
+    const circleBaseSize = 28;
+    const offset = circleBaseSize / 2 + 10;
+
+    let x = centerX + offset;
+    let y = centerY - circleBaseSize / 2;
+
+    if (x + 400 > window.innerWidth) {
+      x = centerX - offset - 400;
+    }
+    x = Math.max(10, x);
+
+    const elRect = el.getBoundingClientRect();
+    if (y + elRect.height > window.innerHeight) {
+      y = window.innerHeight - elRect.height - 10;
+    }
+    y = Math.max(10, y);
+
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+  }
+
+  createPreviewCircle(x, y) {
+    this.removePreviewCircle();
+
+    const circle = document.createElement('div');
+    circle.className = `${CLASSES.CIRCLE} ${CLASSES.PREVIEW_CIRCLE}`;
+    circle.style.position = 'absolute';
+    circle.style.left = `${x}px`;
+    circle.style.top = `${y}px`;
+    circle.style.transform = 'translate(-50%, -50%)';
+    circle.style.pointerEvents = 'none';
+
+    this.overlay.appendChild(circle);
+    this.previewCircle = circle;
+  }
+
+  removePreviewCircle() {
+    this.previewCircle?.remove();
+    this.previewCircle = null;
   }
 
   cleanupResizeObserver(commentId) {
@@ -506,17 +661,17 @@ class CommentOverlay {
    * Cleanup method to remove all event listeners and observers
    */
   cleanup() {
-    // Remove window resize handler
+    this.closeThreadPopover();
+    this.removePreviewCircle();
+
     if (this.windowResizeHandler) {
       window.removeEventListener('resize', this.windowResizeHandler);
     }
 
-    // Remove scroll handler
     if (this.scrollHandler) {
       window.removeEventListener('scroll', this.scrollHandler, { capture: true });
     }
 
-    // Remove load handler
     if (this.loadHandler) {
       window.removeEventListener('load', this.loadHandler);
     }

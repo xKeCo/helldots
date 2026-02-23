@@ -7,12 +7,24 @@ export const CLASSES = {
     TOOLBAR_TEXT: 'toolbar-text',
     SHORTCUT_HINT: 'shortcut-hint',
     COMMENT_BOX: 'comment-box',
-    COMMENT_ACTIONS: 'comment-actions',
+    COMMENT_INPUT_AREA: 'comment-input-area',
     CLOSE_TOOLTIP: 'close-tooltip',
     ACTIVE: 'active',
     FLASH: 'flash',
     COMMENT_CURSOR: 'comment-cursor',
-    COMMENT_OVERLAY: 'comment-overlay'
+    COMMENT_OVERLAY: 'comment-overlay',
+    THREAD_POPOVER: 'comment-thread-popover',
+    THREAD_HEADER: 'thread-header',
+    THREAD_BODY: 'thread-body',
+    THREAD_REPLIES: 'thread-replies',
+    THREAD_REPLY: 'thread-reply',
+    THREAD_INPUT_AREA: 'thread-input-area',
+    THREAD_INPUT: 'thread-input',
+    THREAD_SUBMIT: 'thread-submit',
+    THREAD_META: 'thread-meta',
+    THREAD_AUTHOR: 'thread-author',
+    THREAD_TIME: 'thread-time',
+    PREVIEW_CIRCLE: 'preview-circle',
 };
 
 export const IDS = {
@@ -20,7 +32,6 @@ export const IDS = {
     COMMENT_BOX: 'comment-box',
     COMMENT_INPUT: 'comment-input',
     SUBMIT_COMMENT: 'submit-comment',
-    CANCEL_COMMENT: 'cancel-comment',
     STYLES: 'comment-overlay-styles'
 };
 
