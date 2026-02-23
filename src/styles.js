@@ -1,4 +1,4 @@
-import { CLASSES, IDS, Z_INDEX, CURSOR_SVG } from './constants.js';
+import { CLASSES, IDS, Z_INDEX, CURSOR_SVG } from "./constants.js";
 
 export const getStyles = () => `
     #${IDS.TOOLBAR} {
@@ -239,6 +239,7 @@ export const getStyles = () => `
         padding: 8px 0 0;
         border-top: 1px solid rgba(255,255,255,0.1);
         margin-top: 4px;
+        padding-top: 10px;
     }
 
     .${CLASSES.THREAD_INPUT} {
@@ -318,5 +319,128 @@ export const getStyles = () => `
     .${CLASSES.COMMENT_OVERLAY}.${CLASSES.ACTIVE} {
         pointer-events: auto;
         background: rgba(0, 0, 0, 0.1);
+    }
+
+    .${CLASSES.SELECTION_RECT} {
+        position: fixed;
+        border: 2px solid #2E90FA;
+        background: rgba(46, 144, 250, 0.1);
+        pointer-events: none;
+        z-index: ${Z_INDEX.TOOLTIP};
+        box-sizing: border-box;
+    }
+
+    .${CLASSES.SCREENSHOT_PREVIEW} {
+        position: relative;
+        margin-top: 8px;
+        display: none;
+        width: fit-content;
+    }
+
+    .${CLASSES.SCREENSHOT_PREVIEW}.${CLASSES.ACTIVE} {
+        display: block;
+    }
+
+    .${CLASSES.SCREENSHOT_PREVIEW} .${CLASSES.SCREENSHOT_IMG} {
+        width: 50px;
+        height: 50px;
+        object-fit: cover;
+        border-radius: 6px;
+        display: block;
+        cursor: pointer;
+    }
+
+    .${CLASSES.SCREENSHOT_IMG} {
+        width: 100%;
+        border-radius: 8px;
+        display: block;
+        cursor: pointer;
+        margin-top: 4px;
+        margin-bottom: 12px;
+    }
+
+    .${CLASSES.SCREENSHOT_IMG}:hover {
+        opacity: 0.85;
+    }
+
+    .${CLASSES.SCREENSHOT_REMOVE} {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 18px;
+        height: 18px;
+        background: rgba(0,0,0,0.7);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        font-size: 12px;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .${CLASSES.SCREENSHOT_REMOVE}:hover {
+        background: rgba(0,0,0,0.9);
+    }
+
+    .${CLASSES.TOOLTIP} .${CLASSES.SCREENSHOT_IMG},
+    .${CLASSES.THREAD_POPOVER} .${CLASSES.SCREENSHOT_IMG} {
+        width: 144px;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 8px;
+        margin-top: 4px;
+        cursor: pointer;
+        display: block;
+    }
+
+    .${CLASSES.LIGHTBOX} {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.92);
+        z-index: ${Z_INDEX.LIGHTBOX};
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: helldots-fade-in 0.2s ease;
+    }
+
+    @keyframes helldots-fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .${CLASSES.LIGHTBOX_IMG} {
+        max-width: 90vw;
+        max-height: 90vh;
+        object-fit: contain;
+        border-radius: 8px;
+    }
+
+    .${CLASSES.LIGHTBOX_CLOSE} {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        background: rgba(255,255,255,0.15);
+        border: none;
+        color: white;
+        font-size: 24px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+    }
+
+    .${CLASSES.LIGHTBOX_CLOSE}:hover {
+        background: rgba(255,255,255,0.3);
     }
 `;

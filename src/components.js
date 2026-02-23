@@ -78,14 +78,31 @@ export const createToolbar = (options = {}) => {
 export const createCommentBox = () => {
   const commentBox = document.createElement('div');
   commentBox.id = IDS.COMMENT_BOX;
-  commentBox.innerHTML = `
-        <div class="${CLASSES.COMMENT_INPUT_AREA}">
-            <textarea id="${IDS.COMMENT_INPUT}" placeholder="Type your comment..." rows="1"></textarea>
-            <button id="${IDS.SUBMIT_COMMENT}" class="${CLASSES.THREAD_SUBMIT}">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2"/></svg>
-            </button>
-        </div>
+
+  const screenshotPreview = document.createElement('div');
+  screenshotPreview.className = CLASSES.SCREENSHOT_PREVIEW;
+
+  const screenshotImg = document.createElement('img');
+  screenshotImg.className = CLASSES.SCREENSHOT_IMG;
+
+  const screenshotRemove = document.createElement('button');
+  screenshotRemove.className = CLASSES.SCREENSHOT_REMOVE;
+  screenshotRemove.innerHTML = '&times;';
+
+  screenshotPreview.appendChild(screenshotImg);
+  screenshotPreview.appendChild(screenshotRemove);
+
+  const inputArea = document.createElement('div');
+  inputArea.className = CLASSES.COMMENT_INPUT_AREA;
+  inputArea.innerHTML = `
+        <textarea id="${IDS.COMMENT_INPUT}" placeholder="Type your comment..." rows="1"></textarea>
+        <button id="${IDS.SUBMIT_COMMENT}" class="${CLASSES.THREAD_SUBMIT}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2"/></svg>
+        </button>
     `;
+
+  commentBox.appendChild(inputArea);
+  commentBox.appendChild(screenshotPreview);
   commentBox.style.display = 'none';
   return commentBox;
 };
@@ -127,6 +144,12 @@ export const createTooltip = (comment) => {
 
   tooltip.appendChild(header);
   tooltip.appendChild(body);
+  if (comment.screenshot) {
+    const img = document.createElement('img');
+    img.className = CLASSES.SCREENSHOT_IMG;
+    img.src = comment.screenshot;
+    tooltip.appendChild(img);
+  }
   return tooltip;
 };
 
@@ -189,6 +212,12 @@ export const createThreadPopover = (comment) => {
 
   popover.appendChild(header);
   popover.appendChild(body);
+  if (comment.screenshot) {
+    const img = document.createElement('img');
+    img.className = CLASSES.SCREENSHOT_IMG;
+    img.src = comment.screenshot;
+    popover.appendChild(img);
+  }
   popover.appendChild(replies);
   popover.appendChild(inputArea);
 

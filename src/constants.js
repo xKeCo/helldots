@@ -25,6 +25,13 @@ export const CLASSES = {
     THREAD_AUTHOR: 'thread-author',
     THREAD_TIME: 'thread-time',
     PREVIEW_CIRCLE: 'preview-circle',
+    SELECTION_RECT: 'selection-rect',
+    SCREENSHOT_PREVIEW: 'screenshot-preview',
+    SCREENSHOT_IMG: 'screenshot-img',
+    SCREENSHOT_REMOVE: 'screenshot-remove',
+    LIGHTBOX: 'helldots-lightbox',
+    LIGHTBOX_IMG: 'helldots-lightbox-img',
+    LIGHTBOX_CLOSE: 'helldots-lightbox-close',
 };
 
 export const IDS = {
@@ -43,7 +50,8 @@ export const Z_INDEX = {
     CIRCLE: 9997,
     TOOLTIP: 10000,
     TOOLBAR: 9998,
-    COMMENT_BOX: 9999
+    COMMENT_BOX: 9999,
+    LIGHTBOX: 10001
 };
 
 export const CURSOR_SVG = `data:image/svg+xml;utf8,<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><g filter="url(%23filter0_d_4_97)"><path d="M6 8C6 6.89543 6.89543 6 8 6H20C27.732 6 34 12.268 34 20V20C34 27.732 27.732 34 20 34V34C12.268 34 6 27.732 6 20V8Z" fill="%232E90FA"/><path d="M8 7H20C27.1797 7 33 12.8203 33 20C33 27.1797 27.1797 33 20 33C12.8203 33 7 27.1797 7 20V8C7 7.44772 7.44772 7 8 7Z" stroke="white" stroke-width="2"/></g><filter id="filter0_d_4_97" x="0" y="0" width="48" height="48" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dx="4" dy="4"/><feGaussianBlur stdDeviation="5"/><feComposite in2="hardAlpha" operator="out"/><feColorMatrix type="matrix" values="0 0 0 0 0.180392 0 0 0 0 0.564706 0 0 0 0 0.980392 0 0 0 0.16 0"/><feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_4_97"/><feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_4_97" result="shape"/></filter></svg>`; 

@@ -1,5 +1,6 @@
-import { CLASSES, IDS, SELECTORS } from './constants.js';
-import { getStyles } from './styles.js';
+import html2canvas from "html2canvas";
+import { CLASSES, IDS, SELECTORS } from "./constants.js";
+import { getStyles } from "./styles.js";
 import {
   createToolbar,
   createCommentBox,
@@ -7,7 +8,7 @@ import {
   createTooltip,
   createThreadPopover,
   createReplyElement,
-} from './components.js';
+} from "./components.js";
 
 class CommentOverlay {
   constructor(options = {}) {
@@ -15,8 +16,8 @@ class CommentOverlay {
     this.commentMode = false;
     this.isMac = /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
     this.options = {
-      shortcutKey: options.shortcutKey || (this.isMac ? 'c' : 'C'),
-      shortcutModifier: options.shortcutModifier || 'alt',
+      shortcutKey: options.shortcutKey || (this.isMac ? "c" : "C"),
+      shortcutModifier: options.shortcutModifier || "alt",
       ...options,
     };
 
@@ -29,8 +30,8 @@ class CommentOverlay {
     // rAF scheduling flag for bulk updates
     this._pendingRaf = null;
 
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => this.initOverlay());
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => this.initOverlay());
     } else {
       this.initOverlay();
     }
@@ -40,7 +41,7 @@ class CommentOverlay {
     // Create and append UI elements
     this.toolbar = createToolbar(this.options);
     this.commentBox = createCommentBox();
-    this.overlay = document.createElement('div');
+    this.overlay = document.createElement("div");
     this.overlay.className = CLASSES.COMMENT_OVERLAY;
 
     document.body.appendChild(this.overlay);
@@ -48,7 +49,9 @@ class CommentOverlay {
     document.body.appendChild(this.commentBox);
 
     // Get references to DOM elements
-    this.toolbarContent = this.toolbar.querySelector(`.${CLASSES.TOOLBAR_CONTENT}`);
+    this.toolbarContent = this.toolbar.querySelector(
+      `.${CLASSES.TOOLBAR_CONTENT}`
+    );
     this.submitButton = document.getElementById(IDS.SUBMIT_COMMENT);
     this.commentInput = document.getElementById(IDS.COMMENT_INPUT);
 
@@ -60,31 +63,35 @@ class CommentOverlay {
   }
 
   bindEventListeners() {
-    this.toolbarContent.addEventListener('click', () => this.toggleCommentMode());
-    this.submitButton.addEventListener('click', () => this.saveComment());
+    this.toolbarContent.addEventListener("click", () =>
+      this.toggleCommentMode()
+    );
+    this.submitButton.addEventListener("click", () => this.saveComment());
 
-    this.commentInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+    this.commentInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         this.saveComment();
       }
     });
 
-    document.addEventListener('mousedown', (e) => this.handleDocumentClick(e));
+    document.addEventListener("mousedown", (e) => this.handleDocumentClick(e));
   }
 
   setupKeyboardShortcut() {
     // Remove any existing event listeners
     if (this.keydownHandler) {
-      document.removeEventListener('keydown', this.keydownHandler);
+      document.removeEventListener("keydown", this.keydownHandler);
     }
 
     // Create a new handler with proper binding
     this.keydownHandler = (e) => {
-      if (e.key === 'Escape') {
-        if (this.activeThreadPopover) {
+      if (e.key === "Escape") {
+        if (this._activeLightbox) {
+          this.closeLightbox();
+        } else if (this.activeThreadPopover) {
           this.closeThreadPopover();
-        } else if (this.commentBox.style.display !== 'none') {
+        } else if (this.commentBox.style.display !== "none") {
           this.hideCommentBox();
           this.toggleCommentMode();
         } else if (this.commentMode) {
@@ -94,13 +101,16 @@ class CommentOverlay {
         return;
       }
 
-      const isMacOptionC = this.isMac && e.altKey && (e.key === 'ç' || e.key === 'Ç');
-      const isWindowsAltC = !this.isMac && e.altKey && e.key.toLowerCase() === 'c';
+      const isMacOptionC =
+        this.isMac && e.altKey && (e.key === "ç" || e.key === "Ç");
+      const isWindowsAltC =
+        !this.isMac && e.altKey && e.key.toLowerCase() === "c";
       const isCustomShortcut =
         e.key.toLowerCase() === this.options.shortcutKey.toLowerCase() &&
-        ((this.options.shortcutModifier === 'alt' && e.altKey) ||
-          (this.options.shortcutModifier === 'ctrl' && (e.ctrlKey || e.metaKey)) ||
-          (this.options.shortcutModifier === 'shift' && e.shiftKey));
+        ((this.options.shortcutModifier === "alt" && e.altKey) ||
+          (this.options.shortcutModifier === "ctrl" &&
+            (e.ctrlKey || e.metaKey)) ||
+          (this.options.shortcutModifier === "shift" && e.shiftKey));
 
       if (isMacOptionC || isWindowsAltC || isCustomShortcut) {
         e.preventDefault();
@@ -112,7 +122,7 @@ class CommentOverlay {
     };
 
     // Add the event listener
-    document.addEventListener('keydown', this.keydownHandler);
+    document.addEventListener("keydown", this.keydownHandler);
   }
 
   handleDocumentClick(e) {
@@ -122,7 +132,8 @@ class CommentOverlay {
       this.toolbar.contains(e.target) ||
       e.target.closest(`.${CLASSES.CIRCLE}`) ||
       e.target.closest(`.${CLASSES.TOOLTIP}`) ||
-      e.target.closest(`.${CLASSES.THREAD_POPOVER}`)
+      e.target.closest(`.${CLASSES.THREAD_POPOVER}`) ||
+      e.target.closest(`.${CLASSES.LIGHTBOX}`)
     ) {
       return;
     }
@@ -131,27 +142,98 @@ class CommentOverlay {
       return;
     }
 
-    if (this.commentBox.style.display !== 'none') {
+    if (this.commentBox.style.display !== "none") {
       this.hideCommentBox();
       this.toggleCommentMode();
       return;
     }
 
-    if (e.button === 0) {
-      e.preventDefault();
+    if (e.button !== 0) return;
+    e.preventDefault();
+
+    this._dragStart = { x: e.clientX, y: e.clientY };
+    this._isDragging = false;
+
+    this._boundDragMove = (ev) => this._onDragMove(ev);
+    this._boundDragEnd = (ev) => this._onDragEnd(ev);
+    document.addEventListener("mousemove", this._boundDragMove);
+    document.addEventListener("mouseup", this._boundDragEnd);
+  }
+
+  _onDragMove(e) {
+    const dx = e.clientX - this._dragStart.x;
+    const dy = e.clientY - this._dragStart.y;
+
+    if (!this._isDragging && Math.hypot(dx, dy) < 5) return;
+
+    this._isDragging = true;
+
+    const left = Math.min(this._dragStart.x, e.clientX);
+    const top = Math.min(this._dragStart.y, e.clientY);
+    const width = Math.abs(dx);
+    const height = Math.abs(dy);
+
+    if (!this._selectionRect) {
+      this._selectionRect = document.createElement("div");
+      this._selectionRect.className = CLASSES.SELECTION_RECT;
+      document.body.appendChild(this._selectionRect);
     }
 
-    const clientX = e.clientX;
-    const clientY = e.clientY;
+    this._selectionRect.style.left = `${left}px`;
+    this._selectionRect.style.top = `${top}px`;
+    this._selectionRect.style.width = `${width}px`;
+    this._selectionRect.style.height = `${height}px`;
+  }
 
+  async _onDragEnd(e) {
+    document.removeEventListener("mousemove", this._boundDragMove);
+    document.removeEventListener("mouseup", this._boundDragEnd);
+
+    if (this._isDragging) {
+      const left = Math.min(this._dragStart.x, e.clientX);
+      const top = Math.min(this._dragStart.y, e.clientY);
+      const width = Math.abs(e.clientX - this._dragStart.x);
+      const height = Math.abs(e.clientY - this._dragStart.y);
+
+      this._selectionRect?.remove();
+      this._selectionRect = null;
+
+      if (width > 10 && height > 10) {
+        this.overlay.style.display = "none";
+        try {
+          const canvas = await html2canvas(document.body, {
+            x: left + window.scrollX,
+            y: top + window.scrollY,
+            width,
+            height,
+            windowWidth: document.documentElement.scrollWidth,
+            windowHeight: document.documentElement.scrollHeight,
+          });
+          this._pendingScreenshot = canvas.toDataURL("image/png");
+        } catch (err) {
+          console.warn("Screenshot capture failed:", err);
+          this._pendingScreenshot = null;
+        }
+        this.overlay.style.display = "";
+      }
+
+      this._placeCommentAtPoint(e.clientX, e.clientY);
+    } else {
+      this._placeCommentAtPoint(this._dragStart.x, this._dragStart.y);
+    }
+
+    this._isDragging = false;
+    this._dragStart = null;
+  }
+
+  _placeCommentAtPoint(clientX, clientY) {
     const prevPointerEvents = this.overlay.style.pointerEvents;
-    this.overlay.style.pointerEvents = 'none';
+    this.overlay.style.pointerEvents = "none";
     const underlying = document.elementFromPoint(clientX, clientY);
-    this.overlay.style.pointerEvents = prevPointerEvents || '';
+    this.overlay.style.pointerEvents = prevPointerEvents || "";
 
     const container =
-      (underlying && underlying.closest && underlying.closest(SELECTORS.CONTAINER)) ||
-      document.body;
+      underlying?.closest?.(SELECTORS.CONTAINER) || document.body;
     const containerRect = container.getBoundingClientRect();
 
     const relativeX = (clientX - containerRect.left) / containerRect.width;
@@ -165,11 +247,45 @@ class CommentOverlay {
 
     this.createPreviewCircle(clientX, clientY);
     document.body.classList.remove(CLASSES.COMMENT_CURSOR);
+
+    if (this._pendingScreenshot) {
+      this._showScreenshotInCommentBox(this._pendingScreenshot);
+    }
+
     this.showCommentBox(clientX, clientY);
   }
 
+  _showScreenshotInCommentBox(dataUrl) {
+    const preview = this.commentBox.querySelector(
+      `.${CLASSES.SCREENSHOT_PREVIEW}`
+    );
+    const img = preview.querySelector(`.${CLASSES.SCREENSHOT_IMG}`);
+    const removeBtn = preview.querySelector(`.${CLASSES.SCREENSHOT_REMOVE}`);
+
+    img.src = dataUrl;
+    preview.classList.add(CLASSES.ACTIVE);
+
+    img.onclick = () => this.showLightbox(dataUrl);
+
+    removeBtn.onclick = (e) => {
+      e.stopPropagation();
+      this._pendingScreenshot = null;
+      preview.classList.remove(CLASSES.ACTIVE);
+    };
+  }
+
+  _clearScreenshotPreview() {
+    this._pendingScreenshot = null;
+    const preview = this.commentBox.querySelector(
+      `.${CLASSES.SCREENSHOT_PREVIEW}`
+    );
+    if (preview) {
+      preview.classList.remove(CLASSES.ACTIVE);
+    }
+  }
+
   showCommentBox(x, y) {
-    this.commentBox.style.display = 'block';
+    this.commentBox.style.display = "block";
 
     const boxWidth = 300;
     const circleBaseSize = 28;
@@ -194,14 +310,15 @@ class CommentOverlay {
     this.commentBox.style.left = `${adjustedX}px`;
     this.commentBox.style.top = `${adjustedY}px`;
 
-    this.commentInput.value = '';
+    this.commentInput.value = "";
     setTimeout(() => this.commentInput.focus(), 50);
   }
 
   hideCommentBox() {
-    this.commentBox.style.display = 'none';
+    this.commentBox.style.display = "none";
     this.currentPosition = null;
     this.removePreviewCircle();
+    this._clearScreenshotPreview();
 
     if (this.commentMode) {
       document.body.classList.add(CLASSES.COMMENT_CURSOR);
@@ -238,6 +355,7 @@ class CommentOverlay {
       replies: [],
       author: 'Anonymous',
       createdAt: new Date().toISOString(),
+      screenshot: this._pendingScreenshot || null,
     };
 
     this.comments.push(comment);
@@ -271,63 +389,82 @@ class CommentOverlay {
       this.showThreadPopover(circle, comment);
     });
 
-    // Render circle inside the fixed viewport overlay layer
     this.overlay.appendChild(circle);
-
-    // Update position using validation system
     this.updateCommentPosition(comment, circle);
 
-    // Debug position for development
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      setTimeout(() => this.debugPosition(comment, circle), 100);
-    }
-
-    // Create observers for dynamic position updates
     this.createResizeObserver(comment, circle);
     this.createMutationObserver(comment, circle);
   }
 
   showCommentTooltip(circle, comment) {
     const existingPopover = document.querySelector(
-      `.${CLASSES.THREAD_POPOVER}[data-for="${comment.id}"]`,
+      `.${CLASSES.THREAD_POPOVER}[data-for="${comment.id}"]`
     );
     if (existingPopover) return;
 
-    const existingTooltip = document.querySelector(`.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`);
+    const existingTooltip = document.querySelector(
+      `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
+    );
     if (existingTooltip) return;
 
     const tooltip = createTooltip(comment);
     document.body.appendChild(tooltip);
 
+    const tooltipScreenshot = tooltip.querySelector(
+      `.${CLASSES.SCREENSHOT_IMG}`
+    );
+    if (tooltipScreenshot) {
+      tooltipScreenshot.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.showLightbox(comment.screenshot);
+      });
+    }
+
     setTimeout(() => {
       this.positionPopoverAtCircle(tooltip, circle);
     }, 10);
 
-    tooltip.querySelector(`.${CLASSES.CLOSE_TOOLTIP}`).addEventListener('click', (e) => {
-      e.stopPropagation();
-      tooltip.remove();
-    });
+    tooltip
+      .querySelector(`.${CLASSES.CLOSE_TOOLTIP}`)
+      .addEventListener("click", (e) => {
+        e.stopPropagation();
+        tooltip.remove();
+      });
 
-    tooltip.addEventListener('mouseleave', () => tooltip.remove());
+    tooltip.addEventListener("mouseleave", () => tooltip.remove());
   }
 
   showThreadPopover(circle, comment) {
     this.closeThreadPopover();
 
-    const existingTooltip = document.querySelector(`.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`);
+    const existingTooltip = document.querySelector(
+      `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
+    );
     if (existingTooltip) existingTooltip.remove();
 
     const popover = createThreadPopover(comment);
     document.body.appendChild(popover);
 
+    const popoverScreenshot = popover.querySelector(
+      `.${CLASSES.SCREENSHOT_IMG}`
+    );
+    if (popoverScreenshot) {
+      popoverScreenshot.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.showLightbox(comment.screenshot);
+      });
+    }
+
     setTimeout(() => {
       this.positionPopoverAtCircle(popover, circle);
     }, 10);
 
-    popover.querySelector(`.${CLASSES.CLOSE_TOOLTIP}`).addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.closeThreadPopover();
-    });
+    popover
+      .querySelector(`.${CLASSES.CLOSE_TOOLTIP}`)
+      .addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.closeThreadPopover();
+      });
 
     const input = popover.querySelector(`.${CLASSES.THREAD_INPUT}`);
     const submitBtn = popover.querySelector(`.${CLASSES.THREAD_SUBMIT}`);
@@ -338,16 +475,18 @@ class CommentOverlay {
 
       const reply = this.addReply(comment, text);
 
-      const repliesContainer = popover.querySelector(`.${CLASSES.THREAD_REPLIES}`);
+      const repliesContainer = popover.querySelector(
+        `.${CLASSES.THREAD_REPLIES}`
+      );
       repliesContainer.appendChild(createReplyElement(reply));
 
-      input.value = '';
+      input.value = "";
       input.focus();
     };
 
-    submitBtn.addEventListener('click', submitReply);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+    submitBtn.addEventListener("click", submitReply);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         submitReply();
       }
@@ -363,7 +502,7 @@ class CommentOverlay {
           this.closeThreadPopover();
         }
       };
-      document.addEventListener('mousedown', this._threadClickHandler);
+      document.addEventListener("mousedown", this._threadClickHandler);
     }, 0);
   }
 
@@ -373,9 +512,40 @@ class CommentOverlay {
       this.activeThreadPopover = null;
     }
     if (this._threadClickHandler) {
-      document.removeEventListener('mousedown', this._threadClickHandler);
+      document.removeEventListener("mousedown", this._threadClickHandler);
       this._threadClickHandler = null;
     }
+  }
+
+  showLightbox(imageSrc) {
+    this.closeLightbox();
+
+    const lightbox = document.createElement("div");
+    lightbox.className = CLASSES.LIGHTBOX;
+
+    const img = document.createElement("img");
+    img.className = CLASSES.LIGHTBOX_IMG;
+    img.src = imageSrc;
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = CLASSES.LIGHTBOX_CLOSE;
+    closeBtn.innerHTML = "&times;";
+    closeBtn.addEventListener("click", () => this.closeLightbox());
+
+    lightbox.appendChild(img);
+    lightbox.appendChild(closeBtn);
+
+    lightbox.addEventListener("click", (e) => {
+      if (e.target === lightbox) this.closeLightbox();
+    });
+
+    document.body.appendChild(lightbox);
+    this._activeLightbox = lightbox;
+  }
+
+  closeLightbox() {
+    this._activeLightbox?.remove();
+    this._activeLightbox = null;
   }
 
   addReply(comment, text) {
@@ -383,7 +553,7 @@ class CommentOverlay {
     const reply = {
       id: Date.now(),
       text,
-      author: 'Anonymous',
+      author: "Anonymous",
       timestamp: new Date().toISOString(),
     };
     comment.replies.push(reply);
@@ -418,13 +588,13 @@ class CommentOverlay {
   createPreviewCircle(x, y) {
     this.removePreviewCircle();
 
-    const circle = document.createElement('div');
+    const circle = document.createElement("div");
     circle.className = `${CLASSES.CIRCLE} ${CLASSES.PREVIEW_CIRCLE}`;
-    circle.style.position = 'absolute';
+    circle.style.position = "absolute";
     circle.style.left = `${x}px`;
     circle.style.top = `${y}px`;
-    circle.style.transform = 'translate(-50%, -50%)';
-    circle.style.pointerEvents = 'none';
+    circle.style.transform = "translate(-50%, -50%)";
+    circle.style.pointerEvents = "none";
 
     this.overlay.appendChild(circle);
     this.previewCircle = circle;
@@ -463,7 +633,9 @@ class CommentOverlay {
 
     // Validate that container has valid dimensions
     if (containerWidth <= 0 || containerHeight <= 0) {
-      console.warn('Container has invalid dimensions, skipping position calculation');
+      console.warn(
+        "Container has invalid dimensions, skipping position calculation"
+      );
       return null;
     }
 
@@ -473,8 +645,14 @@ class CommentOverlay {
 
     // Ensure position stays within container bounds with small margin for circle size
     const circleRadius = 14; // Half of circle width (28px)
-    const validatedX = Math.max(circleRadius, Math.min(absoluteX, containerWidth - circleRadius));
-    const validatedY = Math.max(circleRadius, Math.min(absoluteY, containerHeight - circleRadius));
+    const validatedX = Math.max(
+      circleRadius,
+      Math.min(absoluteX, containerWidth - circleRadius)
+    );
+    const validatedY = Math.max(
+      circleRadius,
+      Math.min(absoluteY, containerHeight - circleRadius)
+    );
 
     // Recalculate relative position for future calculations
     const validatedRelativeX = validatedX / containerWidth;
@@ -509,8 +687,8 @@ class CommentOverlay {
     // Update the circle position using absolute positioning within overlay
     circle.style.left = `${viewportX}px`;
     circle.style.top = `${viewportY}px`;
-    circle.style.transform = 'translate(-50%, -50%)';
-    circle.style.position = 'absolute';
+    circle.style.transform = "translate(-50%, -50%)";
+    circle.style.position = "absolute";
 
     // Update the comment's relative position if it was adjusted
     comment.relativeX = positionData.relativeX;
@@ -528,7 +706,9 @@ class CommentOverlay {
         this._pendingRaf = null;
         if (!this.positionValidationEnabled) return;
         this.comments.forEach((comment) => {
-          const circle = document.querySelector(`[data-comment-id="${comment.id}"]`);
+          const circle = document.querySelector(
+            `[data-comment-id="${comment.id}"]`
+          );
           if (circle) this.updateCommentPosition(comment, circle);
         });
       });
@@ -538,19 +718,24 @@ class CommentOverlay {
     this.windowResizeHandler = () => {
       this.scheduleUpdatePositions();
     };
-    window.addEventListener('resize', this.windowResizeHandler, { passive: true });
+    window.addEventListener("resize", this.windowResizeHandler, {
+      passive: true,
+    });
 
     // Capture scroll on any scrolling ancestor
     this.scrollHandler = () => {
       this.scheduleUpdatePositions();
     };
-    window.addEventListener('scroll', this.scrollHandler, { capture: true, passive: true });
+    window.addEventListener("scroll", this.scrollHandler, {
+      capture: true,
+      passive: true,
+    });
 
     // Update after resources load (images, fonts)
     this.loadHandler = () => {
       this.scheduleUpdatePositions();
     };
-    window.addEventListener('load', this.loadHandler);
+    window.addEventListener("load", this.loadHandler);
   }
 
   /**
@@ -568,7 +753,7 @@ class CommentOverlay {
     const expectedX = comment.relativeX * containerRect.width;
     const expectedY = comment.relativeY * containerRect.height;
 
-    console.log('Position Debug:', {
+    console.log("Position Debug:", {
       commentId: comment.id,
       relativePosition: { x: comment.relativeX, y: comment.relativeY },
       containerRect: {
@@ -588,8 +773,14 @@ class CommentOverlay {
         y: expectedY,
       },
       offset: {
-        x: circleRect.left + circleRect.width / 2 - (containerRect.left + expectedX),
-        y: circleRect.top + circleRect.height / 2 - (containerRect.top + expectedY),
+        x:
+          circleRect.left +
+          circleRect.width / 2 -
+          (containerRect.left + expectedX),
+        y:
+          circleRect.top +
+          circleRect.height / 2 -
+          (containerRect.top + expectedY),
       },
     });
   }
@@ -601,7 +792,9 @@ class CommentOverlay {
    */
   createResizeObserver(comment, circle) {
     if (!window.ResizeObserver) {
-      console.warn('ResizeObserver not supported, position validation will be limited');
+      console.warn(
+        "ResizeObserver not supported, position validation will be limited"
+      );
       return;
     }
 
@@ -662,18 +855,23 @@ class CommentOverlay {
    */
   cleanup() {
     this.closeThreadPopover();
+    this.closeLightbox();
     this.removePreviewCircle();
+    this._selectionRect?.remove();
+    this._pendingScreenshot = null;
 
     if (this.windowResizeHandler) {
-      window.removeEventListener('resize', this.windowResizeHandler);
+      window.removeEventListener("resize", this.windowResizeHandler);
     }
 
     if (this.scrollHandler) {
-      window.removeEventListener('scroll', this.scrollHandler, { capture: true });
+      window.removeEventListener("scroll", this.scrollHandler, {
+        capture: true,
+      });
     }
 
     if (this.loadHandler) {
-      window.removeEventListener('load', this.loadHandler);
+      window.removeEventListener("load", this.loadHandler);
     }
 
     // Cleanup all resize observers
@@ -698,7 +896,7 @@ class CommentOverlay {
 
     // Remove keyboard shortcut handler
     if (this.keydownHandler) {
-      document.removeEventListener('keydown', this.keydownHandler);
+      document.removeEventListener("keydown", this.keydownHandler);
     }
 
     // Remove DOM elements
@@ -714,7 +912,9 @@ class CommentOverlay {
 
     // Remove all comment circles
     this.comments.forEach((comment) => {
-      const circle = document.querySelector(`[data-comment-id="${comment.id}"]`);
+      const circle = document.querySelector(
+        `[data-comment-id="${comment.id}"]`
+      );
       if (circle && circle.parentNode) {
         circle.parentNode.removeChild(circle);
       }
@@ -727,7 +927,7 @@ class CommentOverlay {
       existingStyle.remove();
     }
 
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.id = IDS.STYLES;
     style.textContent = getStyles();
     document.head.appendChild(style);

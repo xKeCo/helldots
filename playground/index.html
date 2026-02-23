@@ -19,6 +19,14 @@
     <meta property="og:site_name" content="" />
     <meta property="og:type" content="product" />
     <meta property="og:image" content="" />
+    <!-- DEV ONLY: resolves bare specifiers for the bundler-free playground -->
+    <script type="importmap">
+      {
+        "imports": {
+          "html2canvas": "https://esm.sh/html2canvas@1.4.1"
+        }
+      }
+    </script>
   </head>
 
   <body>

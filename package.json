@@ -1,13 +1,28 @@
 {
   "name": "helldots",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Comment overlay library for web applications",
+  "main": "src/index.js",
+  "module": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src/"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "dependencies": {
+    "html2canvas": "^1.4.1"
+  }
 }
