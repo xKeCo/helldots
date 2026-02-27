@@ -46,17 +46,12 @@ const createMetaElement = (author, createdAt) => {
   authorEl.className = CLASSES.THREAD_AUTHOR;
   authorEl.textContent = author || "Anonymous";
 
-  const separator = document.createElement("span");
-  separator.textContent = "·";
-  separator.style.color = "rgba(255,255,255,0.3)";
-
   const timeEl = document.createElement("span");
   timeEl.className = CLASSES.THREAD_TIME;
   timeEl.textContent = formatRelativeTime(createdAt);
   timeEl.dataset.fullDate = formatFullDate(createdAt);
 
   meta.appendChild(authorEl);
-  meta.appendChild(separator);
   meta.appendChild(timeEl);
 
   return meta;
@@ -74,6 +69,84 @@ const getShortcutText = (options) => {
   const key = options.shortcutKey?.toUpperCase() || "C";
 
   return `${modifier} + ${key}`;
+};
+
+const ATTACH_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+
+const SEND_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2"/></svg>`;
+
+/**
+ * Shared input area component used by both the comment box and the thread popover.
+ * Returns the container element and references to key child elements.
+ */
+const createInputArea = ({
+  areaClassName,
+  inputTag = "textarea",
+  inputClassName,
+  inputId,
+  inputPlaceholder,
+  submitBtnId,
+  fileInputId,
+}) => {
+  const container = document.createElement("div");
+  container.className = areaClassName;
+
+  const inputEl = document.createElement(inputTag);
+  if (inputId) inputEl.id = inputId;
+  if (inputClassName) inputEl.className = inputClassName;
+  inputEl.placeholder = inputPlaceholder;
+  if (inputTag === "input") inputEl.type = "text";
+
+  const screenshotPreview = document.createElement("div");
+  screenshotPreview.className = CLASSES.SCREENSHOT_PREVIEW;
+
+  const screenshotImg = document.createElement("img");
+  screenshotImg.className = CLASSES.SCREENSHOT_IMG;
+
+  const screenshotRemove = document.createElement("button");
+  screenshotRemove.className = CLASSES.SCREENSHOT_REMOVE;
+  screenshotRemove.innerHTML = "&times;";
+
+  screenshotPreview.appendChild(screenshotImg);
+  screenshotPreview.appendChild(screenshotRemove);
+
+  const actionsBar = document.createElement("div");
+  actionsBar.className = CLASSES.COMMENT_ACTIONS_BAR;
+
+  const attachBtn = document.createElement("button");
+  attachBtn.className = CLASSES.ATTACH_IMAGE_BTN;
+  attachBtn.type = "button";
+  attachBtn.innerHTML = ATTACH_ICON_SVG;
+
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  if (fileInputId) fileInput.id = fileInputId;
+  fileInput.accept = "image/*";
+  fileInput.style.display = "none";
+
+  const submitBtn = document.createElement("button");
+  if (submitBtnId) submitBtn.id = submitBtnId;
+  submitBtn.className = CLASSES.THREAD_SUBMIT;
+  submitBtn.innerHTML = SEND_ICON_SVG;
+
+  actionsBar.appendChild(attachBtn);
+  actionsBar.appendChild(fileInput);
+  actionsBar.appendChild(submitBtn);
+
+  container.appendChild(inputEl);
+  container.appendChild(screenshotPreview);
+  container.appendChild(actionsBar);
+
+  return {
+    container,
+    inputEl,
+    screenshotPreview,
+    screenshotImg,
+    screenshotRemove,
+    attachBtn,
+    fileInput,
+    submitBtn,
+  };
 };
 
 export const createToolbar = (options = {}) => {
@@ -94,30 +167,16 @@ export const createCommentBox = () => {
   const commentBox = document.createElement("div");
   commentBox.id = IDS.COMMENT_BOX;
 
-  const screenshotPreview = document.createElement("div");
-  screenshotPreview.className = CLASSES.SCREENSHOT_PREVIEW;
-
-  const screenshotImg = document.createElement("img");
-  screenshotImg.className = CLASSES.SCREENSHOT_IMG;
-
-  const screenshotRemove = document.createElement("button");
-  screenshotRemove.className = CLASSES.SCREENSHOT_REMOVE;
-  screenshotRemove.innerHTML = "&times;";
-
-  screenshotPreview.appendChild(screenshotImg);
-  screenshotPreview.appendChild(screenshotRemove);
-
-  const inputArea = document.createElement("div");
-  inputArea.className = CLASSES.COMMENT_INPUT_AREA;
-  inputArea.innerHTML = `
-        <textarea id="${IDS.COMMENT_INPUT}" placeholder="Type your comment..."></textarea>
-        <button id="${IDS.SUBMIT_COMMENT}" class="${CLASSES.THREAD_SUBMIT}">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2"/></svg>
-        </button>
-    `;
+  const { container: inputArea } = createInputArea({
+    areaClassName: CLASSES.COMMENT_INPUT_AREA,
+    inputTag: "textarea",
+    inputId: IDS.COMMENT_INPUT,
+    inputPlaceholder: "Type your comment...",
+    submitBtnId: IDS.SUBMIT_COMMENT,
+    fileInputId: IDS.ATTACH_IMAGE_INPUT,
+  });
 
   commentBox.appendChild(inputArea);
-  commentBox.appendChild(screenshotPreview);
   commentBox.style.display = "none";
   return commentBox;
 };
@@ -174,10 +233,17 @@ export const createReplyElement = (reply) => {
 
   const meta = createMetaElement(reply.author, reply.timestamp);
   const text = document.createElement("div");
+  text.className = CLASSES.THREAD_BODY;
   text.textContent = reply.text;
 
   replyEl.appendChild(meta);
   replyEl.appendChild(text);
+  if (reply.screenshot) {
+    const img = document.createElement("img");
+    img.className = CLASSES.SCREENSHOT_IMG;
+    img.src = reply.screenshot;
+    replyEl.appendChild(img);
+  }
   return replyEl;
 };
 
@@ -209,21 +275,12 @@ export const createThreadPopover = (comment) => {
     });
   }
 
-  const inputArea = document.createElement("div");
-  inputArea.className = CLASSES.THREAD_INPUT_AREA;
-
-  const input = document.createElement("input");
-  input.className = CLASSES.THREAD_INPUT;
-  input.placeholder = "Reply...";
-  input.type = "text";
-
-  const submitBtn = document.createElement("button");
-  submitBtn.className = CLASSES.THREAD_SUBMIT;
-  submitBtn.innerHTML =
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2"/></svg>';
-
-  inputArea.appendChild(input);
-  inputArea.appendChild(submitBtn);
+  const { container: inputArea } = createInputArea({
+    areaClassName: CLASSES.THREAD_INPUT_AREA,
+    inputTag: "input",
+    inputClassName: CLASSES.THREAD_INPUT,
+    inputPlaceholder: "Reply...",
+  });
 
   popover.appendChild(header);
   popover.appendChild(body);

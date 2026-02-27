@@ -1,6 +1,11 @@
 import { CLASSES, IDS, Z_INDEX, CURSOR_SVG } from "./constants.js";
 
 export const getStyles = () => `
+
+    button {
+        padding: 0;
+    }
+
     #${IDS.TOOLBAR} {
         position: fixed;
         bottom: 20px;
@@ -64,8 +69,8 @@ export const getStyles = () => `
     
     #${IDS.COMMENT_BOX} .${CLASSES.COMMENT_INPUT_AREA} {
         display: flex;
-        align-items: center;
-        gap: 8px;
+        flex-direction: column;
+        gap: 0;
     }
 
     #${IDS.COMMENT_INPUT} {
@@ -90,7 +95,31 @@ export const getStyles = () => `
         outline: none;
         box-shadow: none;
     }
-    
+
+    .${CLASSES.COMMENT_ACTIONS_BAR} {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 12px;
+    }
+
+    .${CLASSES.ATTACH_IMAGE_BTN} {
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.5);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        transition: background 0.2s, color 0.2s;
+    }
+
+    .${CLASSES.ATTACH_IMAGE_BTN}:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.8);
+    }
+
     .${CLASSES.CIRCLE} {
         position: absolute;
         width: 28px;
@@ -218,7 +247,7 @@ export const getStyles = () => `
     }
 
     .${CLASSES.THREAD_REPLY} {
-        padding: 8px 0;
+        padding: 16px 0 0 0;
         border-top: 1px solid rgba(255,255,255,0.1);
         white-space: pre-wrap;
         word-break: break-word;
@@ -230,22 +259,29 @@ export const getStyles = () => `
         margin-bottom: 2px;
     }
 
+    .${CLASSES.THREAD_REPLY} .${CLASSES.SCREENSHOT_IMG} {
+        width: 144px;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 8px;
+        margin-top: 4px;
+        cursor: pointer;
+        display: block;
+    }
+
     .${CLASSES.THREAD_INPUT_AREA} {
         display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 0 0;
+        flex-direction: column;
+        gap: 0;
+        padding: 12px 0 0;
         border-top: 1px solid rgba(255,255,255,0.1);
-        margin-top: 4px;
-        padding-top: 10px;
     }
 
     .${CLASSES.THREAD_INPUT} {
-        flex: 1;
-        background: #2C2C2E;
+        width: 100%;
+        background: transparent;
         border: none;
-        border-radius: 8px;
-        padding: 8px 12px;
+        padding: 0;
         color: white;
         font-size: 14px;
         font-family: inherit;
@@ -258,7 +294,8 @@ export const getStyles = () => `
     }
 
     .${CLASSES.THREAD_INPUT}:focus {
-        box-shadow: 0 0 0 2px rgba(46, 144, 250, 0.5);
+        outline: none;
+        box-shadow: none;
     }
 
     .${CLASSES.THREAD_SUBMIT} {
@@ -266,7 +303,6 @@ export const getStyles = () => `
         border: none;
         color: #2E90FA;
         cursor: pointer;
-        padding: 4px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -330,7 +366,8 @@ export const getStyles = () => `
 
     .${CLASSES.SCREENSHOT_PREVIEW} {
         position: relative;
-        margin-top: 8px;
+        margin-top: 12px;
+        margin-bottom: 0;
         display: none;
         width: fit-content;
     }
@@ -354,7 +391,7 @@ export const getStyles = () => `
         display: block;
         cursor: pointer;
         margin-top: 4px;
-        margin-bottom: 12px;
+        margin-bottom: 16px;
     }
 
     .${CLASSES.SCREENSHOT_IMG}:hover {
@@ -363,8 +400,8 @@ export const getStyles = () => `
 
     .${CLASSES.SCREENSHOT_REMOVE} {
         position: absolute;
-        top: 4px;
-        right: 4px;
+        top: 6px;
+        right: 2px;
         width: 18px;
         height: 18px;
         background: rgba(0,0,0,0.7);
@@ -383,8 +420,8 @@ export const getStyles = () => `
         background: rgba(0,0,0,0.9);
     }
 
-    .${CLASSES.TOOLTIP} .${CLASSES.SCREENSHOT_IMG},
-    .${CLASSES.THREAD_POPOVER} .${CLASSES.SCREENSHOT_IMG} {
+    .${CLASSES.TOOLTIP} > .${CLASSES.SCREENSHOT_IMG},
+    .${CLASSES.THREAD_POPOVER} > .${CLASSES.SCREENSHOT_IMG} {
         width: 144px;
         height: 100px;
         object-fit: cover;

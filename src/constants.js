@@ -32,6 +32,8 @@ export const CLASSES = {
     LIGHTBOX: 'helldots-lightbox',
     LIGHTBOX_IMG: 'helldots-lightbox-img',
     LIGHTBOX_CLOSE: 'helldots-lightbox-close',
+    COMMENT_ACTIONS_BAR: 'comment-actions-bar',
+    ATTACH_IMAGE_BTN: 'attach-image-btn',
 };
 
 export const IDS = {
@@ -39,7 +41,8 @@ export const IDS = {
     COMMENT_BOX: 'comment-box',
     COMMENT_INPUT: 'comment-input',
     SUBMIT_COMMENT: 'submit-comment',
-    STYLES: 'comment-overlay-styles'
+    STYLES: 'comment-overlay-styles',
+    ATTACH_IMAGE_INPUT: 'attach-image-input',
 };
 
 export const SELECTORS = {

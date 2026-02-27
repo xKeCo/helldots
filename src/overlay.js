@@ -54,6 +54,10 @@ class CommentOverlay {
     );
     this.submitButton = document.getElementById(IDS.SUBMIT_COMMENT);
     this.commentInput = document.getElementById(IDS.COMMENT_INPUT);
+    this.attachImageBtn = this.commentBox.querySelector(
+      `.${CLASSES.ATTACH_IMAGE_BTN}`
+    );
+    this.attachImageInput = document.getElementById(IDS.ATTACH_IMAGE_INPUT);
 
     // Bind event listeners
     this.bindEventListeners();
@@ -73,6 +77,23 @@ class CommentOverlay {
         e.preventDefault();
         this.saveComment();
       }
+    });
+
+    this.attachImageBtn.addEventListener("click", () => {
+      this.attachImageInput.click();
+    });
+
+    this.attachImageInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        this._pendingScreenshot = ev.target.result;
+        this._showScreenshotInCommentBox(this._pendingScreenshot);
+      };
+      reader.readAsDataURL(file);
+      this.attachImageInput.value = "";
     });
 
     document.addEventListener("mousedown", (e) => this.handleDocumentClick(e));
@@ -479,19 +500,76 @@ class CommentOverlay {
 
     const input = popover.querySelector(`.${CLASSES.THREAD_INPUT}`);
     const submitBtn = popover.querySelector(`.${CLASSES.THREAD_SUBMIT}`);
+    const threadAttachBtn = popover.querySelector(
+      `.${CLASSES.THREAD_INPUT_AREA} .${CLASSES.ATTACH_IMAGE_BTN}`
+    );
+    const threadFileInput = popover.querySelector(
+      `.${CLASSES.THREAD_INPUT_AREA} input[type="file"]`
+    );
+    const threadPreview = popover.querySelector(
+      `.${CLASSES.THREAD_INPUT_AREA} .${CLASSES.SCREENSHOT_PREVIEW}`
+    );
+    const threadPreviewImg = threadPreview.querySelector(
+      `.${CLASSES.SCREENSHOT_IMG}`
+    );
+    const threadPreviewRemove = threadPreview.querySelector(
+      `.${CLASSES.SCREENSHOT_REMOVE}`
+    );
+
+    let pendingReplyScreenshot = null;
+
+    threadAttachBtn.addEventListener("click", () => {
+      threadFileInput.click();
+    });
+
+    threadFileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        pendingReplyScreenshot = ev.target.result;
+        threadPreviewImg.src = pendingReplyScreenshot;
+        threadPreview.classList.add(CLASSES.ACTIVE);
+
+        threadPreviewImg.onclick = () =>
+          this.showLightbox(pendingReplyScreenshot);
+      };
+      reader.readAsDataURL(file);
+      threadFileInput.value = "";
+    });
+
+    threadPreviewRemove.addEventListener("click", (e) => {
+      e.stopPropagation();
+      pendingReplyScreenshot = null;
+      threadPreview.classList.remove(CLASSES.ACTIVE);
+    });
 
     const submitReply = () => {
       const text = input.value.trim();
-      if (!text) return;
+      if (!text && !pendingReplyScreenshot) return;
 
-      const reply = this.addReply(comment, text);
+      const reply = this.addReply(comment, text, pendingReplyScreenshot);
 
       const repliesContainer = popover.querySelector(
         `.${CLASSES.THREAD_REPLIES}`
       );
-      repliesContainer.appendChild(createReplyElement(reply));
+      const replyEl = createReplyElement(reply);
+      repliesContainer.appendChild(replyEl);
+
+      const replyScreenshot = replyEl.querySelector(
+        `.${CLASSES.SCREENSHOT_IMG}`
+      );
+      if (replyScreenshot) {
+        replyScreenshot.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.showLightbox(reply.screenshot);
+        });
+      }
 
       input.value = "";
+      pendingReplyScreenshot = null;
+      threadPreview.classList.remove(CLASSES.ACTIVE);
       input.focus();
     };
 
@@ -559,13 +637,14 @@ class CommentOverlay {
     this._activeLightbox = null;
   }
 
-  addReply(comment, text) {
+  addReply(comment, text, screenshot = null) {
     if (!comment.replies) comment.replies = [];
     const reply = {
       id: Date.now(),
       text,
       author: "Anonymous",
       timestamp: new Date().toISOString(),
+      screenshot,
     };
     comment.replies.push(reply);
     return reply;
