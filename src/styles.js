@@ -11,49 +11,108 @@ export const getStyles = () => `
         bottom: 20px;
         left: 50%;
         transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.8);
-        backdrop-filter: blur(8px);
-        padding: 8px 12px;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
         z-index: ${Z_INDEX.TOOLBAR};
-        display: flex;
-        align-items: center;
-        gap: 10px;
     }
-    
-    .${CLASSES.TOOLBAR_CONTENT} {
+
+    .${CLASSES.TOOLBAR_ACTION_WRAPPER} {
+        position: relative;
+    }
+
+    .${CLASSES.TOOLBAR_ACTION_TOOLTIP} {
+        position: absolute;
+        bottom: calc(100% + 10px);
+        left: 50%;
+        transform: translateX(-50%) translateY(4px);
         display: flex;
         align-items: center;
         gap: 8px;
+        background: rgba(20, 20, 23, 0.95);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
         color: white;
-        cursor: pointer;
-        padding: 4px;
-        border-radius: 6px;
-        transition: background-color 0.2s;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease, transform 0.15s ease;
     }
-    
-    .${CLASSES.TOOLBAR_CONTENT}:hover {
-        background: rgba(255, 255, 255, 0.1);
+
+    .${CLASSES.TOOLBAR_ACTION_WRAPPER}:hover .${
+  CLASSES.TOOLBAR_ACTION_TOOLTIP
+} {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateX(-50%) translateY(0);
     }
-    
-    .${CLASSES.TOOLBAR_CONTENT}.${CLASSES.ACTIVE} {
-        background: rgba(255, 255, 255, 0.2);
-    }
-    
+
     .${CLASSES.TOOLBAR_TEXT} {
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 500;
+        letter-spacing: -0.01em;
     }
-    
+
     .${CLASSES.SHORTCUT_HINT} {
-        color: #ffffff;
-        font-size: 12px;
-        background: rgba(255, 255, 255, 0.2);
+        font-size: 11px;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         padding: 2px 6px;
-        border-radius: 4px;
+        border-radius: 5px;
+        line-height: 1;
         white-space: nowrap;
     }
+
+    .${CLASSES.TOOLBAR_ACTIONS} {
+        display: flex;
+        flex-direction: row;
+        background: rgba(20, 20, 23, 0.95);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-radius: 12px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .${CLASSES.TOOLBAR_ACTION_BTN} {
+        width: 42px;
+        height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        outline: none;
+        color: rgba(255, 255, 255, 0.65);
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s;
+        padding: 0;
+    }
+
+    .${CLASSES.TOOLBAR_ACTION_WRAPPER}:first-child .${
+  CLASSES.TOOLBAR_ACTION_BTN
+} {
+        border-radius: 12px 0 0 12px;
+    }
+
+    .${CLASSES.TOOLBAR_ACTION_WRAPPER}:last-child .${
+  CLASSES.TOOLBAR_ACTION_BTN
+} {
+        border-radius: 0 12px 12px 0;
+    }
+
+    .${CLASSES.TOOLBAR_ACTION_BTN}:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: white;
+    }
+
+    .${CLASSES.TOOLBAR_COMMENT_BTN}.${CLASSES.ACTIVE} {
+        color: #2E90FA;
+        background: rgba(46, 144, 250, 0.1);
+    }
+
     
     #${IDS.COMMENT_BOX} {
         position: fixed;

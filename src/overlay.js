@@ -48,9 +48,8 @@ class CommentOverlay {
     document.body.appendChild(this.toolbar);
     document.body.appendChild(this.commentBox);
 
-    // Get references to DOM elements
-    this.toolbarContent = this.toolbar.querySelector(
-      `.${CLASSES.TOOLBAR_CONTENT}`
+    this.commentBtn = this.toolbar.querySelector(
+      `.${CLASSES.TOOLBAR_COMMENT_BTN}`
     );
     this.submitButton = document.getElementById(IDS.SUBMIT_COMMENT);
     this.commentInput = document.getElementById(IDS.COMMENT_INPUT);
@@ -67,9 +66,7 @@ class CommentOverlay {
   }
 
   bindEventListeners() {
-    this.toolbarContent.addEventListener("click", () =>
-      this.toggleCommentMode()
-    );
+    this.commentBtn.addEventListener("click", () => this.toggleCommentMode());
     this.submitButton.addEventListener("click", () => this.saveComment());
 
     this.commentInput.addEventListener("keydown", (e) => {
@@ -119,7 +116,6 @@ class CommentOverlay {
           this.toggleCommentMode();
         } else if (this.commentMode) {
           this.toggleCommentMode();
-          this.flashButton();
         }
         return;
       }
@@ -139,7 +135,6 @@ class CommentOverlay {
         e.preventDefault();
         e.stopPropagation();
         this.toggleCommentMode();
-        this.flashButton();
         return false;
       }
     };
@@ -377,20 +372,13 @@ class CommentOverlay {
 
   toggleCommentMode() {
     this.commentMode = !this.commentMode;
-    this.toolbarContent.classList.toggle(CLASSES.ACTIVE, this.commentMode);
+    this.commentBtn?.classList.toggle(CLASSES.ACTIVE, this.commentMode);
     this.overlay.classList.toggle(CLASSES.ACTIVE, this.commentMode);
     document.body.classList.toggle(CLASSES.COMMENT_CURSOR, this.commentMode);
 
     if (!this.commentMode) {
       this.hideCommentBox();
     }
-  }
-
-  flashButton() {
-    this.toolbarContent.classList.add(CLASSES.FLASH);
-    setTimeout(() => {
-      this.toolbarContent.classList.remove(CLASSES.FLASH);
-    }, 300);
   }
 
   saveComment() {

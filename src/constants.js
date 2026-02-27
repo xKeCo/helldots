@@ -3,14 +3,12 @@ export const CLASSES = {
     CIRCLE_WRAPPER: 'comment-circle-wrapper',
     TOOLTIP: 'comment-tooltip',
     TOOLBAR: 'comment-toolbar',
-    TOOLBAR_CONTENT: 'toolbar-content',
     TOOLBAR_TEXT: 'toolbar-text',
     SHORTCUT_HINT: 'shortcut-hint',
     COMMENT_BOX: 'comment-box',
     COMMENT_INPUT_AREA: 'comment-input-area',
     CLOSE_TOOLTIP: 'close-tooltip',
     ACTIVE: 'active',
-    FLASH: 'flash',
     COMMENT_CURSOR: 'comment-cursor',
     COMMENT_OVERLAY: 'comment-overlay',
     THREAD_POPOVER: 'comment-thread-popover',
@@ -36,6 +34,12 @@ export const CLASSES = {
     LIGHTBOX_CLOSE: 'helldots-lightbox-close',
     COMMENT_ACTIONS_BAR: 'comment-actions-bar',
     ATTACH_IMAGE_BTN: 'attach-image-btn',
+    TOOLBAR_ACTIONS: 'toolbar-actions',
+    TOOLBAR_ACTION_BTN: 'toolbar-action-btn',
+    TOOLBAR_ACTION_WRAPPER: 'toolbar-action-wrapper',
+    TOOLBAR_ACTION_TOOLTIP: 'toolbar-action-tooltip',
+    TOOLBAR_COMMENT_BTN: 'toolbar-comment-btn',
+    TOOLBAR_MENU_BTN: 'toolbar-menu-btn',
 };
 
 export const IDS = {
