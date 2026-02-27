@@ -29,6 +29,8 @@ export const CLASSES = {
     SCREENSHOT_PREVIEW: 'screenshot-preview',
     SCREENSHOT_IMG: 'screenshot-img',
     SCREENSHOT_REMOVE: 'screenshot-remove',
+    SCREENSHOTS_CONTAINER: 'screenshots-container',
+    SCREENSHOT_ITEM: 'screenshot-item',
     LIGHTBOX: 'helldots-lightbox',
     LIGHTBOX_IMG: 'helldots-lightbox-img',
     LIGHTBOX_CLOSE: 'helldots-lightbox-close',

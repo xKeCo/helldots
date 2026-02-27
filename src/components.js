@@ -97,18 +97,8 @@ const createInputArea = ({
   inputEl.placeholder = inputPlaceholder;
   if (inputTag === "input") inputEl.type = "text";
 
-  const screenshotPreview = document.createElement("div");
-  screenshotPreview.className = CLASSES.SCREENSHOT_PREVIEW;
-
-  const screenshotImg = document.createElement("img");
-  screenshotImg.className = CLASSES.SCREENSHOT_IMG;
-
-  const screenshotRemove = document.createElement("button");
-  screenshotRemove.className = CLASSES.SCREENSHOT_REMOVE;
-  screenshotRemove.innerHTML = "&times;";
-
-  screenshotPreview.appendChild(screenshotImg);
-  screenshotPreview.appendChild(screenshotRemove);
+  const screenshotsContainer = document.createElement("div");
+  screenshotsContainer.className = CLASSES.SCREENSHOTS_CONTAINER;
 
   const actionsBar = document.createElement("div");
   actionsBar.className = CLASSES.COMMENT_ACTIONS_BAR;
@@ -134,15 +124,13 @@ const createInputArea = ({
   actionsBar.appendChild(submitBtn);
 
   container.appendChild(inputEl);
-  container.appendChild(screenshotPreview);
+  container.appendChild(screenshotsContainer);
   container.appendChild(actionsBar);
 
   return {
     container,
     inputEl,
-    screenshotPreview,
-    screenshotImg,
-    screenshotRemove,
+    screenshotsContainer,
     attachBtn,
     fileInput,
     submitBtn,
@@ -196,6 +184,26 @@ export const createCommentCircle = (comment) => {
   return circle;
 };
 
+const createScreenshotsDisplay = (screenshots) => {
+  const container = document.createElement("div");
+  container.className = CLASSES.SCREENSHOTS_CONTAINER;
+  container.classList.add(CLASSES.ACTIVE);
+
+  screenshots.forEach((src) => {
+    const item = document.createElement("div");
+    item.className = CLASSES.SCREENSHOT_ITEM;
+
+    const img = document.createElement("img");
+    img.className = CLASSES.SCREENSHOT_IMG;
+    img.src = src;
+
+    item.appendChild(img);
+    container.appendChild(item);
+  });
+
+  return container;
+};
+
 export const createTooltip = (comment) => {
   const tooltip = document.createElement("div");
   tooltip.className = CLASSES.TOOLTIP;
@@ -218,11 +226,9 @@ export const createTooltip = (comment) => {
 
   tooltip.appendChild(header);
   tooltip.appendChild(body);
-  if (comment.screenshot) {
-    const img = document.createElement("img");
-    img.className = CLASSES.SCREENSHOT_IMG;
-    img.src = comment.screenshot;
-    tooltip.appendChild(img);
+  const tooltipScreenshots = comment.screenshots || (comment.screenshot ? [comment.screenshot] : []);
+  if (tooltipScreenshots.length > 0) {
+    tooltip.appendChild(createScreenshotsDisplay(tooltipScreenshots));
   }
   return tooltip;
 };
@@ -238,11 +244,9 @@ export const createReplyElement = (reply) => {
 
   replyEl.appendChild(meta);
   replyEl.appendChild(text);
-  if (reply.screenshot) {
-    const img = document.createElement("img");
-    img.className = CLASSES.SCREENSHOT_IMG;
-    img.src = reply.screenshot;
-    replyEl.appendChild(img);
+  const replyScreenshots = reply.screenshots || (reply.screenshot ? [reply.screenshot] : []);
+  if (replyScreenshots.length > 0) {
+    replyEl.appendChild(createScreenshotsDisplay(replyScreenshots));
   }
   return replyEl;
 };
@@ -284,11 +288,9 @@ export const createThreadPopover = (comment) => {
 
   popover.appendChild(header);
   popover.appendChild(body);
-  if (comment.screenshot) {
-    const img = document.createElement("img");
-    img.className = CLASSES.SCREENSHOT_IMG;
-    img.src = comment.screenshot;
-    popover.appendChild(img);
+  const popoverScreenshots = comment.screenshots || (comment.screenshot ? [comment.screenshot] : []);
+  if (popoverScreenshots.length > 0) {
+    popover.appendChild(createScreenshotsDisplay(popoverScreenshots));
   }
   popover.appendChild(replies);
   popover.appendChild(inputArea);

@@ -86,11 +86,13 @@ class CommentOverlay {
     this.attachImageInput.addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      if (!this._pendingScreenshots) this._pendingScreenshots = [];
+      if (this._pendingScreenshots.length >= 5) return;
 
       const reader = new FileReader();
       reader.onload = (ev) => {
-        this._pendingScreenshot = ev.target.result;
-        this._showScreenshotInCommentBox(this._pendingScreenshot);
+        this._pendingScreenshots.push(ev.target.result);
+        this._updateScreenshotsPreview();
       };
       reader.readAsDataURL(file);
       this.attachImageInput.value = "";
@@ -222,6 +224,7 @@ class CommentOverlay {
       if (width > 10 && height > 10) {
         this.overlay.style.display = "none";
         try {
+          if (!this._pendingScreenshots) this._pendingScreenshots = [];
           const canvas = await html2canvas(document.body, {
             x: left + window.scrollX,
             y: top + window.scrollY,
@@ -230,10 +233,11 @@ class CommentOverlay {
             windowWidth: document.documentElement.scrollWidth,
             windowHeight: document.documentElement.scrollHeight,
           });
-          this._pendingScreenshot = canvas.toDataURL("image/png");
+          if (this._pendingScreenshots.length < 5) {
+            this._pendingScreenshots.push(canvas.toDataURL("image/png"));
+          }
         } catch (err) {
           console.warn("Screenshot capture failed:", err);
-          this._pendingScreenshot = null;
         }
         this.overlay.style.display = "";
       }
@@ -269,39 +273,59 @@ class CommentOverlay {
     this.createPreviewCircle(clientX, clientY);
     document.body.classList.remove(CLASSES.COMMENT_CURSOR);
 
-    if (this._pendingScreenshot) {
-      this._showScreenshotInCommentBox(this._pendingScreenshot);
+    if (this._pendingScreenshots && this._pendingScreenshots.length > 0) {
+      this._updateScreenshotsPreview();
     }
 
     this.showCommentBox(clientX, clientY);
   }
 
-  _showScreenshotInCommentBox(dataUrl) {
-    const preview = this.commentBox.querySelector(
-      `.${CLASSES.SCREENSHOT_PREVIEW}`
+  _updateScreenshotsPreview() {
+    const container = this.commentBox.querySelector(
+      `.${CLASSES.SCREENSHOTS_CONTAINER}`
     );
-    const img = preview.querySelector(`.${CLASSES.SCREENSHOT_IMG}`);
-    const removeBtn = preview.querySelector(`.${CLASSES.SCREENSHOT_REMOVE}`);
+    if (!container) return;
+    container.innerHTML = "";
 
-    img.src = dataUrl;
-    preview.classList.add(CLASSES.ACTIVE);
+    if (!this._pendingScreenshots || this._pendingScreenshots.length === 0) {
+      container.classList.remove(CLASSES.ACTIVE);
+      return;
+    }
 
-    img.onclick = () => this.showLightbox(dataUrl);
+    container.classList.add(CLASSES.ACTIVE);
 
-    removeBtn.onclick = (e) => {
-      e.stopPropagation();
-      this._pendingScreenshot = null;
-      preview.classList.remove(CLASSES.ACTIVE);
-    };
+    this._pendingScreenshots.forEach((dataUrl, i) => {
+      const item = document.createElement("div");
+      item.className = CLASSES.SCREENSHOT_ITEM;
+
+      const img = document.createElement("img");
+      img.className = CLASSES.SCREENSHOT_IMG;
+      img.src = dataUrl;
+      img.onclick = () => this.showLightbox(dataUrl);
+
+      const removeBtn = document.createElement("button");
+      removeBtn.className = CLASSES.SCREENSHOT_REMOVE;
+      removeBtn.innerHTML = "&times;";
+      removeBtn.onclick = (e) => {
+        e.stopPropagation();
+        this._pendingScreenshots.splice(i, 1);
+        this._updateScreenshotsPreview();
+      };
+
+      item.appendChild(img);
+      item.appendChild(removeBtn);
+      container.appendChild(item);
+    });
   }
 
   _clearScreenshotPreview() {
-    this._pendingScreenshot = null;
-    const preview = this.commentBox.querySelector(
-      `.${CLASSES.SCREENSHOT_PREVIEW}`
+    this._pendingScreenshots = [];
+    const container = this.commentBox.querySelector(
+      `.${CLASSES.SCREENSHOTS_CONTAINER}`
     );
-    if (preview) {
-      preview.classList.remove(CLASSES.ACTIVE);
+    if (container) {
+      container.innerHTML = "";
+      container.classList.remove(CLASSES.ACTIVE);
     }
   }
 
@@ -381,7 +405,9 @@ class CommentOverlay {
       replies: [],
       author: "Anonymous",
       createdAt: new Date().toISOString(),
-      screenshot: this._pendingScreenshot || null,
+      screenshots: this._pendingScreenshots
+        ? [...this._pendingScreenshots]
+        : [],
     };
 
     this.comments.push(comment);
@@ -442,15 +468,12 @@ class CommentOverlay {
     const tooltip = createTooltip(comment);
     document.body.appendChild(tooltip);
 
-    const tooltipScreenshot = tooltip.querySelector(
-      `.${CLASSES.SCREENSHOT_IMG}`
-    );
-    if (tooltipScreenshot) {
-      tooltipScreenshot.addEventListener("click", (e) => {
+    tooltip.querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`).forEach((img) => {
+      img.addEventListener("click", (e) => {
         e.stopPropagation();
-        this.showLightbox(comment.screenshot);
+        this.showLightbox(img.src);
       });
-    }
+    });
 
     setTimeout(() => {
       this.positionPopoverAtCircle(tooltip, circle);
@@ -477,14 +500,18 @@ class CommentOverlay {
     const popover = createThreadPopover(comment);
     document.body.appendChild(popover);
 
-    const popoverScreenshot = popover.querySelector(
-      `.${CLASSES.SCREENSHOT_IMG}`
+    const mainScreenshotsContainer = popover.querySelector(
+      `:scope > .${CLASSES.SCREENSHOTS_CONTAINER}`
     );
-    if (popoverScreenshot) {
-      popoverScreenshot.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.showLightbox(comment.screenshot);
-      });
+    if (mainScreenshotsContainer) {
+      mainScreenshotsContainer
+        .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
+        .forEach((img) => {
+          img.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.showLightbox(img.src);
+          });
+        });
     }
 
     setTimeout(() => {
@@ -506,17 +533,42 @@ class CommentOverlay {
     const threadFileInput = popover.querySelector(
       `.${CLASSES.THREAD_INPUT_AREA} input[type="file"]`
     );
-    const threadPreview = popover.querySelector(
-      `.${CLASSES.THREAD_INPUT_AREA} .${CLASSES.SCREENSHOT_PREVIEW}`
-    );
-    const threadPreviewImg = threadPreview.querySelector(
-      `.${CLASSES.SCREENSHOT_IMG}`
-    );
-    const threadPreviewRemove = threadPreview.querySelector(
-      `.${CLASSES.SCREENSHOT_REMOVE}`
+    const threadScreenshotsContainer = popover.querySelector(
+      `.${CLASSES.THREAD_INPUT_AREA} .${CLASSES.SCREENSHOTS_CONTAINER}`
     );
 
-    let pendingReplyScreenshot = null;
+    let pendingReplyScreenshots = [];
+
+    const updateReplyScreenshotsPreview = () => {
+      threadScreenshotsContainer.innerHTML = "";
+      if (pendingReplyScreenshots.length === 0) {
+        threadScreenshotsContainer.classList.remove(CLASSES.ACTIVE);
+        return;
+      }
+      threadScreenshotsContainer.classList.add(CLASSES.ACTIVE);
+      pendingReplyScreenshots.forEach((dataUrl, i) => {
+        const item = document.createElement("div");
+        item.className = CLASSES.SCREENSHOT_ITEM;
+
+        const img = document.createElement("img");
+        img.className = CLASSES.SCREENSHOT_IMG;
+        img.src = dataUrl;
+        img.onclick = () => this.showLightbox(dataUrl);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = CLASSES.SCREENSHOT_REMOVE;
+        removeBtn.innerHTML = "&times;";
+        removeBtn.onclick = (e) => {
+          e.stopPropagation();
+          pendingReplyScreenshots.splice(i, 1);
+          updateReplyScreenshotsPreview();
+        };
+
+        item.appendChild(img);
+        item.appendChild(removeBtn);
+        threadScreenshotsContainer.appendChild(item);
+      });
+    };
 
     threadAttachBtn.addEventListener("click", () => {
       threadFileInput.click();
@@ -525,31 +577,26 @@ class CommentOverlay {
     threadFileInput.addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      if (pendingReplyScreenshots.length >= 5) return;
 
       const reader = new FileReader();
       reader.onload = (ev) => {
-        pendingReplyScreenshot = ev.target.result;
-        threadPreviewImg.src = pendingReplyScreenshot;
-        threadPreview.classList.add(CLASSES.ACTIVE);
-
-        threadPreviewImg.onclick = () =>
-          this.showLightbox(pendingReplyScreenshot);
+        pendingReplyScreenshots.push(ev.target.result);
+        updateReplyScreenshotsPreview();
       };
       reader.readAsDataURL(file);
       threadFileInput.value = "";
     });
 
-    threadPreviewRemove.addEventListener("click", (e) => {
-      e.stopPropagation();
-      pendingReplyScreenshot = null;
-      threadPreview.classList.remove(CLASSES.ACTIVE);
-    });
-
     const submitReply = () => {
       const text = input.value.trim();
-      if (!text && !pendingReplyScreenshot) return;
+      if (!text && pendingReplyScreenshots.length === 0) return;
 
-      const reply = this.addReply(comment, text, pendingReplyScreenshot);
+      const reply = this.addReply(
+        comment,
+        text,
+        pendingReplyScreenshots.length > 0 ? [...pendingReplyScreenshots] : []
+      );
 
       const repliesContainer = popover.querySelector(
         `.${CLASSES.THREAD_REPLIES}`
@@ -557,19 +604,16 @@ class CommentOverlay {
       const replyEl = createReplyElement(reply);
       repliesContainer.appendChild(replyEl);
 
-      const replyScreenshot = replyEl.querySelector(
-        `.${CLASSES.SCREENSHOT_IMG}`
-      );
-      if (replyScreenshot) {
-        replyScreenshot.addEventListener("click", (e) => {
+      replyEl.querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`).forEach((img) => {
+        img.addEventListener("click", (e) => {
           e.stopPropagation();
-          this.showLightbox(reply.screenshot);
+          this.showLightbox(img.src);
         });
-      }
+      });
 
       input.value = "";
-      pendingReplyScreenshot = null;
-      threadPreview.classList.remove(CLASSES.ACTIVE);
+      pendingReplyScreenshots = [];
+      updateReplyScreenshotsPreview();
       input.focus();
     };
 
@@ -637,14 +681,14 @@ class CommentOverlay {
     this._activeLightbox = null;
   }
 
-  addReply(comment, text, screenshot = null) {
+  addReply(comment, text, screenshots = []) {
     if (!comment.replies) comment.replies = [];
     const reply = {
       id: Date.now(),
       text,
       author: "Anonymous",
       timestamp: new Date().toISOString(),
-      screenshot,
+      screenshots,
     };
     comment.replies.push(reply);
     return reply;
@@ -949,7 +993,7 @@ class CommentOverlay {
     this.closeLightbox();
     this.removePreviewCircle();
     this._selectionRect?.remove();
-    this._pendingScreenshot = null;
+    this._pendingScreenshots = [];
 
     if (this.windowResizeHandler) {
       window.removeEventListener("resize", this.windowResizeHandler);

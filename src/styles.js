@@ -85,6 +85,8 @@ export const getStyles = () => `
         line-height: 1.4;
         box-sizing: border-box;
         field-sizing: content;
+        padding-top: 4px;
+        padding-bottom: 8px;
     }
 
     #${IDS.COMMENT_INPUT}::placeholder {
@@ -364,44 +366,48 @@ export const getStyles = () => `
         box-sizing: border-box;
     }
 
-    .${CLASSES.SCREENSHOT_PREVIEW} {
-        position: relative;
-        margin-top: 12px;
-        margin-bottom: 0;
+    .${CLASSES.SCREENSHOTS_CONTAINER} {
         display: none;
-        width: fit-content;
-    }
-
-    .${CLASSES.SCREENSHOT_PREVIEW}.${CLASSES.ACTIVE} {
-        display: block;
-    }
-
-    .${CLASSES.SCREENSHOT_PREVIEW} .${CLASSES.SCREENSHOT_IMG} {
-        width: 50px;
-        height: 50px;
-        object-fit: cover;
-        border-radius: 6px;
-        display: block;
-        cursor: pointer;
-    }
-
-    .${CLASSES.SCREENSHOT_IMG} {
-        width: 100%;
-        border-radius: 8px;
-        display: block;
-        cursor: pointer;
+        overflow-x: auto;
+        gap: 8px;
         margin-top: 4px;
+        padding: 4px 0;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
         margin-bottom: 16px;
     }
 
-    .${CLASSES.SCREENSHOT_IMG}:hover {
+    .${CLASSES.SCREENSHOTS_CONTAINER}::-webkit-scrollbar {
+        display: none;
+    }
+
+    .${CLASSES.SCREENSHOTS_CONTAINER}.${CLASSES.ACTIVE} {
+        display: flex;
+    }
+
+    .${CLASSES.SCREENSHOT_ITEM} {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .${CLASSES.SCREENSHOT_ITEM} .${CLASSES.SCREENSHOT_IMG} {
+        width: 50px;
+        height: 50px;
+        object-fit: cover;
+        border-radius: 8px;
+        cursor: pointer;
+        display: block;
+        margin: 0;
+    }
+
+    .${CLASSES.SCREENSHOT_ITEM} .${CLASSES.SCREENSHOT_IMG}:hover {
         opacity: 0.85;
     }
 
-    .${CLASSES.SCREENSHOT_REMOVE} {
+    .${CLASSES.SCREENSHOT_ITEM} .${CLASSES.SCREENSHOT_REMOVE} {
         position: absolute;
-        top: 6px;
-        right: 2px;
+        top: -5px;
+        right: -5px;
         width: 18px;
         height: 18px;
         background: rgba(0,0,0,0.7);
@@ -411,24 +417,31 @@ export const getStyles = () => `
         font-size: 12px;
         line-height: 1;
         cursor: pointer;
-        display: flex;
+        display: none;
         align-items: center;
         justify-content: center;
+        z-index: 1;
     }
 
-    .${CLASSES.SCREENSHOT_REMOVE}:hover {
+    .${CLASSES.SCREENSHOT_ITEM}:hover .${CLASSES.SCREENSHOT_REMOVE} {
+        display: flex;
+    }
+
+    .${CLASSES.SCREENSHOT_ITEM} .${CLASSES.SCREENSHOT_REMOVE}:hover {
         background: rgba(0,0,0,0.9);
     }
 
-    .${CLASSES.TOOLTIP} > .${CLASSES.SCREENSHOT_IMG},
-    .${CLASSES.THREAD_POPOVER} > .${CLASSES.SCREENSHOT_IMG} {
+    .${CLASSES.TOOLTIP} > .${CLASSES.SCREENSHOTS_CONTAINER} .${
+  CLASSES.SCREENSHOT_ITEM
+} .${CLASSES.SCREENSHOT_IMG},
+    .${CLASSES.THREAD_POPOVER} > .${CLASSES.SCREENSHOTS_CONTAINER} .${
+  CLASSES.SCREENSHOT_ITEM
+} .${CLASSES.SCREENSHOT_IMG},
+    .${CLASSES.THREAD_REPLY} .${CLASSES.SCREENSHOT_ITEM} .${
+  CLASSES.SCREENSHOT_IMG
+} {
         width: 144px;
         height: 100px;
-        object-fit: cover;
-        border-radius: 8px;
-        margin-top: 4px;
-        cursor: pointer;
-        display: block;
     }
 
     .${CLASSES.LIGHTBOX} {
