@@ -23,3 +23,20 @@
   `package.json` ahora apunta `main`/`module`/`exports` a `dist/`; el
   playground sigue importando directamente desde `src/index.js`, sin
   bundler. Ver `DECISIONS.md` para el tratamiento de `html2canvas`.
+- **test**: cobertura medible ≥80% sobre `src/` (RNF08). Se agrega
+  `@vitest/coverage-v8` con umbrales (`lines`/`functions`/`branches`/
+  `statements`) configurados en `vitest.config.js`; `npm run test:coverage`
+  falla si la cobertura cae por debajo de 80%. Se añadieron suites para
+  `index.js`, `components.js`, `overlay.js`, `styles.js`, `constants.js` y
+  `root-element.js` (105 tests, ~97%/85%/95%/99% stmts/branches/funcs/lines).
+  Escribir estas pruebas encontró y corrigió tres bugs reales:
+  - `cleanup()` nunca quitaba el listener `mousedown` de `handleDocumentClick`
+    de `document`, dejándolo filtrarse (memory/listener leak) cada vez que se
+    destruía una instancia de `CommentOverlay`.
+  - `CLASSES.TOOLBAR`, `CLASSES.COMMENT_BOX` y `CLASSES.SCREENSHOT_PREVIEW`
+    eran constantes muertas (nunca usadas como className en ningún lado, dos
+    de ellas además colisionaban en valor con sus `IDS` homónimos) — removidas.
+  - El selector `:scope > .screenshots-container` en `showThreadPopover` no
+    es resoluble de forma fiable en todos los entornos de testing basados en
+    jsdom; se reemplazó por una búsqueda explícita sobre `popover.children`
+    con el mismo comportamiento en navegadores reales pero verificable en CI.

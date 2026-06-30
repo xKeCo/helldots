@@ -17,8 +17,7 @@ describe("Shadow DOM encapsulation", () => {
   });
 
   it("mounts a single <helldots-root> host with an open shadow root", () => {
-    overlay = new CommentOverlay({ autoInit: false });
-    overlay.initOverlay();
+    overlay = new CommentOverlay();
 
     const hosts = document.querySelectorAll("helldots-root");
     expect(hosts.length).toBe(1);
@@ -27,8 +26,7 @@ describe("Shadow DOM encapsulation", () => {
   });
 
   it("injects widget styles inside the shadow root, never into document.head", () => {
-    overlay = new CommentOverlay({ autoInit: false });
-    overlay.initOverlay();
+    overlay = new CommentOverlay();
 
     expect(document.getElementById(IDS.STYLES)).toBeNull();
     expect(overlay.shadowRoot.getElementById(IDS.STYLES)).toBeTruthy();
@@ -40,8 +38,7 @@ describe("Shadow DOM encapsulation", () => {
   });
 
   it("renders the toolbar and comment box inside the shadow root, invisible to host document queries", () => {
-    overlay = new CommentOverlay({ autoInit: false });
-    overlay.initOverlay();
+    overlay = new CommentOverlay();
 
     expect(document.getElementById(IDS.TOOLBAR)).toBeNull();
     expect(document.getElementById(IDS.COMMENT_BOX)).toBeNull();
@@ -55,8 +52,7 @@ describe("Shadow DOM encapsulation", () => {
     aggressiveReset.textContent = "* { all: unset !important; }";
     document.head.appendChild(aggressiveReset);
 
-    overlay = new CommentOverlay({ autoInit: false });
-    overlay.initOverlay();
+    overlay = new CommentOverlay();
 
     // The host page rule only targets elements in the document's own light
     // tree (CSS selectors do not pierce shadow boundaries), so the widget's
@@ -93,8 +89,7 @@ describe("Shadow DOM encapsulation", () => {
     hostToolbar.className = "toolbar";
     document.body.appendChild(hostToolbar);
 
-    overlay = new CommentOverlay({ autoInit: false });
-    overlay.initOverlay();
+    overlay = new CommentOverlay();
 
     // Host rule should hide the host's own .toolbar element...
     expect(getComputedStyle(hostToolbar).display).toBe("none");
@@ -108,11 +103,9 @@ describe("Shadow DOM encapsulation", () => {
 
   it("keeps the configurable keyboard shortcut working after the shadow DOM migration", () => {
     overlay = new CommentOverlay({
-      autoInit: false,
       shortcutKey: "k",
       shortcutModifier: "shift",
     });
-    overlay.initOverlay();
 
     expect(overlay.commentMode).toBe(false);
     document.dispatchEvent(
@@ -122,8 +115,7 @@ describe("Shadow DOM encapsulation", () => {
   });
 
   it("still anchors comments to host DOM elements outside the shadow root after scroll/resize", () => {
-    overlay = new CommentOverlay({ autoInit: false });
-    overlay.initOverlay();
+    overlay = new CommentOverlay();
 
     const container = document.createElement("div");
     document.body.appendChild(container);

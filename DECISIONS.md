@@ -60,3 +60,30 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   import map a un CDN), tal como antes del pipeline de build. `dist/` solo
   se genera para publicar el paquete, nunca se commitea (ya estaba en
   `.gitignore`).
+
+## Testing y cobertura (Tarea 3)
+
+- **Vitest + jsdom**: ya eran la elección natural dado que el proyecto corre
+  100% en ESM sin transpilador (Vitest soporta ESM nativo) y `jsdom` es
+  necesario para testear manipulación de Shadow DOM, `MutationObserver`, etc.
+  `happy-dom` se consideró pero `jsdom` tiene mejor soporte de Shadow DOM en
+  la práctica (aunque con limitaciones, ver abajo).
+- **`createOverlay` en tests crea `new CommentOverlay(options)` directamente,
+  sin llamar `.initOverlay()` aparte**: el constructor de `CommentOverlay` ya
+  llama `initOverlay()` de forma síncrona salvo que `document.readyState`
+  sea `"loading"` (no lo es en jsdom). `autoInit` es un concepto que solo
+  consume la factory `createCommentOverlay()` de `index.js`, no la clase en
+  sí — pasarlo directamente a `new CommentOverlay()` no tiene efecto. Una
+  primera versión de las pruebas llamaba `.initOverlay()` una segunda vez
+  "por si acaso", lo que registraba cada listener del documento dos veces y
+  causaba fugas de listeners detectables entre tests (ver bug de `cleanup()`
+  abajo). Ya corregido en `test/overlay.test.js` y `test/shadow-dom.test.js`.
+- **Límite real de jsdom con `:scope` dentro de un shadow root**: al escribir
+  pruebas para `showThreadPopover`, se detectó que `element.querySelector(
+  ':scope > .clase')` devuelve `null` quando `element` vive dentro de un
+  shadow root en jsdom (nwsapi no resuelve `:scope` correctamente ahí),
+  aunque la combinación es válida y funciona en todos los navegadores reales.
+  Se optó por **eliminar la dependencia de `:scope`** en `src/overlay.js`
+  (reemplazada por una búsqueda sobre `popover.children`) en vez de dejar ese
+  camino sin cobertura — mismo comportamiento observable, pero ahora
+  verificable en CI con el stack de testing elegido para todo el proyecto.

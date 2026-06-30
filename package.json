@@ -20,6 +20,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "build": "node scripts/build.mjs",
     "size": "node scripts/check-size.mjs",
     "prepublishOnly": "npm run build"
@@ -31,6 +32,7 @@
     "html2canvas": "^1.4.1"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.9",
     "esbuild": "^0.28.1",
     "jsdom": "^29.1.1",
     "vitest": "^4.1.9"

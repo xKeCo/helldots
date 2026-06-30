@@ -102,7 +102,8 @@ class CommentOverlay {
       this.attachImageInput.value = "";
     });
 
-    document.addEventListener("mousedown", (e) => this.handleDocumentClick(e));
+    this._handleDocumentClickBound = (e) => this.handleDocumentClick(e);
+    document.addEventListener("mousedown", this._handleDocumentClickBound);
   }
 
   setupKeyboardShortcut() {
@@ -502,8 +503,8 @@ class CommentOverlay {
     const popover = createThreadPopover(comment);
     this.shadowRoot.appendChild(popover);
 
-    const mainScreenshotsContainer = popover.querySelector(
-      `:scope > .${CLASSES.SCREENSHOTS_CONTAINER}`
+    const mainScreenshotsContainer = Array.from(popover.children).find(
+      (child) => child.classList.contains(CLASSES.SCREENSHOTS_CONTAINER)
     );
     if (mainScreenshotsContainer) {
       mainScreenshotsContainer
@@ -997,6 +998,10 @@ class CommentOverlay {
     this.removePreviewCircle();
     this._selectionRect?.remove();
     this._pendingScreenshots = [];
+
+    if (this._handleDocumentClickBound) {
+      document.removeEventListener("mousedown", this._handleDocumentClickBound);
+    }
 
     if (this.windowResizeHandler) {
       window.removeEventListener("resize", this.windowResizeHandler);
