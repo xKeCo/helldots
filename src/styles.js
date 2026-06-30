@@ -2,8 +2,25 @@ import { CLASSES, IDS, Z_INDEX, CURSOR_SVG } from "./constants.js";
 
 export const getStyles = () => `
 
+    :host {
+        all: initial;
+        display: block;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.5;
+        color-scheme: light;
+    }
+
+    :host *,
+    :host *::before,
+    :host *::after {
+        box-sizing: border-box;
+        font-family: inherit;
+    }
+
     button {
         padding: 0;
+        font: inherit;
+        color: inherit;
     }
 
     #${IDS.TOOLBAR} {

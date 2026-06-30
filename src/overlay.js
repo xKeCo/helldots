@@ -1,6 +1,7 @@
 import html2canvas from "html2canvas";
 import { CLASSES, IDS, SELECTORS } from "./constants.js";
 import { getStyles } from "./styles.js";
+import { getShadowRoot } from "./root-element.js";
 import {
   createToolbar,
   createCommentBox,
@@ -38,25 +39,31 @@ class CommentOverlay {
   }
 
   initOverlay() {
+    // Mount inside a dedicated shadow root so widget styles/markup stay
+    // isolated from the host page in both directions.
+    this.shadowRoot = getShadowRoot();
+
     // Create and append UI elements
     this.toolbar = createToolbar(this.options);
     this.commentBox = createCommentBox();
     this.overlay = document.createElement("div");
     this.overlay.className = CLASSES.COMMENT_OVERLAY;
 
-    document.body.appendChild(this.overlay);
-    document.body.appendChild(this.toolbar);
-    document.body.appendChild(this.commentBox);
+    this.shadowRoot.appendChild(this.overlay);
+    this.shadowRoot.appendChild(this.toolbar);
+    this.shadowRoot.appendChild(this.commentBox);
 
     this.commentBtn = this.toolbar.querySelector(
       `.${CLASSES.TOOLBAR_COMMENT_BTN}`
     );
-    this.submitButton = document.getElementById(IDS.SUBMIT_COMMENT);
-    this.commentInput = document.getElementById(IDS.COMMENT_INPUT);
+    this.submitButton = this.shadowRoot.getElementById(IDS.SUBMIT_COMMENT);
+    this.commentInput = this.shadowRoot.getElementById(IDS.COMMENT_INPUT);
     this.attachImageBtn = this.commentBox.querySelector(
       `.${CLASSES.ATTACH_IMAGE_BTN}`
     );
-    this.attachImageInput = document.getElementById(IDS.ATTACH_IMAGE_INPUT);
+    this.attachImageInput = this.shadowRoot.getElementById(
+      IDS.ATTACH_IMAGE_INPUT
+    );
 
     // Bind event listeners
     this.bindEventListeners();
@@ -146,17 +153,22 @@ class CommentOverlay {
   handleDocumentClick(e) {
     if (!this.commentMode) return;
 
+    // Listener is attached on `document`, outside the shadow boundary, so
+    // `e.target` gets retargeted to the shadow host. Use composedPath() to
+    // recover the real, deepest target inside the shadow tree.
+    const target = e.composedPath()[0] || e.target;
+
     if (
-      this.toolbar.contains(e.target) ||
-      e.target.closest(`.${CLASSES.CIRCLE}`) ||
-      e.target.closest(`.${CLASSES.TOOLTIP}`) ||
-      e.target.closest(`.${CLASSES.THREAD_POPOVER}`) ||
-      e.target.closest(`.${CLASSES.LIGHTBOX}`)
+      this.toolbar.contains(target) ||
+      target.closest?.(`.${CLASSES.CIRCLE}`) ||
+      target.closest?.(`.${CLASSES.TOOLTIP}`) ||
+      target.closest?.(`.${CLASSES.THREAD_POPOVER}`) ||
+      target.closest?.(`.${CLASSES.LIGHTBOX}`)
     ) {
       return;
     }
 
-    if (this.commentBox.contains(e.target)) {
+    if (this.commentBox.contains(target)) {
       return;
     }
 
@@ -194,7 +206,7 @@ class CommentOverlay {
     if (!this._selectionRect) {
       this._selectionRect = document.createElement("div");
       this._selectionRect.className = CLASSES.SELECTION_RECT;
-      document.body.appendChild(this._selectionRect);
+      this.shadowRoot.appendChild(this._selectionRect);
     }
 
     this._selectionRect.style.left = `${left}px`;
@@ -403,7 +415,9 @@ class CommentOverlay {
     this.hideCommentBox();
     this.toggleCommentMode();
 
-    const circle = document.querySelector(`[data-comment-id="${comment.id}"]`);
+    const circle = this.shadowRoot.querySelector(
+      `[data-comment-id="${comment.id}"]`
+    );
     if (circle) {
       this.showThreadPopover(circle, comment);
     }
@@ -417,7 +431,7 @@ class CommentOverlay {
     );
     circle.addEventListener("mouseleave", () => {
       setTimeout(() => {
-        const tooltip = document.querySelector(
+        const tooltip = this.shadowRoot.querySelector(
           `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
         );
         if (tooltip && !tooltip.matches(":hover")) {
@@ -428,7 +442,7 @@ class CommentOverlay {
 
     circle.addEventListener("click", (e) => {
       e.stopPropagation();
-      const tooltip = document.querySelector(
+      const tooltip = this.shadowRoot.querySelector(
         `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
       );
       if (tooltip) tooltip.remove();
@@ -443,18 +457,18 @@ class CommentOverlay {
   }
 
   showCommentTooltip(circle, comment) {
-    const existingPopover = document.querySelector(
+    const existingPopover = this.shadowRoot.querySelector(
       `.${CLASSES.THREAD_POPOVER}[data-for="${comment.id}"]`
     );
     if (existingPopover) return;
 
-    const existingTooltip = document.querySelector(
+    const existingTooltip = this.shadowRoot.querySelector(
       `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
     );
     if (existingTooltip) return;
 
     const tooltip = createTooltip(comment);
-    document.body.appendChild(tooltip);
+    this.shadowRoot.appendChild(tooltip);
 
     tooltip.querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`).forEach((img) => {
       img.addEventListener("click", (e) => {
@@ -480,13 +494,13 @@ class CommentOverlay {
   showThreadPopover(circle, comment) {
     this.closeThreadPopover();
 
-    const existingTooltip = document.querySelector(
+    const existingTooltip = this.shadowRoot.querySelector(
       `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
     );
     if (existingTooltip) existingTooltip.remove();
 
     const popover = createThreadPopover(comment);
-    document.body.appendChild(popover);
+    this.shadowRoot.appendChild(popover);
 
     const mainScreenshotsContainer = popover.querySelector(
       `:scope > .${CLASSES.SCREENSHOTS_CONTAINER}`
@@ -619,7 +633,8 @@ class CommentOverlay {
 
     setTimeout(() => {
       this._threadClickHandler = (e) => {
-        if (!popover.contains(e.target) && !circle.contains(e.target)) {
+        const target = e.composedPath()[0] || e.target;
+        if (!popover.contains(target) && !circle.contains(target)) {
           this.closeThreadPopover();
         }
       };
@@ -660,7 +675,7 @@ class CommentOverlay {
       if (e.target === lightbox) this.closeLightbox();
     });
 
-    document.body.appendChild(lightbox);
+    this.shadowRoot.appendChild(lightbox);
     this._activeLightbox = lightbox;
   }
 
@@ -829,7 +844,7 @@ class CommentOverlay {
         this._pendingRaf = null;
         if (!this.positionValidationEnabled) return;
         this.comments.forEach((comment) => {
-          const circle = document.querySelector(
+          const circle = this.shadowRoot.querySelector(
             `[data-comment-id="${comment.id}"]`
           );
           if (circle) this.updateCommentPosition(comment, circle);
@@ -1035,7 +1050,7 @@ class CommentOverlay {
 
     // Remove all comment circles
     this.comments.forEach((comment) => {
-      const circle = document.querySelector(
+      const circle = this.shadowRoot.querySelector(
         `[data-comment-id="${comment.id}"]`
       );
       if (circle && circle.parentNode) {
@@ -1045,7 +1060,7 @@ class CommentOverlay {
   }
 
   injectStyles() {
-    const existingStyle = document.getElementById(IDS.STYLES);
+    const existingStyle = this.shadowRoot.getElementById(IDS.STYLES);
     if (existingStyle) {
       existingStyle.remove();
     }
@@ -1053,7 +1068,7 @@ class CommentOverlay {
     const style = document.createElement("style");
     style.id = IDS.STYLES;
     style.textContent = getStyles();
-    document.head.appendChild(style);
+    this.shadowRoot.appendChild(style);
   }
 }
 
