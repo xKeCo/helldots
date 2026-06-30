@@ -2,22 +2,27 @@
   "name": "helldots",
   "version": "1.0.0",
   "description": "Comment overlay library for web applications",
-  "main": "src/index.js",
-  "module": "src/index.js",
+  "main": "dist/helldots.esm.js",
+  "module": "dist/helldots.esm.js",
   "types": "src/index.d.ts",
   "type": "module",
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
-      "import": "./src/index.js",
-      "default": "./src/index.js"
+      "import": "./dist/helldots.esm.js",
+      "default": "./dist/helldots.esm.js"
     }
   },
+  "unpkg": "dist/helldots.umd.js",
   "files": [
-    "src/"
+    "src/",
+    "dist/"
   ],
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "node scripts/build.mjs",
+    "size": "node scripts/check-size.mjs",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [],
   "author": "",
@@ -26,6 +31,7 @@
     "html2canvas": "^1.4.1"
   },
   "devDependencies": {
+    "esbuild": "^0.28.1",
     "jsdom": "^29.1.1",
     "vitest": "^4.1.9"
   }

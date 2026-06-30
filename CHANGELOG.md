@@ -14,3 +14,12 @@
 - **test**: se agrega Vitest + jsdom (`vitest.config.js`, `test/`) con la
   primera suite de pruebas, enfocada en regresión de la encapsulación Shadow
   DOM (Tarea 1 del plan técnico). `npm test` ahora corre Vitest.
+- **build**: se agrega un pipeline de build con esbuild (`scripts/build.mjs`).
+  `npm run build` genera `dist/helldots.esm.js` (ESM, minificado, tree-shake
+  friendly, `html2canvas` externo) y `dist/helldots.umd.js` (IIFE
+  autocontenido para `<script>` plano, con `html2canvas` empaquetado).
+  `npm run size` mide el tamaño gzip de `dist/helldots.esm.js` y falla si
+  supera el presupuesto de 50 KB (RNF01/RNF08) — actualmente ~10.4 KB gzip.
+  `package.json` ahora apunta `main`/`module`/`exports` a `dist/`; el
+  playground sigue importando directamente desde `src/index.js`, sin
+  bundler. Ver `DECISIONS.md` para el tratamiento de `html2canvas`.

@@ -33,3 +33,30 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   shadow tree — esto no cambió. Solo los círculos visuales (que se posicionan
   con `position: fixed`/`absolute` en coordenadas de viewport) viven dentro
   del shadow root.
+
+## Build pipeline (Tarea 2)
+
+- **esbuild sobre Rollup/Webpack**: se eligió esbuild por simplicidad de
+  configuración (un script `scripts/build.mjs` con la API de Node, sin
+  archivo de config aparte) y velocidad. El proyecto no tiene necesidades de
+  bundling complejas (sin code-splitting entre múltiples entradas, sin
+  plugins de framework) que justifiquen Rollup.
+- **`html2canvas` como dependencia externa en el bundle ESM**: medido en
+  ~45 KB gzip (`html2canvas.min.js` por sí solo), bundlearlo dejaría casi sin
+  margen el presupuesto de 50 KB. Se marca `external: ["html2canvas"]` en el
+  build ESM (`dist/helldots.esm.js`, el artefacto medido por `npm run size`)
+  y se deja como `dependency` normal en `package.json` — cualquier bundler
+  del consumidor (Vite, webpack, esbuild, etc.) lo resuelve igual que
+  cualquier otra dependencia transitiva de npm. Verificado importando el
+  bundle desde un proyecto Vite de prueba: resuelve y compila sin errores.
+- **`dist/helldots.umd.js` (IIFE) SÍ empaqueta `html2canvas`**: es un
+  artefacto de conveniencia para `<script>` plano sin bundler ni resolución
+  de módulos disponible, así que necesita ser autocontenido. Por eso queda
+  **fuera** del presupuesto de 50 KB que mide `npm run size` — ese gate solo
+  audita el punto de entrada real del paquete npm (`dist/helldots.esm.js`),
+  que es el que importan la inmensa mayoría de consumidores reales.
+- **El playground no usa `dist/`**: sigue importando `../src/index.js`
+  directamente vía ES Modules nativos (con `html2canvas` resuelto por
+  import map a un CDN), tal como antes del pipeline de build. `dist/` solo
+  se genera para publicar el paquete, nunca se commitea (ya estaba en
+  `.gitignore`).
