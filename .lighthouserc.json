@@ -1,0 +1,19 @@
+{
+  "ci": {
+    "collect": {
+      "staticDistDir": ".",
+      "url": ["http://localhost:PORT/playground/lighthouse.html"],
+      "numberOfRuns": 1
+    },
+    "assert": {
+      "assertions": {
+        "categories:accessibility": ["error", { "minScore": 0.9 }],
+        "categories:performance": ["warn", { "minScore": 0.5 }]
+      }
+    },
+    "upload": {
+      "target": "filesystem",
+      "outputDir": "./lhci-reports"
+    }
+  }
+}

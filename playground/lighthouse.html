@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HellDots — CI accessibility/performance fixture</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "html2canvas": "https://esm.sh/html2canvas@1.4.1"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>HellDots CI fixture</h1>
+      <p>
+        Minimal, semantically clean host page used by CI to audit the HellDots
+        widget's own accessibility and performance, isolated from the feature
+        demo in <code>playground/index.html</code> (a third-party template with
+        pre-existing, unrelated a11y issues).
+      </p>
+    </main>
+    <script type="module">
+      import { createCommentOverlay } from "../src/index.js";
+
+      createCommentOverlay({ autoInit: true });
+    </script>
+  </body>
+</html>

@@ -47,3 +47,15 @@
   o verifican el repo (excluyendo `playground/index.html`, una plantilla de
   terceros que no es código de HellDots — ver `DECISIONS.md`). Se eliminó
   un parámetro `circle` sin usar en `createMutationObserver`.
+- **ci**: se agrega `.github/workflows/ci.yml`, que en cada push/PR a `main`
+  corre `npm run lint`, `npm test`, `npm run test:coverage`, `npm run build`,
+  `npm run size`, y una auditoría de Lighthouse CI sobre un fixture mínimo
+  (`playground/lighthouse.html`) que falla si Accessibility < 90 (proxy de
+  RNF09/WCAG 2.1 AA). Se agrega también `.github/workflows/release.yml`
+  (documentado, sin publicar realmente — requiere un secret `NPM_TOKEN` que
+  no está configurado). Escribir el gate de accesibilidad encontró un bug
+  real: los botones de la toolbar (Comment/Inbox) y otros botones solo-ícono
+  (adjuntar imagen, enviar, cerrar, quitar captura) no tenían nombre
+  accesible (`aria-label`) — corregido en `src/components.js`/`src/overlay.js`,
+  además de `alt` en las imágenes de captura de pantalla. Ver `DECISIONS.md`
+  para el porqué del fixture dedicado en vez de auditar `playground/index.html`.

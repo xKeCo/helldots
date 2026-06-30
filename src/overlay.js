@@ -309,10 +309,13 @@ class CommentOverlay {
       const img = document.createElement("img");
       img.className = CLASSES.SCREENSHOT_IMG;
       img.src = dataUrl;
+      img.alt = "Attached screenshot";
       img.onclick = () => this.showLightbox(dataUrl);
 
       const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
       removeBtn.className = CLASSES.SCREENSHOT_REMOVE;
+      removeBtn.setAttribute("aria-label", "Remove screenshot");
       removeBtn.innerHTML = "&times;";
       removeBtn.onclick = (e) => {
         e.stopPropagation();
@@ -556,6 +559,7 @@ class CommentOverlay {
         const img = document.createElement("img");
         img.className = CLASSES.SCREENSHOT_IMG;
         img.src = dataUrl;
+        img.alt = "Attached screenshot";
         img.onclick = () => this.showLightbox(dataUrl);
 
         const removeBtn = document.createElement("button");
@@ -663,9 +667,12 @@ class CommentOverlay {
     const img = document.createElement("img");
     img.className = CLASSES.LIGHTBOX_IMG;
     img.src = imageSrc;
+    img.alt = "Screenshot preview";
 
     const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
     closeBtn.className = CLASSES.LIGHTBOX_CLOSE;
+    closeBtn.setAttribute("aria-label", "Close");
     closeBtn.innerHTML = "&times;";
     closeBtn.addEventListener("click", () => this.closeLightbox());
 

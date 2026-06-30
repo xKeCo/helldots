@@ -110,6 +110,7 @@ const createInputArea = ({
   const attachBtn = document.createElement("button");
   attachBtn.className = CLASSES.ATTACH_IMAGE_BTN;
   attachBtn.type = "button";
+  attachBtn.setAttribute("aria-label", "Attach image");
   attachBtn.innerHTML = ATTACH_ICON_SVG;
 
   const fileInput = document.createElement("input");
@@ -121,6 +122,8 @@ const createInputArea = ({
   const submitBtn = document.createElement("button");
   if (submitBtnId) submitBtn.id = submitBtnId;
   submitBtn.className = CLASSES.THREAD_SUBMIT;
+  submitBtn.type = "button";
+  submitBtn.setAttribute("aria-label", "Send");
   submitBtn.innerHTML = SEND_ICON_SVG;
 
   actionsBar.appendChild(attachBtn);
@@ -141,7 +144,7 @@ const createInputArea = ({
   };
 };
 
-const createActionWithTooltip = (btnClass, btnSvg, tooltipContent) => {
+const createActionWithTooltip = (btnClass, btnSvg, tooltipContent, label) => {
   const wrapper = document.createElement("div");
   wrapper.className = CLASSES.TOOLBAR_ACTION_WRAPPER;
 
@@ -150,7 +153,9 @@ const createActionWithTooltip = (btnClass, btnSvg, tooltipContent) => {
   tooltipContent.forEach((el) => tooltip.appendChild(el));
 
   const btn = document.createElement("button");
+  btn.type = "button";
   btn.className = `${CLASSES.TOOLBAR_ACTION_BTN} ${btnClass}`;
+  btn.setAttribute("aria-label", label);
   btn.innerHTML = btnSvg;
 
   wrapper.appendChild(tooltip);
@@ -176,7 +181,8 @@ export const createToolbar = (options = {}) => {
   const commentWrapper = createActionWithTooltip(
     CLASSES.TOOLBAR_COMMENT_BTN,
     COMMENT_BUBBLE_SVG,
-    [commentLabel, shortcutKey]
+    [commentLabel, shortcutKey],
+    "Comment"
   );
 
   const inboxLabel = document.createElement("span");
@@ -186,7 +192,8 @@ export const createToolbar = (options = {}) => {
   const inboxWrapper = createActionWithTooltip(
     CLASSES.TOOLBAR_MENU_BTN,
     MENU_ICON_SVG,
-    [inboxLabel]
+    [inboxLabel],
+    "Inbox"
   );
 
   actions.appendChild(commentWrapper);
@@ -241,6 +248,7 @@ const createScreenshotsDisplay = (screenshots) => {
     const img = document.createElement("img");
     img.className = CLASSES.SCREENSHOT_IMG;
     img.src = src;
+    img.alt = "Attached screenshot";
 
     item.appendChild(img);
     container.appendChild(item);

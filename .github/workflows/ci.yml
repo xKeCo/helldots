@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Test coverage (gate at 80%)
+        run: npm run test:coverage
+
+      - name: Build
+        run: npm run build
+
+      - name: Bundle size (gate at 50 KB gzip)
+        run: npm run size
+
+      - name: Lighthouse CI (playground)
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: ./.lighthouserc.json
+          uploadArtifacts: true
+          temporaryPublicStorage: false

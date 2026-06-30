@@ -1,0 +1,47 @@
+name: Release
+
+# Publishes to npm when a v* tag is pushed. Requires an NPM_TOKEN repo
+# secret (Settings > Secrets and variables > Actions) with publish
+# permission for this package — not configured yet, so this workflow will
+# fail at the publish step until that secret is added. Documented here so
+# the release path is ready as soon as credentials exist; not wired up with
+# real secrets by the agent that authored it.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Bundle size gate
+        run: npm run size
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

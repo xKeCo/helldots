@@ -105,3 +105,44 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   intencionales (ignoran errores de `disconnect()` en observers ya
   desconectados) — se permite la excepción vía configuración de ESLint en
   vez de añadir comentarios o lógica superflua solo para silenciar la regla.
+
+## CI/CD (Tarea 4)
+
+- **GitHub Actions, un solo workflow `ci.yml`**: corre en cada push/PR a
+  `main` y encadena lint → test → coverage → build → size → Lighthouse, en
+  ese orden (falla rápido en los gates más baratos antes de los más caros).
+- **Fixture dedicado para Lighthouse (`playground/lighthouse.html`) en vez
+  de auditar `playground/index.html`**: el demo de `playground/index.html`
+  es una plantilla de terceros ("Dev Space" de Lapa Ninja) con problemas de
+  accesibilidad preexistentes y ajenos a HellDots (`color-contrast`,
+  `heading-order`, `link-name` en el propio markup de la plantilla) — medido
+  localmente con `@lhci/cli`: 0.82 de Accessibility, por debajo del umbral
+  de RNF09. Auditar esa página haría que el gate de CI fallara por razones
+  que HellDots no controla y no puede arreglar (no se reformatea código de
+  terceros, ver Tarea 5). Se creó un fixture mínimo y semánticamente limpio
+  que monta el widget sobre una página propia, para que el gate de
+  Lighthouse audite exclusivamente la UI que HellDots controla. Con el
+  fixture: Accessibility 1.0 tras corregir el bug de abajo.
+- **Bug real encontrado por el gate de accesibilidad**: los botones
+  solo-ícono de la toolbar (Comment/Inbox) no tenían nombre accesible,
+  haciendo fallar la auditoría `button-name` incluso en el fixture limpio.
+  Se agregaron `aria-label` a esos botones y a los demás botones solo-ícono
+  del widget (adjuntar imagen, enviar respuesta, cerrar tooltip/lightbox,
+  quitar captura), y `alt` a las imágenes de captura de pantalla. Esto
+  adelanta una porción mínima de la Tarea 8 (accesibilidad WCAG 2.1 AA);
+  el resto de esa tarea (navegación completa por teclado documentada,
+  contraste de color, roles ARIA en popovers) queda pendiente como P2.
+- **Sin comparación de regresión de Performance contra el run anterior**:
+  el plan pide fallar "si Performance regresa más de un umbral razonable
+  (ej. 10 puntos) respecto al run anterior", lo cual requiere almacenamiento
+  persistente entre runs (LHCI server con base de datos, o un servicio como
+  Lighthouse CI Server / temporary-public-storage con histórico). Se
+  consideró fuera de alcance para este gate inicial — en su lugar se aplica
+  un umbral absoluto mínimo (`warn` a partir de 0.5) que no bloquea el
+  merge pero deja constancia en el log. Documentado aquí como limitación
+  conocida, no como criterio cumplido al 100%.
+- **`release.yml` documentado pero no funcional**: publica a npm en tags
+  `v*`, pero depende de un secret `NPM_TOKEN` que no existe en este
+  repositorio — el workflow fallará en el paso de publish hasta que alguien
+  con acceso al repo lo configure. Es intencional: el plan pide dejar este
+  flujo "documentado pero sin secretos reales".
