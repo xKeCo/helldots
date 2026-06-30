@@ -1,6 +1,6 @@
 export interface CommentOverlayOptions {
   shortcutKey?: string;
-  shortcutModifier?: 'alt' | 'ctrl' | 'shift';
+  shortcutModifier?: "alt" | "ctrl" | "shift";
   autoInit?: boolean;
 }
 
@@ -27,7 +27,7 @@ export declare class CommentOverlay {
   comments: Comment[];
   commentMode: boolean;
 
-  constructor(options?: Omit<CommentOverlayOptions, 'autoInit'>);
+  constructor(options?: Omit<CommentOverlayOptions, "autoInit">);
 
   toggleCommentMode(): void;
   addReply(comment: Comment, text: string): CommentReply;
@@ -35,7 +35,7 @@ export declare class CommentOverlay {
 }
 
 export declare function createCommentOverlay(
-  options?: CommentOverlayOptions,
+  options?: CommentOverlayOptions
 ): CommentOverlay | (() => CommentOverlay);
 
 export default createCommentOverlay;

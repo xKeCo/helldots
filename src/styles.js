@@ -58,8 +58,8 @@ export const getStyles = () => `
     }
 
     .${CLASSES.TOOLBAR_ACTION_WRAPPER}:hover .${
-  CLASSES.TOOLBAR_ACTION_TOOLTIP
-} {
+      CLASSES.TOOLBAR_ACTION_TOOLTIP
+    } {
         opacity: 1;
         pointer-events: auto;
         transform: translateX(-50%) translateY(0);
@@ -109,14 +109,14 @@ export const getStyles = () => `
     }
 
     .${CLASSES.TOOLBAR_ACTION_WRAPPER}:first-child .${
-  CLASSES.TOOLBAR_ACTION_BTN
-} {
+      CLASSES.TOOLBAR_ACTION_BTN
+    } {
         border-radius: 12px 0 0 12px;
     }
 
     .${CLASSES.TOOLBAR_ACTION_WRAPPER}:last-child .${
-  CLASSES.TOOLBAR_ACTION_BTN
-} {
+      CLASSES.TOOLBAR_ACTION_BTN
+    } {
         border-radius: 0 12px 12px 0;
     }
 
@@ -508,14 +508,14 @@ export const getStyles = () => `
     }
 
     .${CLASSES.TOOLTIP} > .${CLASSES.SCREENSHOTS_CONTAINER} .${
-  CLASSES.SCREENSHOT_ITEM
-} .${CLASSES.SCREENSHOT_IMG},
+      CLASSES.SCREENSHOT_ITEM
+    } .${CLASSES.SCREENSHOT_IMG},
     .${CLASSES.THREAD_POPOVER} > .${CLASSES.SCREENSHOTS_CONTAINER} .${
-  CLASSES.SCREENSHOT_ITEM
-} .${CLASSES.SCREENSHOT_IMG},
+      CLASSES.SCREENSHOT_ITEM
+    } .${CLASSES.SCREENSHOT_IMG},
     .${CLASSES.THREAD_REPLY} .${CLASSES.SCREENSHOT_ITEM} .${
-  CLASSES.SCREENSHOT_IMG
-} {
+      CLASSES.SCREENSHOT_IMG
+    } {
         width: 144px;
         height: 100px;
     }

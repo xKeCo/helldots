@@ -40,3 +40,10 @@
     es resoluble de forma fiable en todos los entornos de testing basados en
     jsdom; se reemplazó por una búsqueda explícita sobre `popover.children`
     con el mismo comportamiento en navegadores reales pero verificable en CI.
+- **lint/format**: se agrega ESLint (flat config, `eslint.config.js`) con
+  `@eslint/js` recomendado + `eslint-config-prettier`, y Prettier
+  (`.prettierrc.json`). `npm run lint` corre sin errores sobre `src/`,
+  `test/` y `scripts/`; `npm run format` / `npm run format:check` formatean
+  o verifican el repo (excluyendo `playground/index.html`, una plantilla de
+  terceros que no es código de HellDots — ver `DECISIONS.md`). Se eliminó
+  un parámetro `circle` sin usar en `createMutationObserver`.

@@ -21,7 +21,7 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   shadow tree (p. ej. un reset agresivo `* { all: unset !important; }` en la
   página anfitriona). Las reglas CSS del host no pueden seleccionar nodos
   dentro del shadow tree (el shadow boundary no es atravesado por selectores),
-  pero sí pueden filtrar *valores heredados* (color, font-family, etc.) hacia
+  pero sí pueden filtrar _valores heredados_ (color, font-family, etc.) hacia
   el host element — `:host { all: initial }` corta esa herencia.
 - **Retargeting de eventos**: los listeners globales en `document` (click
   fuera para cerrar comment box / thread popover) usaban `e.target`, que se
@@ -80,10 +80,28 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   abajo). Ya corregido en `test/overlay.test.js` y `test/shadow-dom.test.js`.
 - **Límite real de jsdom con `:scope` dentro de un shadow root**: al escribir
   pruebas para `showThreadPopover`, se detectó que `element.querySelector(
-  ':scope > .clase')` devuelve `null` quando `element` vive dentro de un
+':scope > .clase')` devuelve `null` quando `element` vive dentro de un
   shadow root en jsdom (nwsapi no resuelve `:scope` correctamente ahí),
   aunque la combinación es válida y funciona en todos los navegadores reales.
   Se optó por **eliminar la dependencia de `:scope`** en `src/overlay.js`
   (reemplazada por una búsqueda sobre `popover.children`) en vez de dejar ese
   camino sin cobertura — mismo comportamiento observable, pero ahora
   verificable en CI con el stack de testing elegido para todo el proyecto.
+
+## Linting y formato (Tarea 5)
+
+- **ESLint flat config + `eslint-config-prettier`**: se usa la config plana
+  (`eslint.config.js`) en vez del formato legado `.eslintrc`, ya que es el
+  formato recomendado para proyectos ESM nuevos. `eslint-config-prettier`
+  desactiva las reglas de estilo de ESLint que pisarían a Prettier, evitando
+  conflictos entre ambas herramientas.
+- **`playground/index.html` excluido de Prettier**: es una plantilla HTML de
+  terceros ("Dev Space" de Lapa Ninja) usada solo como fixture visual de
+  desarrollo, no código propio de HellDots. Reformatearla generaba un diff
+  enorme e irrelevante; se excluyó vía `.prettierignore` en vez de
+  reformatearla.
+- **`no-empty: { allowEmptyCatch: true }`**: los bloques `catch {}` vacíos en
+  la limpieza de `ResizeObserver`/`MutationObserver` (`src/overlay.js`) son
+  intencionales (ignoran errores de `disconnect()` en observers ya
+  desconectados) — se permite la excepción vía configuración de ESLint en
+  vez de añadir comentarios o lógica superflua solo para silenciar la regla.

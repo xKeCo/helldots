@@ -1,4 +1,4 @@
-import CommentOverlay from './overlay.js';
+import CommentOverlay from "./overlay.js";
 
 /**
  * Creates and initializes a new CommentOverlay instance
@@ -9,26 +9,26 @@ import CommentOverlay from './overlay.js';
  * @returns {CommentOverlay} The comment overlay instance
  */
 export function createCommentOverlay(options = {}) {
-    const { autoInit = true, ...otherOptions } = options;
-    
-    const initialize = () => {
-        const overlay = new CommentOverlay(otherOptions);
-        return overlay;
-    };
-    
-    if (autoInit) {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initialize);
-        } else {
-            return initialize();
-        }
+  const { autoInit = true, ...otherOptions } = options;
+
+  const initialize = () => {
+    const overlay = new CommentOverlay(otherOptions);
+    return overlay;
+  };
+
+  if (autoInit) {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initialize);
+    } else {
+      return initialize();
     }
-    
-    return initialize;
+  }
+
+  return initialize;
 }
 
 // Export the class for advanced usage
 export { CommentOverlay };
 
 // Export a default instance creator for simple usage
-export default createCommentOverlay; 
+export default createCommentOverlay;

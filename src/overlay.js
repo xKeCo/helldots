@@ -454,7 +454,7 @@ class CommentOverlay {
     this.updateCommentPosition(comment, circle);
 
     this.createResizeObserver(comment, circle);
-    this.createMutationObserver(comment, circle);
+    this.createMutationObserver(comment);
   }
 
   showCommentTooltip(circle, comment) {
@@ -962,16 +962,15 @@ class CommentOverlay {
   /**
    * Creates a MutationObserver to react to layout-affecting DOM changes
    * @param {Object} comment
-   * @param {HTMLElement} circle
    */
-  createMutationObserver(comment, circle) {
+  createMutationObserver(comment) {
     if (!window.MutationObserver) return;
 
     // Disconnect existing for this comment if any
     if (this.mutationObservers.has(comment.id)) {
       try {
         this.mutationObservers.get(comment.id).disconnect();
-      } catch (_) {}
+      } catch {}
       this.mutationObservers.delete(comment.id);
     }
 
@@ -1032,7 +1031,7 @@ class CommentOverlay {
       this.mutationObservers.forEach((observer) => {
         try {
           observer.disconnect();
-        } catch (_) {}
+        } catch {}
       });
       this.mutationObservers.clear();
     }

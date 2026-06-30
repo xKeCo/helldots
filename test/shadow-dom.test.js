@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { CommentOverlay } from "../src/index.js";
-import { IDS, CLASSES } from "../src/constants.js";
+import { IDS } from "../src/constants.js";
 
 const cleanupDom = () => {
   document.querySelectorAll("helldots-root").forEach((el) => el.remove());
@@ -63,8 +63,8 @@ describe("Shadow DOM encapsulation", () => {
     expect(toolbarStyle).toBe(true);
     expect(document.styleSheets.length).toBeGreaterThan(0);
     expect(
-      Array.from(document.styleSheets).every(
-        (sheet) => sheet.ownerNode?.dataset?.test !== undefined
+      Array.from(document.styleSheets).every((sheet) =>
+        sheet.ownerNode?.dataset?.test !== undefined
           ? sheet.ownerNode.textContent.includes("all: unset")
           : true
       )

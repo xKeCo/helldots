@@ -21,6 +21,9 @@
   "scripts": {
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "build": "node scripts/build.mjs",
     "size": "node scripts/check-size.mjs",
     "prepublishOnly": "npm run build"
@@ -32,9 +35,14 @@
     "html2canvas": "^1.4.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^4.1.9",
     "esbuild": "^0.28.1",
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.7.0",
     "jsdom": "^29.1.1",
+    "prettier": "^3.9.4",
     "vitest": "^4.1.9"
   }
 }

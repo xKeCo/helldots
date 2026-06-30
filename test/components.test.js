@@ -71,9 +71,9 @@ describe("components", () => {
       expect(
         tooltip.querySelector(`.${CLASSES.THREAD_AUTHOR}`).textContent
       ).toBe("Jane");
-      expect(
-        tooltip.querySelector(`.${CLASSES.THREAD_BODY}`).textContent
-      ).toBe("a comment");
+      expect(tooltip.querySelector(`.${CLASSES.THREAD_BODY}`).textContent).toBe(
+        "a comment"
+      );
       expect(
         tooltip.querySelectorAll(`.${CLASSES.SCREENSHOTS_CONTAINER}`).length
       ).toBe(0);
@@ -97,9 +97,13 @@ describe("components", () => {
         createdAt: new Date().toISOString(),
         screenshots: ["data:image/png;base64,aaa", "data:image/png;base64,bbb"],
       });
-      const gallery = tooltip.querySelector(`.${CLASSES.SCREENSHOTS_CONTAINER}`);
+      const gallery = tooltip.querySelector(
+        `.${CLASSES.SCREENSHOTS_CONTAINER}`
+      );
       expect(gallery).toBeTruthy();
-      expect(gallery.querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`).length).toBe(2);
+      expect(
+        gallery.querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`).length
+      ).toBe(2);
     });
 
     it("falls back to the legacy single-screenshot field", () => {
@@ -122,12 +126,12 @@ describe("components", () => {
         timestamp: new Date().toISOString(),
         text: "a reply",
       });
-      expect(
-        reply.querySelector(`.${CLASSES.THREAD_AUTHOR}`).textContent
-      ).toBe("Bob");
-      expect(
-        reply.querySelector(`.${CLASSES.THREAD_BODY}`).textContent
-      ).toBe("a reply");
+      expect(reply.querySelector(`.${CLASSES.THREAD_AUTHOR}`).textContent).toBe(
+        "Bob"
+      );
+      expect(reply.querySelector(`.${CLASSES.THREAD_BODY}`).textContent).toBe(
+        "a reply"
+      );
     });
 
     it("renders screenshots attached to the reply", () => {
@@ -137,9 +141,7 @@ describe("components", () => {
         text: "a reply",
         screenshots: ["data:image/png;base64,ccc"],
       });
-      expect(
-        reply.querySelector(`.${CLASSES.SCREENSHOT_IMG}`)
-      ).toBeTruthy();
+      expect(reply.querySelector(`.${CLASSES.SCREENSHOT_IMG}`)).toBeTruthy();
     });
   });
 
@@ -155,12 +157,12 @@ describe("components", () => {
         ],
       });
       expect(popover.dataset.for).toBe("9");
-      expect(
-        popover.querySelector(`.${CLASSES.THREAD_BODY}`).textContent
-      ).toBe("root comment");
-      expect(
-        popover.querySelectorAll(`.${CLASSES.THREAD_REPLY}`).length
-      ).toBe(1);
+      expect(popover.querySelector(`.${CLASSES.THREAD_BODY}`).textContent).toBe(
+        "root comment"
+      );
+      expect(popover.querySelectorAll(`.${CLASSES.THREAD_REPLY}`).length).toBe(
+        1
+      );
       expect(popover.querySelector(`.${CLASSES.THREAD_INPUT}`)).toBeTruthy();
       expect(popover.querySelector(`.${CLASSES.THREAD_SUBMIT}`)).toBeTruthy();
     });
@@ -172,9 +174,9 @@ describe("components", () => {
         author: "Ann",
         createdAt: new Date().toISOString(),
       });
-      expect(
-        popover.querySelectorAll(`.${CLASSES.THREAD_REPLY}`).length
-      ).toBe(0);
+      expect(popover.querySelectorAll(`.${CLASSES.THREAD_REPLY}`).length).toBe(
+        0
+      );
     });
 
     it("renders the root comment's screenshots gallery when present", () => {

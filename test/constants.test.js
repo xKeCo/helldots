@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { CLASSES, IDS, SELECTORS, Z_INDEX, CURSOR_SVG } from "../src/constants.js";
+import {
+  CLASSES,
+  IDS,
+  SELECTORS,
+  Z_INDEX,
+  CURSOR_SVG,
+} from "../src/constants.js";
 
 const srcDir = resolve(process.cwd(), "src");
 const sourceText = ["overlay.js", "components.js", "styles.js"]

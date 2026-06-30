@@ -177,10 +177,7 @@ describe("CommentOverlay", () => {
       overlay = makeOverlay();
       const removeSpy = vi.spyOn(document, "removeEventListener");
       overlay.setupKeyboardShortcut();
-      expect(removeSpy).toHaveBeenCalledWith(
-        "keydown",
-        expect.any(Function)
-      );
+      expect(removeSpy).toHaveBeenCalledWith("keydown", expect.any(Function));
     });
   });
 
@@ -200,7 +197,12 @@ describe("CommentOverlay", () => {
       overlay = makeOverlay();
       const addSpy = vi.spyOn(document, "addEventListener");
       document.dispatchEvent(
-        new MouseEvent("mousedown", { bubbles: true, composed: true, clientX: 5, clientY: 5 })
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          composed: true,
+          clientX: 5,
+          clientY: 5,
+        })
       );
       expect(addSpy).not.toHaveBeenCalledWith(
         "mousemove",
@@ -211,7 +213,10 @@ describe("CommentOverlay", () => {
     it("ignores clicks on the toolbar/circle/tooltip/popover/lightbox/comment box even in comment mode", () => {
       overlay = makeOverlay();
       overlay.toggleCommentMode();
-      const evt = new MouseEvent("mousedown", { bubbles: true, composed: true });
+      const evt = new MouseEvent("mousedown", {
+        bubbles: true,
+        composed: true,
+      });
       Object.defineProperty(evt, "composedPath", {
         value: () => [overlay.toolbar],
       });
@@ -260,7 +265,11 @@ describe("CommentOverlay", () => {
         })
       );
       document.dispatchEvent(
-        new MouseEvent("mousemove", { bubbles: true, clientX: 150, clientY: 160 })
+        new MouseEvent("mousemove", {
+          bubbles: true,
+          clientX: 150,
+          clientY: 160,
+        })
       );
       document.dispatchEvent(
         new MouseEvent("mouseup", { bubbles: true, clientX: 150, clientY: 160 })
@@ -291,7 +300,11 @@ describe("CommentOverlay", () => {
         })
       );
       document.dispatchEvent(
-        new MouseEvent("mousemove", { bubbles: true, clientX: 150, clientY: 160 })
+        new MouseEvent("mousemove", {
+          bubbles: true,
+          clientX: 150,
+          clientY: 160,
+        })
       );
       document.dispatchEvent(
         new MouseEvent("mouseup", { bubbles: true, clientX: 150, clientY: 160 })
@@ -310,7 +323,11 @@ describe("CommentOverlay", () => {
       overlay.toggleCommentMode();
       overlay.commentBox.style.display = "block";
 
-      const evt = new MouseEvent("mousedown", { bubbles: true, composed: true, button: 0 });
+      const evt = new MouseEvent("mousedown", {
+        bubbles: true,
+        composed: true,
+        button: 0,
+      });
       Object.defineProperty(evt, "composedPath", {
         value: () => [overlay.commentInput, overlay.commentBox],
       });
@@ -542,9 +559,9 @@ describe("CommentOverlay", () => {
       expect(comment.replies.length).toBe(1);
       expect(comment.replies[0].text).toBe("a reply");
       expect(input.value).toBe("");
-      expect(
-        popover.querySelectorAll(`.${CLASSES.THREAD_REPLY}`).length
-      ).toBe(1);
+      expect(popover.querySelectorAll(`.${CLASSES.THREAD_REPLY}`).length).toBe(
+        1
+      );
     });
 
     it("submits a reply via Enter in the thread input", () => {
@@ -574,7 +591,10 @@ describe("CommentOverlay", () => {
       overlay.showThreadPopover(circle, comment);
       await wait(10);
 
-      const evt = new MouseEvent("mousedown", { bubbles: true, composed: true });
+      const evt = new MouseEvent("mousedown", {
+        bubbles: true,
+        composed: true,
+      });
       Object.defineProperty(evt, "composedPath", {
         value: () => [document.body],
       });
@@ -601,7 +621,9 @@ describe("CommentOverlay", () => {
       );
       expect(container.classList.contains(CLASSES.ACTIVE)).toBe(true);
 
-      const removeBtn = container.querySelector(`.${CLASSES.SCREENSHOT_REMOVE}`);
+      const removeBtn = container.querySelector(
+        `.${CLASSES.SCREENSHOT_REMOVE}`
+      );
       removeBtn.onclick({ stopPropagation: () => {} });
       expect(container.classList.contains(CLASSES.ACTIVE)).toBe(false);
     });
@@ -832,7 +854,11 @@ describe("CommentOverlay", () => {
       const observer = { disconnect: vi.fn() };
       const circle = document.createElement("div");
       document.body.appendChild(circle);
-      overlay.resizeObservers.set(1, { circle, observer, container: document.body });
+      overlay.resizeObservers.set(1, {
+        circle,
+        observer,
+        container: document.body,
+      });
 
       overlay.cleanupResizeObserver(1);
 
@@ -941,7 +967,13 @@ describe("CommentOverlay", () => {
         width: 100,
         height: 100,
       });
-      const comment = { id: 50, container, relativeX: 0.5, relativeY: 0.5, replies: [] };
+      const comment = {
+        id: 50,
+        container,
+        relativeX: 0.5,
+        relativeY: 0.5,
+        replies: [],
+      };
       overlay.comments.push(comment);
       overlay.renderCommentCircle(comment);
 
@@ -971,7 +1003,13 @@ describe("CommentOverlay", () => {
       overlay = makeOverlay();
       const container = document.createElement("div");
       document.body.appendChild(container);
-      const comment = { id: 51, container, relativeX: 0.5, relativeY: 0.5, replies: [] };
+      const comment = {
+        id: 51,
+        container,
+        relativeX: 0.5,
+        relativeY: 0.5,
+        replies: [],
+      };
       overlay.comments.push(comment);
       overlay.renderCommentCircle(comment);
 
@@ -1075,8 +1113,14 @@ describe("CommentOverlay", () => {
 
       overlay = makeOverlay();
       overlay.toggleCommentMode();
-      const evt = new MouseEvent("mousedown", { bubbles: true, composed: true, button: 0 });
-      Object.defineProperty(evt, "composedPath", { value: () => [document.body] });
+      const evt = new MouseEvent("mousedown", {
+        bubbles: true,
+        composed: true,
+        button: 0,
+      });
+      Object.defineProperty(evt, "composedPath", {
+        value: () => [document.body],
+      });
       const preventSpy = vi.spyOn(evt, "preventDefault");
       document.dispatchEvent(evt);
 
@@ -1092,9 +1136,9 @@ describe("CommentOverlay", () => {
       overlay.injectStyles();
       const second = overlay.shadowRoot.getElementById(IDS.STYLES);
       expect(second).not.toBe(first);
-      expect(
-        overlay.shadowRoot.querySelectorAll(`#${IDS.STYLES}`).length
-      ).toBe(1);
+      expect(overlay.shadowRoot.querySelectorAll(`#${IDS.STYLES}`).length).toBe(
+        1
+      );
     });
   });
 });
