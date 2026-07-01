@@ -1190,5 +1190,27 @@ describe("CommentOverlay", () => {
         1
       );
     });
+
+    it("also injects the comment-cursor rule into document.head, since it targets document.body outside the shadow root", () => {
+      overlay = makeOverlay();
+      const globalStyle = document.getElementById(IDS.GLOBAL_STYLES);
+      expect(globalStyle).toBeTruthy();
+      expect(globalStyle.parentNode).toBe(document.head);
+      expect(globalStyle.textContent).toContain(`.${CLASSES.COMMENT_CURSOR}`);
+
+      const first = globalStyle;
+      overlay.injectStyles();
+      const second = document.getElementById(IDS.GLOBAL_STYLES);
+      expect(second).not.toBe(first);
+      expect(
+        document.head.querySelectorAll(`#${IDS.GLOBAL_STYLES}`).length
+      ).toBe(1);
+    });
+
+    it("cleanup() removes the global cursor stylesheet from document.head", () => {
+      overlay = makeOverlay();
+      overlay.cleanup();
+      expect(document.getElementById(IDS.GLOBAL_STYLES)).toBeNull();
+    });
   });
 });

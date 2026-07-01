@@ -42,10 +42,12 @@ Every other interaction — activating an existing comment marker, replying,
 closing tooltips/popovers/lightbox, dismissing the comment box, exiting
 comment mode — is fully keyboard-operable.
 
-Focus is always visible: `:focus-visible` outlines were added for the
-toolbar buttons, comment input, reply input, and comment circles (see
-`src/styles.js`), so keyboard users never lose track of focus while mouse
-users don't see a ring on click.
+Note: visible `:focus-visible` outlines were added here for the toolbar
+buttons, comment input, reply input, and comment circles, then deliberately
+reverted at the user's request to restore exact pixel parity with the
+pre-Shadow-DOM UI (`dev-v2`) — see `DECISIONS.md`. Keyboard users
+currently get no visible focus indicator on these elements, same as before
+Tarea 8; this is a known, intentional accessibility gap.
 
 Re-run this checklist whenever `src/overlay.js` or `src/components.js`
 change focus/keyboard-handling logic.

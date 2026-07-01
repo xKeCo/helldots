@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStyles } from "../src/styles.js";
+import { getStyles, getGlobalStyles } from "../src/styles.js";
 import { CLASSES, IDS } from "../src/constants.js";
 
 describe("styles", () => {
@@ -34,5 +34,17 @@ describe("styles", () => {
   it("is regenerated fresh on every call (function, not a cached constant)", () => {
     expect(getStyles()).toBe(getStyles());
     expect(typeof getStyles).toBe("function");
+  });
+
+  it("does not style the comment-cursor class (that's host-page-only, see getGlobalStyles)", () => {
+    expect(getStyles()).not.toContain(`.${CLASSES.COMMENT_CURSOR}`);
+  });
+});
+
+describe("getGlobalStyles", () => {
+  it("styles the comment-cursor class meant for document.body", () => {
+    const css = getGlobalStyles();
+    expect(css).toContain(`.${CLASSES.COMMENT_CURSOR}`);
+    expect(css).toContain("cursor: url(");
   });
 });

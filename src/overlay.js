@@ -1,6 +1,6 @@
 import html2canvas from "html2canvas";
 import { CLASSES, IDS, SELECTORS } from "./constants.js";
-import { getStyles } from "./styles.js";
+import { getStyles, getGlobalStyles } from "./styles.js";
 import { getShadowRoot } from "./root-element.js";
 import { getStrings, detectLocale } from "./i18n.js";
 import {
@@ -1091,6 +1091,9 @@ class CommentOverlay {
       this.overlay.parentNode.removeChild(this.overlay);
     }
 
+    document.body.classList.remove(CLASSES.COMMENT_CURSOR);
+    document.getElementById(IDS.GLOBAL_STYLES)?.remove();
+
     // Remove all comment circles
     this.comments.forEach((comment) => {
       const circle = this.shadowRoot.querySelector(
@@ -1112,6 +1115,19 @@ class CommentOverlay {
     style.id = IDS.STYLES;
     style.textContent = getStyles();
     this.shadowRoot.appendChild(style);
+
+    // A few rules (e.g. the comment-mode cursor on document.body) target
+    // the host page itself, which a shadow root's stylesheet can't reach —
+    // those live in a separate <style> in document.head instead.
+    const existingGlobalStyle = document.getElementById(IDS.GLOBAL_STYLES);
+    if (existingGlobalStyle) {
+      existingGlobalStyle.remove();
+    }
+
+    const globalStyle = document.createElement("style");
+    globalStyle.id = IDS.GLOBAL_STYLES;
+    globalStyle.textContent = getGlobalStyles();
+    document.head.appendChild(globalStyle);
   }
 }
 

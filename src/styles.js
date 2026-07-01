@@ -108,11 +108,6 @@ export const getStyles = () => `
         padding: 0;
     }
 
-    .${CLASSES.TOOLBAR_ACTION_BTN}:focus-visible {
-        outline: 2px solid #2E90FA;
-        outline-offset: 2px;
-    }
-
     .${CLASSES.TOOLBAR_ACTION_WRAPPER}:first-child .${
       CLASSES.TOOLBAR_ACTION_BTN
     } {
@@ -179,11 +174,6 @@ export const getStyles = () => `
         box-shadow: none;
     }
 
-    #${IDS.COMMENT_INPUT}:focus-visible {
-        outline: 2px solid #2E90FA;
-        outline-offset: -2px;
-    }
-
     .${CLASSES.COMMENT_ACTIONS_BAR} {
         display: flex;
         align-items: center;
@@ -220,11 +210,6 @@ export const getStyles = () => `
         transition: transform 0.2s, background 0.2s;
         z-index: ${Z_INDEX.CIRCLE};
         transform: translate(-50%, -50%);
-    }
-
-    .${CLASSES.CIRCLE}:focus-visible {
-        outline: 2px solid white;
-        outline-offset: 2px;
     }
 
     .${CLASSES.CIRCLE}:hover {
@@ -391,11 +376,6 @@ export const getStyles = () => `
         box-shadow: none;
     }
 
-    .${CLASSES.THREAD_INPUT}:focus-visible {
-        outline: 2px solid #2E90FA;
-        outline-offset: 2px;
-    }
-
     .${CLASSES.THREAD_SUBMIT} {
         background: none;
         border: none;
@@ -433,10 +413,6 @@ export const getStyles = () => `
     @keyframes helldots-pulse {
         0%, 100% { box-shadow: 0 0 0 0 rgba(46, 144, 250, 0.4), 0 1px 5px rgba(0,0,0,0.2); }
         50% { box-shadow: 0 0 0 8px rgba(46, 144, 250, 0), 0 1px 5px rgba(0,0,0,0.2); }
-    }
-
-    .${CLASSES.COMMENT_CURSOR} {
-        cursor: url('${CURSOR_SVG}') 6 6, auto !important;
     }
 
     .${CLASSES.COMMENT_OVERLAY} {
@@ -588,5 +564,18 @@ export const getStyles = () => `
 
     .${CLASSES.LIGHTBOX_CLOSE}:hover {
         background: rgba(255,255,255,0.3);
+    }
+`;
+
+/**
+ * Styles that must apply to the host page itself (outside the shadow root),
+ * because they target elements HellDots doesn't own — e.g. `document.body`
+ * while in comment mode. A shadow root's stylesheet never reaches outside
+ * it, so these can't live in `getStyles()`; they're injected separately
+ * into `document.head` instead (see `CommentOverlay.injectStyles`).
+ */
+export const getGlobalStyles = () => `
+    .${CLASSES.COMMENT_CURSOR} {
+        cursor: url('${CURSOR_SVG}') 6 6, auto !important;
     }
 `;

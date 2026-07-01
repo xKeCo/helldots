@@ -45,6 +45,7 @@ export const IDS = {
   COMMENT_INPUT: "comment-input",
   SUBMIT_COMMENT: "submit-comment",
   STYLES: "comment-overlay-styles",
+  GLOBAL_STYLES: "comment-overlay-global-styles",
   ATTACH_IMAGE_INPUT: "attach-image-input",
 };
 

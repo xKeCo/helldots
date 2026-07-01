@@ -254,3 +254,27 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   locales distintos, ambas comparten el mismo shadow root y "gana" quien
   montó su toolbar primero — no es algo que esta tarea introduce ni
   intenta resolver (el caso de uso real es una sola instancia por página).
+
+## Fix de paridad visual post-Shadow DOM
+
+- **Bug real: cursor de modo comentario roto por el shadow root**: al
+  encapsular estilos en la Tarea 1, la regla `.comment-cursor` (que
+  necesita aplicar a `document.body`, un elemento del host que el widget
+  no controla) quedó atrapada dentro del `<style>` del shadow root. Un
+  shadow root no permite que sus estilos escapen hacia el documento — por
+  diseño — así que la regla dejó de tener efecto. Se separó en
+  `getGlobalStyles()`, inyectado en un segundo `<style>` en
+  `document.head`. Es la primera (y por ahora única) regla que necesita
+  este tratamiento; si aparecen más casos así, agregarlas a
+  `getGlobalStyles()` en vez de duplicar el mecanismo.
+- **Reversión deliberada de los 4 `:focus-visible` de la Tarea 8**: el
+  usuario probó la rama contra `dev-v2` (el estado pre-Shadow DOM) y pidió
+  explícitamente restaurar el aspecto visual exacto de antes, incluyendo
+  perder el anillo de foco visible que se había agregado por accesibilidad
+  (WCAG 2.1 AA, criterio 2.4.7 Focus Visible). Es una decisión consciente
+  de producto, no un descuido: se documenta aquí para que quede claro que
+  **esto reintroduce una brecha de accesibilidad conocida** — los
+  elementos interactivos del widget (toolbar, inputs, círculos) vuelven a
+  no mostrar ningún indicador de foco al navegar por teclado, igual que en
+  `dev-v2`. Si en el futuro se requiere volver a cumplir ese criterio,
+  revisar el historial de la Tarea 8 y este commit de reversión.

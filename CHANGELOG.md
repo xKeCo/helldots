@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- **fix(shadow-dom)**: el cursor personalizado de modo comentario dejó de
+  aplicarse tras la Tarea 1. La clase `comment-cursor` se sigue poniendo en
+  `document.body` (fuera del shadow root), pero su regla CSS vivía dentro
+  del `<style>` inyectado en el shadow root — que nunca llega al host.
+  Se agrega `getGlobalStyles()` en `src/styles.js` para las pocas reglas
+  que deben aplicar al host page (hoy, solo esta), inyectadas en un
+  `<style id="comment-overlay-global-styles">` aparte en `document.head`
+  (`CommentOverlay.injectStyles`/`cleanup`), separado del stylesheet
+  encapsulado del widget. Verificado contra `dev-v2` con Playwright:
+  `getComputedStyle(document.body).cursor` ahora coincide.
+- **revert(a11y)**: por decisión explícita del usuario, se quitaron los 4
+  anillos `:focus-visible` agregados en la Tarea 8 (toolbar, input de
+  comentario, input de respuesta, círculo de comentario) para restaurar el
+  aspecto visual exacto de antes de esa tarea — verificado pixel a pixel
+  contra `dev-v2`. El resto de la Tarea 8 (roles ARIA, `aria-label`,
+  activación por teclado de los círculos, contraste del placeholder) se
+  mantiene intacto. Ver `DECISIONS.md` para el trade-off de accesibilidad
+  que esto reintroduce.
+
 - **feat(shadow-dom)**: HellDots ahora se monta dentro de un custom element
   `<helldots-root>` con un shadow root abierto (`src/root-element.js`). Toda
   la UI (toolbar, comment box, tooltips, popovers, lightbox, selection rect) y
