@@ -82,6 +82,14 @@ const MENU_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 16 16" stroke-li
 /**
  * Shared input area component used by both the comment box and the thread popover.
  * Returns the container element and references to key child elements.
+ * @param {Object} options
+ * @param {string} options.areaClassName
+ * @param {"textarea" | "input"} [options.inputTag]
+ * @param {string} [options.inputClassName]
+ * @param {string} [options.inputId]
+ * @param {string} options.inputPlaceholder
+ * @param {string} [options.submitBtnId]
+ * @param {string} [options.fileInputId]
  */
 const createInputArea = ({
   areaClassName,
@@ -95,11 +103,13 @@ const createInputArea = ({
   const container = document.createElement("div");
   container.className = areaClassName;
 
+  /** @type {HTMLInputElement | HTMLTextAreaElement} */
   const inputEl = document.createElement(inputTag);
   if (inputId) inputEl.id = inputId;
   if (inputClassName) inputEl.className = inputClassName;
   inputEl.placeholder = inputPlaceholder;
-  if (inputTag === "input") inputEl.type = "text";
+  if (inputTag === "input")
+    /** @type {HTMLInputElement} */ (inputEl).type = "text";
 
   const screenshotsContainer = document.createElement("div");
   screenshotsContainer.className = CLASSES.SCREENSHOTS_CONTAINER;

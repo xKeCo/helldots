@@ -56,13 +56,20 @@ class CommentOverlay {
     this.commentBtn = this.toolbar.querySelector(
       `.${CLASSES.TOOLBAR_COMMENT_BTN}`
     );
-    this.submitButton = this.shadowRoot.getElementById(IDS.SUBMIT_COMMENT);
-    this.commentInput = this.shadowRoot.getElementById(IDS.COMMENT_INPUT);
+    /** @type {HTMLButtonElement} */
+    this.submitButton = /** @type {any} */ (
+      this.shadowRoot.getElementById(IDS.SUBMIT_COMMENT)
+    );
+    /** @type {HTMLTextAreaElement} */
+    this.commentInput = /** @type {any} */ (
+      this.shadowRoot.getElementById(IDS.COMMENT_INPUT)
+    );
     this.attachImageBtn = this.commentBox.querySelector(
       `.${CLASSES.ATTACH_IMAGE_BTN}`
     );
-    this.attachImageInput = this.shadowRoot.getElementById(
-      IDS.ATTACH_IMAGE_INPUT
+    /** @type {HTMLInputElement} */
+    this.attachImageInput = /** @type {any} */ (
+      this.shadowRoot.getElementById(IDS.ATTACH_IMAGE_INPUT)
     );
 
     // Bind event listeners
@@ -88,7 +95,7 @@ class CommentOverlay {
     });
 
     this.attachImageInput.addEventListener("change", (e) => {
-      const file = e.target.files[0];
+      const file = /** @type {HTMLInputElement} */ (e.target).files[0];
       if (!file) return;
       if (!this._pendingScreenshots) this._pendingScreenshots = [];
       if (this._pendingScreenshots.length >= 5) return;
@@ -474,12 +481,14 @@ class CommentOverlay {
     const tooltip = createTooltip(comment);
     this.shadowRoot.appendChild(tooltip);
 
-    tooltip.querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`).forEach((img) => {
-      img.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.showLightbox(img.src);
+    tooltip
+      .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
+      .forEach((/** @type {HTMLImageElement} */ img) => {
+        img.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.showLightbox(img.src);
+        });
       });
-    });
 
     setTimeout(() => {
       this.positionPopoverAtCircle(tooltip, circle);
@@ -512,7 +521,7 @@ class CommentOverlay {
     if (mainScreenshotsContainer) {
       mainScreenshotsContainer
         .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
-        .forEach((img) => {
+        .forEach((/** @type {HTMLImageElement} */ img) => {
           img.addEventListener("click", (e) => {
             e.stopPropagation();
             this.showLightbox(img.src);
@@ -531,13 +540,17 @@ class CommentOverlay {
         this.closeThreadPopover();
       });
 
-    const input = popover.querySelector(`.${CLASSES.THREAD_INPUT}`);
+    /** @type {HTMLInputElement} */
+    const input = /** @type {any} */ (
+      popover.querySelector(`.${CLASSES.THREAD_INPUT}`)
+    );
     const submitBtn = popover.querySelector(`.${CLASSES.THREAD_SUBMIT}`);
     const threadAttachBtn = popover.querySelector(
       `.${CLASSES.THREAD_INPUT_AREA} .${CLASSES.ATTACH_IMAGE_BTN}`
     );
-    const threadFileInput = popover.querySelector(
-      `.${CLASSES.THREAD_INPUT_AREA} input[type="file"]`
+    /** @type {HTMLInputElement} */
+    const threadFileInput = /** @type {any} */ (
+      popover.querySelector(`.${CLASSES.THREAD_INPUT_AREA} input[type="file"]`)
     );
     const threadScreenshotsContainer = popover.querySelector(
       `.${CLASSES.THREAD_INPUT_AREA} .${CLASSES.SCREENSHOTS_CONTAINER}`
@@ -582,7 +595,7 @@ class CommentOverlay {
     });
 
     threadFileInput.addEventListener("change", (e) => {
-      const file = e.target.files[0];
+      const file = /** @type {HTMLInputElement} */ (e.target).files[0];
       if (!file) return;
       if (pendingReplyScreenshots.length >= 5) return;
 
@@ -611,12 +624,14 @@ class CommentOverlay {
       const replyEl = createReplyElement(reply);
       repliesContainer.appendChild(replyEl);
 
-      replyEl.querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`).forEach((img) => {
-        img.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.showLightbox(img.src);
+      replyEl
+        .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
+        .forEach((/** @type {HTMLImageElement} */ img) => {
+          img.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.showLightbox(img.src);
+          });
         });
-      });
 
       input.value = "";
       pendingReplyScreenshots = [];
@@ -852,8 +867,9 @@ class CommentOverlay {
         this._pendingRaf = null;
         if (!this.positionValidationEnabled) return;
         this.comments.forEach((comment) => {
-          const circle = this.shadowRoot.querySelector(
-            `[data-comment-id="${comment.id}"]`
+          /** @type {HTMLElement} */
+          const circle = /** @type {any} */ (
+            this.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`)
           );
           if (circle) this.updateCommentPosition(comment, circle);
         });

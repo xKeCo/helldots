@@ -2,11 +2,8 @@ import CommentOverlay from "./overlay.js";
 
 /**
  * Creates and initializes a new CommentOverlay instance
- * @param {Object} options - Configuration options
- * @param {string} [options.shortcutKey='c'] - Key to use for the comment shortcut
- * @param {string} [options.shortcutModifier='alt'] - Modifier key to use ('alt', 'ctrl', or 'shift')
- * @param {boolean} [options.autoInit=true] - Automatically initialize when DOM is ready
- * @returns {CommentOverlay} The comment overlay instance
+ * @param {import('./index.d.ts').CommentOverlayOptions} [options] - Configuration options
+ * @returns {import('./index.d.ts').CommentOverlay | (() => import('./index.d.ts').CommentOverlay)}
  */
 export function createCommentOverlay(options = {}) {
   const { autoInit = true, ...otherOptions } = options;

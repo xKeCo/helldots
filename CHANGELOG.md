@@ -59,3 +59,13 @@
   accesible (`aria-label`) — corregido en `src/components.js`/`src/overlay.js`,
   además de `alt` en las imágenes de captura de pantalla. Ver `DECISIONS.md`
   para el porqué del fixture dedicado en vez de auditar `playground/index.html`.
+- **typecheck**: se agrega `tsconfig.json` (`checkJs`, sin emitir) y
+  `npm run typecheck` (`tsc --noEmit`), integrado como gate en
+  `ci.yml`/`release.yml`. Se anotó `src/index.js` con JSDoc que referencia
+  los tipos de `src/index.d.ts`, y se corrigieron ~20 errores de tipos reales
+  en `src/overlay.js`/`src/components.js` (elementos DOM sin narrowing —
+  `HTMLInputElement`, `HTMLTextAreaElement`, `HTMLImageElement`, etc.) vía
+  anotaciones JSDoc puntuales, sin cambiar ningún comportamiento. Se agrega
+  `typecheck/consistency-check.ts` (fuera de `src/`, no se publica) para que
+  el checkeo realmente contraste `index.d.ts` contra la implementación —
+  ver `DECISIONS.md` para el problema de TypeScript que esto rodea.

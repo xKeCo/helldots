@@ -146,3 +146,39 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   repositorio — el workflow fallará en el paso de publish hasta que alguien
   con acceso al repo lo configure. Es intencional: el plan pide dejar este
   flujo "documentado pero sin secretos reales".
+
+## Typecheck (Tarea 6)
+
+- **`checkJs` en vez de migrar a TypeScript**: exactamente lo que pedía el
+  plan — validar consistencia sin migrar. `tsconfig.json` tiene `allowJs`,
+  `checkJs`, `noEmit`, sin `declaration`.
+- **Bug real de TypeScript descubierto al implementar el gate**: cuando un
+  `foo.d.ts` vive junto a un `foo.js` (nuestro caso: `src/index.d.ts` junto
+  a `src/index.js`), TypeScript deja de re-derivar/chequear el cuerpo del
+  `.js` y trata el `.d.ts` como la única fuente de verdad para ese módulo.
+  Un primer intento de `npm run typecheck` "pasaba" incluso con
+  `index.d.ts` deliberadamente roto (comprobado insertando un método que no
+  existe en la implementación real y cambiando el tipo de `commentMode`):
+  el archivo `src/index.js` simplemente nunca se estaba analizando.
+  Verificado con `tsc --listFiles`, que no listaba `src/index.js` en el
+  programa compilado.
+- **Archivo de consistencia dedicado (`typecheck/consistency-check.ts`),
+  fuera de `src/`**: importa la implementación real (`src/overlay.js`, que
+  al no tener un `.d.ts` hermano sí conserva su tipo inferido) y los tipos
+  declarados (`src/index.d.ts`), y los asigna entre sí — si divergen, este
+  archivo deja de compilar. Verificado deliberadamente: romper
+  `commentMode: boolean` a `string`, o agregar un método inexistente, hace
+  fallar `npm run typecheck` (exit code 2) apuntando exactamente a la
+  discrepancia; revertido el cambio, vuelve a pasar (exit 0).
+- **Trampa adicional con el nombre del archivo**: un primer intento se
+  llamó `src/index.d.consistency.ts`. TypeScript también lo clasificó como
+  archivo de declaración ambient (cualquier nombre con el infijo `.d.`
+  activa esa heurística, no solo el sufijo exacto `.d.ts`), por lo que las
+  aserciones de tipo dentro de él tampoco se chequeaban — mismo síntoma que
+  el bug anterior. Renombrado a `typecheck/consistency-check.ts` (sin `.d.`
+  en el nombre) para evitarlo.
+- **`src/index.js` con JSDoc que referencia `import('./index.d.ts').X`
+  directamente**: hace que la implementación declare explícitamente su
+  contrato contra el `.d.ts`, en vez de que `checkJs` intente inferir tipos
+  de parámetros JS sin anotar (que habrían quedado como `any` en la mayoría
+  de los casos, sin dar ninguna señal útil).
