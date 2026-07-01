@@ -575,7 +575,8 @@ export const getStyles = () => `
  * into `document.head` instead (see `CommentOverlay.injectStyles`).
  */
 export const getGlobalStyles = () => `
-    .${CLASSES.COMMENT_CURSOR} {
+    .${CLASSES.COMMENT_CURSOR},
+    .${CLASSES.COMMENT_CURSOR} * {
         cursor: url('${CURSOR_SVG}') 6 6, auto !important;
     }
 `;

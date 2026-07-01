@@ -12,6 +12,15 @@
   (`CommentOverlay.injectStyles`/`cleanup`), separado del stylesheet
   encapsulado del widget. Verificado contra `dev-v2` con Playwright:
   `getComputedStyle(document.body).cursor` ahora coincide.
+  Además, a pedido explícito del usuario, la regla ahora también fuerza el
+  cursor sobre **todos** los descendientes del host (`.comment-cursor,
+.comment-cursor *`) — antes (incluso en `dev-v2`) enlaces y botones de
+  la página anfitriona conservaban su propio `cursor: pointer` porque el
+  valor heredado de `body` no gana contra una regla explícita en el
+  descendiente. Con `!important` + el selector `*`, el ícono de comentario
+  ahora se ve sin importar sobre qué elemento del host esté el mouse. El
+  selector no cruza el shadow boundary, así que los controles propios del
+  widget (toolbar, botones) conservan su cursor normal.
 - **revert(a11y)**: por decisión explícita del usuario, se quitaron los 4
   anillos `:focus-visible` agregados en la Tarea 8 (toolbar, input de
   comentario, input de respuesta, círculo de comentario) para restaurar el

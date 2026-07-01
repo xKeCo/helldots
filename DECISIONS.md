@@ -267,6 +267,19 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   `document.head`. Es la primera (y por ahora única) regla que necesita
   este tratamiento; si aparecen más casos así, agregarlas a
   `getGlobalStyles()` en vez de duplicar el mecanismo.
+- **`.comment-cursor *` en vez de solo `.comment-cursor`**: el pedido
+  original era "restaurar el cursor", pero al verificar contra `dev-v2` se
+  confirmó que ni siquiera la versión original forzaba el cursor sobre
+  elementos con su propio `cursor` explícito (links, botones de la
+  plantilla) — la herencia de `cursor` en CSS no puede ganarle a una
+  declaración explícita en el propio elemento, con o sin Shadow DOM de por
+  medio. El usuario pidió expresamente que el ícono aparezca "sea donde
+  sea que me mueva el cursor", así que se agregó el descendant selector
+  `*` junto con `!important` para forzarlo sobre todo el host mientras
+  dura el modo comentario. No cruza el shadow boundary (los selectores CSS
+  no pueden hacerlo), así que los controles propios del widget (toolbar,
+  botones del comment box) conservan su cursor normal — solo se ve
+  afectada la página anfitriona, que es la intención.
 - **Reversión deliberada de los 4 `:focus-visible` de la Tarea 8**: el
   usuario probó la rama contra `dev-v2` (el estado pre-Shadow DOM) y pidió
   explícitamente restaurar el aspecto visual exacto de antes, incluyendo

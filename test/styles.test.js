@@ -47,4 +47,10 @@ describe("getGlobalStyles", () => {
     expect(css).toContain(`.${CLASSES.COMMENT_CURSOR}`);
     expect(css).toContain("cursor: url(");
   });
+
+  it("forces the cursor on every descendant too, overriding elements with their own cursor style (e.g. links/buttons)", () => {
+    const css = getGlobalStyles();
+    expect(css).toContain(`.${CLASSES.COMMENT_CURSOR} *`);
+    expect(css).toContain("!important");
+  });
 });
