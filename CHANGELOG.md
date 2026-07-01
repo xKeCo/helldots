@@ -69,3 +69,11 @@
   `typecheck/consistency-check.ts` (fuera de `src/`, no se publica) para que
   el checkeo realmente contraste `index.d.ts` contra la implementación —
   ver `DECISIONS.md` para el problema de TypeScript que esto rodea.
+- **versionado**: se agrega [changesets](https://github.com/changesets/changesets)
+  (`.changeset/`, `npm run changeset`, `npm run release`) para versionado
+  semántico y `CHANGELOG.md` de releases de npm automatizados a partir de
+  los changesets acumulados. Documentado en `CONTRIBUTING.md`, junto con la
+  convención de Conventional Commits que ya seguía el historial del repo.
+  Verificado manualmente: un changeset de prueba (`minor`) hace que
+  `npm run release` haga bump de `1.0.0 → 1.1.0` y anteponga la entrada
+  correspondiente a `CHANGELOG.md`; revertido después de confirmar.

@@ -182,3 +182,18 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   contrato contra el `.d.ts`, en vez de que `checkJs` intente inferir tipos
   de parámetros JS sin anotar (que habrían quedado como `any` en la mayoría
   de los casos, sin dar ninguna señal útil).
+
+## Versionado (Tarea 7)
+
+- **changesets sobre `standard-version`**: se eligió changesets porque
+  encaja mejor con un flujo de PRs individuales (cada cambio agrega su
+  propio archivo de changeset, sin depender de que el mensaje de commit de
+  merge tenga el prefijo correcto) y porque soporta bien un único paquete
+  publicado con `access: "public"`, que es nuestro caso.
+- **`CHANGELOG.md` de la raíz vs. el generado por changesets**: son
+  documentos distintos con propósitos distintos, no un conflicto — ver
+  `CONTRIBUTING.md`. El de la raíz narra decisiones de arquitectura durante
+  la ejecución de este plan técnico; el de changesets (que se antepone al
+  mismo archivo a partir de la primera release real) documenta versiones
+  de npm publicadas. Cuando se corte la primera release, ambos coexistirán
+  en el mismo archivo, con las entradas de versión arriba.
