@@ -77,3 +77,22 @@
   Verificado manualmente: un changeset de prueba (`minor`) hace que
   `npm run release` haga bump de `1.0.0 → 1.1.0` y anteponga la entrada
   correspondiente a `CHANGELOG.md`; revertido después de confirmar.
+- **accesibilidad (WCAG 2.1 AA)**: cierre de la Tarea 8. Los marcadores de
+  comentario (círculos) ahora son alcanzables por teclado
+  (`role="button"`, `tabindex="0"`, `aria-label` con el texto del
+  comentario, `Enter`/`Space` los activa igual que un click). Los botones
+  de cerrar (`×`) pasaron de `<span>` a `<button>` reales con
+  `aria-label="Close"`. El botón "Comment" de la toolbar expone
+  `aria-pressed` reflejando si el modo comentario está activo. Los
+  contenedores de comment box / tooltip / popover llevan `role="dialog"` y
+  `aria-label`; los inputs de texto tienen `aria-label`. Se agregaron
+  anillos de foco visibles (`:focus-visible`) en botones, inputs y círculos
+  donde antes se quitaba el `outline` sin reemplazo. Se corrigió el único
+  contraste de color bajo el umbral (placeholder text `rgba(255,255,255,0.4)`
+  → `0.5`, de 3.79:1 a 5.16:1). Verificado con Lighthouse (fixture: 100/100
+  Accessibility, supera el objetivo de ≥95) y con un recorrido 100% por
+  teclado en un navegador real vía Playwright — documentado en
+  `TESTING.md`. Colocar un comentario **nuevo** sigue requiriendo apuntar a
+  un punto de la página con el mouse (inherente a anclar comentarios a
+  ubicaciones arbitrarias, igual que Vercel Toolbar/Userback/Marker.io);
+  todo lo demás es 100% operable por teclado.

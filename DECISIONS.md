@@ -197,3 +197,31 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   mismo archivo a partir de la primera release real) documenta versiones
   de npm publicadas. Cuando se corte la primera release, ambos coexistirán
   en el mismo archivo, con las entradas de versión arriba.
+
+## Accesibilidad (Tarea 8)
+
+- **Marcadores de comentario como `<div role="button">` en vez de
+  `<button>`**: se necesita la forma custom del círculo (border-radius
+  asimétrico) y posicionamiento absoluto que un `<button>` real complicaría
+  ligeramente por sus estilos base; en vez de pelear con el reset, se usó
+  el patrón estándar `role="button"` + `tabindex="0"` + manejo explícito de
+  `keydown` para `Enter`/`Space` (documentado como patrón válido en la
+  guía ARIA Authoring Practices).
+- **`role="dialog"` sin `aria-modal="true"` en popover/tooltip/comment
+  box**: no se implementó un verdadero focus-trap (que exigiría
+  interceptar `Tab`/`Shift+Tab` para ciclar el foco dentro del diálogo) —
+  fuera de alcance para esta pasada. `aria-modal` sin un trap real sería
+  engañoso para tecnología asistiva, así que se omitió deliberadamente en
+  vez de declarar una garantía que no se cumple.
+- **Colocar un comentario nuevo sigue requiriendo el mouse**: es inherente
+  a la función (anclar a una posición arbitraria de la página host), no
+  una omisión — mismo trade-off que hacen Vercel Toolbar, Userback,
+  BugHerd y Marker.io. Todo lo demás (activar un marcador existente,
+  responder, cerrar tooltips/popovers/lightbox, salir del modo comentario)
+  es 100% operable por teclado, verificado en `TESTING.md`.
+- **Fixture de Lighthouse sin escenario interactivo**: la auditoría de
+  accesibilidad de CI (`playground/lighthouse.html`) solo audita el estado
+  inicial de la página (toolbar visible, nada más montado) porque Lighthouse
+  no simula interacción de usuario. El recorrido por teclado que ejercita
+  popover/tooltip/comment box se verificó manualmente vía Playwright y se
+  documentó en `TESTING.md`, no vía el gate automatizado de CI.

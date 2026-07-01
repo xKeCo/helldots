@@ -28,6 +28,18 @@ describe("components", () => {
       ).toContain("K");
     });
 
+    it("gives every icon-only toolbar button an accessible name", () => {
+      const toolbar = createToolbar();
+      const commentBtn = toolbar.querySelector(
+        `.${CLASSES.TOOLBAR_COMMENT_BTN}`
+      );
+      const menuBtn = toolbar.querySelector(`.${CLASSES.TOOLBAR_MENU_BTN}`);
+      expect(commentBtn.getAttribute("aria-label")).toBe("Comment");
+      expect(commentBtn.getAttribute("aria-pressed")).toBe("false");
+      expect(menuBtn.getAttribute("aria-label")).toBe("Inbox");
+      expect(commentBtn.type).toBe("button");
+    });
+
     it("falls back to default shortcut text when no options are given", () => {
       const toolbar = createToolbar();
       expect(
@@ -47,6 +59,10 @@ describe("components", () => {
       expect(
         box.querySelector(`.${CLASSES.SCREENSHOTS_CONTAINER}`)
       ).toBeTruthy();
+      expect(box.getAttribute("role")).toBe("dialog");
+      expect(
+        box.querySelector(`#${IDS.COMMENT_INPUT}`).getAttribute("aria-label")
+      ).toBeTruthy();
     });
   });
 
@@ -56,6 +72,13 @@ describe("components", () => {
       expect(circle.className).toBe(CLASSES.CIRCLE);
       expect(circle.dataset.commentId).toBe("42");
       expect(circle.dataset.commentText).toBe("hello world");
+    });
+
+    it("is keyboard-focusable and exposes an accessible name", () => {
+      const circle = createCommentCircle({ id: 1, text: "hello" });
+      expect(circle.getAttribute("role")).toBe("button");
+      expect(circle.getAttribute("tabindex")).toBe("0");
+      expect(circle.getAttribute("aria-label")).toContain("hello");
     });
   });
 
@@ -77,6 +100,10 @@ describe("components", () => {
       expect(
         tooltip.querySelectorAll(`.${CLASSES.SCREENSHOTS_CONTAINER}`).length
       ).toBe(0);
+      expect(tooltip.getAttribute("role")).toBe("dialog");
+      const closeBtn = tooltip.querySelector(`.${CLASSES.CLOSE_TOOLTIP}`);
+      expect(closeBtn.tagName).toBe("BUTTON");
+      expect(closeBtn.getAttribute("aria-label")).toBe("Close");
     });
 
     it("defaults the author to Anonymous when missing", () => {
@@ -165,6 +192,12 @@ describe("components", () => {
       );
       expect(popover.querySelector(`.${CLASSES.THREAD_INPUT}`)).toBeTruthy();
       expect(popover.querySelector(`.${CLASSES.THREAD_SUBMIT}`)).toBeTruthy();
+      expect(popover.getAttribute("role")).toBe("dialog");
+      expect(
+        popover
+          .querySelector(`.${CLASSES.THREAD_INPUT}`)
+          .getAttribute("aria-label")
+      ).toBeTruthy();
     });
 
     it("renders without replies or screenshots when absent", () => {

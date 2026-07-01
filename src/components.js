@@ -108,6 +108,7 @@ const createInputArea = ({
   if (inputId) inputEl.id = inputId;
   if (inputClassName) inputEl.className = inputClassName;
   inputEl.placeholder = inputPlaceholder;
+  inputEl.setAttribute("aria-label", inputPlaceholder);
   if (inputTag === "input")
     /** @type {HTMLInputElement} */ (inputEl).type = "text";
 
@@ -194,6 +195,9 @@ export const createToolbar = (options = {}) => {
     [commentLabel, shortcutKey],
     "Comment"
   );
+  commentWrapper
+    .querySelector(`.${CLASSES.TOOLBAR_COMMENT_BTN}`)
+    ?.setAttribute("aria-pressed", "false");
 
   const inboxLabel = document.createElement("span");
   inboxLabel.className = CLASSES.TOOLBAR_TEXT;
@@ -216,6 +220,8 @@ export const createToolbar = (options = {}) => {
 export const createCommentBox = () => {
   const commentBox = document.createElement("div");
   commentBox.id = IDS.COMMENT_BOX;
+  commentBox.setAttribute("role", "dialog");
+  commentBox.setAttribute("aria-label", "New comment");
 
   const { container: inputArea } = createInputArea({
     areaClassName: CLASSES.COMMENT_INPUT_AREA,
@@ -236,6 +242,9 @@ export const createCommentCircle = (comment) => {
   circle.className = CLASSES.CIRCLE;
   circle.dataset.commentId = comment.id;
   circle.dataset.commentText = comment.text;
+  circle.setAttribute("role", "button");
+  circle.setAttribute("tabindex", "0");
+  circle.setAttribute("aria-label", `Comment: ${comment.text}`);
 
   // Basic positioning - will be updated by position validation system
   circle.style.cssText = `
@@ -271,13 +280,17 @@ export const createTooltip = (comment) => {
   const tooltip = document.createElement("div");
   tooltip.className = CLASSES.TOOLTIP;
   tooltip.dataset.for = comment.id;
+  tooltip.setAttribute("role", "dialog");
+  tooltip.setAttribute("aria-label", "Comment preview");
 
   const header = document.createElement("div");
   header.className = CLASSES.THREAD_HEADER;
 
   const meta = createMetaElement(comment.author, comment.createdAt);
-  const closeButton = document.createElement("span");
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
   closeButton.className = CLASSES.CLOSE_TOOLTIP;
+  closeButton.setAttribute("aria-label", "Close");
   closeButton.innerHTML = "&times;";
 
   header.appendChild(meta);
@@ -320,13 +333,17 @@ export const createThreadPopover = (comment) => {
   const popover = document.createElement("div");
   popover.className = CLASSES.THREAD_POPOVER;
   popover.dataset.for = comment.id;
+  popover.setAttribute("role", "dialog");
+  popover.setAttribute("aria-label", "Comment thread");
 
   const header = document.createElement("div");
   header.className = CLASSES.THREAD_HEADER;
 
   const meta = createMetaElement(comment.author, comment.createdAt);
-  const closeButton = document.createElement("span");
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
   closeButton.className = CLASSES.CLOSE_TOOLTIP;
+  closeButton.setAttribute("aria-label", "Close");
   closeButton.innerHTML = "&times;";
 
   header.appendChild(meta);

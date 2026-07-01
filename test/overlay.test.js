@@ -537,6 +537,23 @@ describe("CommentOverlay", () => {
       ).toBeNull();
     });
 
+    it("Enter/Space on a focused circle activates it like a click (keyboard accessibility)", () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      expect(circle.getAttribute("role")).toBe("button");
+      expect(circle.getAttribute("tabindex")).toBe("0");
+
+      circle.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+      );
+      expect(overlay.activeThreadPopover).toBeTruthy();
+
+      overlay.closeThreadPopover();
+      circle.dispatchEvent(
+        new KeyboardEvent("keydown", { key: " ", bubbles: true })
+      );
+      expect(overlay.activeThreadPopover).toBeTruthy();
+    });
+
     it("opening a second thread popover closes the first", () => {
       const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
       overlay.showThreadPopover(circle, comment);

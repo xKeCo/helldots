@@ -396,6 +396,7 @@ class CommentOverlay {
   toggleCommentMode() {
     this.commentMode = !this.commentMode;
     this.commentBtn?.classList.toggle(CLASSES.ACTIVE, this.commentMode);
+    this.commentBtn?.setAttribute("aria-pressed", String(this.commentMode));
     this.overlay.classList.toggle(CLASSES.ACTIVE, this.commentMode);
     document.body.classList.toggle(CLASSES.COMMENT_CURSOR, this.commentMode);
 
@@ -458,6 +459,15 @@ class CommentOverlay {
       );
       if (tooltip) tooltip.remove();
       this.showThreadPopover(circle, comment);
+    });
+
+    // The circle is a <div role="button">, so unlike a real <button> it
+    // doesn't get Enter/Space-activates-click for free.
+    circle.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        circle.click();
+      }
     });
 
     this.overlay.appendChild(circle);

@@ -108,6 +108,11 @@ export const getStyles = () => `
         padding: 0;
     }
 
+    .${CLASSES.TOOLBAR_ACTION_BTN}:focus-visible {
+        outline: 2px solid #2E90FA;
+        outline-offset: 2px;
+    }
+
     .${CLASSES.TOOLBAR_ACTION_WRAPPER}:first-child .${
       CLASSES.TOOLBAR_ACTION_BTN
     } {
@@ -166,12 +171,17 @@ export const getStyles = () => `
     }
 
     #${IDS.COMMENT_INPUT}::placeholder {
-        color: rgba(255, 255, 255, 0.4);
+        color: rgba(255, 255, 255, 0.5);
     }
     
     #${IDS.COMMENT_INPUT}:focus {
         outline: none;
         box-shadow: none;
+    }
+
+    #${IDS.COMMENT_INPUT}:focus-visible {
+        outline: 2px solid #2E90FA;
+        outline-offset: -2px;
     }
 
     .${CLASSES.COMMENT_ACTIONS_BAR} {
@@ -211,7 +221,12 @@ export const getStyles = () => `
         z-index: ${Z_INDEX.CIRCLE};
         transform: translate(-50%, -50%);
     }
-    
+
+    .${CLASSES.CIRCLE}:focus-visible {
+        outline: 2px solid white;
+        outline-offset: 2px;
+    }
+
     .${CLASSES.CIRCLE}:hover {
         transform: translate(-50%, -50%) scale(1.2) !important;
         background: rgb(0, 123, 255);
@@ -368,12 +383,17 @@ export const getStyles = () => `
     }
 
     .${CLASSES.THREAD_INPUT}::placeholder {
-        color: rgba(255,255,255,0.4);
+        color: rgba(255,255,255,0.5);
     }
 
     .${CLASSES.THREAD_INPUT}:focus {
         outline: none;
         box-shadow: none;
+    }
+
+    .${CLASSES.THREAD_INPUT}:focus-visible {
+        outline: 2px solid #2E90FA;
+        outline-offset: 2px;
     }
 
     .${CLASSES.THREAD_SUBMIT} {
@@ -394,6 +414,8 @@ export const getStyles = () => `
     }
 
     .${CLASSES.CLOSE_TOOLTIP} {
+        background: none;
+        border: none;
         font-size: 18px;
         cursor: pointer;
         color: rgba(255,255,255,0.5);
