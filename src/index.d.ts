@@ -2,6 +2,8 @@ export interface CommentOverlayOptions {
   shortcutKey?: string;
   shortcutModifier?: "alt" | "ctrl" | "shift";
   autoInit?: boolean;
+  /** UI language. Defaults to the browser's language when supported, else "en". */
+  locale?: "en" | "es";
 }
 
 export interface CommentReply {

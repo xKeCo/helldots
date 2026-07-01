@@ -2,6 +2,7 @@ import html2canvas from "html2canvas";
 import { CLASSES, IDS, SELECTORS } from "./constants.js";
 import { getStyles } from "./styles.js";
 import { getShadowRoot } from "./root-element.js";
+import { getStrings, detectLocale } from "./i18n.js";
 import {
   createToolbar,
   createCommentBox,
@@ -12,6 +13,9 @@ import {
 } from "./components.js";
 
 class CommentOverlay {
+  /**
+   * @param {import('./index.d.ts').CommentOverlayOptions} [options]
+   */
   constructor(options = {}) {
     this.comments = [];
     this.commentMode = false;
@@ -21,6 +25,8 @@ class CommentOverlay {
       shortcutModifier: options.shortcutModifier || "alt",
       ...options,
     };
+    this.locale = this.options.locale || detectLocale();
+    this.strings = getStrings(this.locale);
 
     // Initialize resize observers and position validation
     this.resizeObservers = new Map();
@@ -44,8 +50,8 @@ class CommentOverlay {
     this.shadowRoot = getShadowRoot();
 
     // Create and append UI elements
-    this.toolbar = createToolbar(this.options);
-    this.commentBox = createCommentBox();
+    this.toolbar = createToolbar(this.options, this.strings);
+    this.commentBox = createCommentBox(this.strings);
     this.overlay = document.createElement("div");
     this.overlay.className = CLASSES.COMMENT_OVERLAY;
 
@@ -316,13 +322,13 @@ class CommentOverlay {
       const img = document.createElement("img");
       img.className = CLASSES.SCREENSHOT_IMG;
       img.src = dataUrl;
-      img.alt = "Attached screenshot";
+      img.alt = this.strings.attachedScreenshot;
       img.onclick = () => this.showLightbox(dataUrl);
 
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = CLASSES.SCREENSHOT_REMOVE;
-      removeBtn.setAttribute("aria-label", "Remove screenshot");
+      removeBtn.setAttribute("aria-label", this.strings.removeScreenshot);
       removeBtn.innerHTML = "&times;";
       removeBtn.onclick = (e) => {
         e.stopPropagation();
@@ -415,7 +421,7 @@ class CommentOverlay {
       relativeY: this.currentPosition.relativeY,
       id: Date.now(),
       replies: [],
-      author: "Anonymous",
+      author: this.strings.anonymous,
       createdAt: new Date().toISOString(),
       screenshots: this._pendingScreenshots
         ? [...this._pendingScreenshots]
@@ -436,7 +442,7 @@ class CommentOverlay {
   }
 
   renderCommentCircle(comment) {
-    const circle = createCommentCircle(comment);
+    const circle = createCommentCircle(comment, this.strings);
 
     circle.addEventListener("mouseenter", () =>
       this.showCommentTooltip(circle, comment)
@@ -488,7 +494,7 @@ class CommentOverlay {
     );
     if (existingTooltip) return;
 
-    const tooltip = createTooltip(comment);
+    const tooltip = createTooltip(comment, this.strings, this.locale);
     this.shadowRoot.appendChild(tooltip);
 
     tooltip
@@ -522,7 +528,7 @@ class CommentOverlay {
     );
     if (existingTooltip) existingTooltip.remove();
 
-    const popover = createThreadPopover(comment);
+    const popover = createThreadPopover(comment, this.strings, this.locale);
     this.shadowRoot.appendChild(popover);
 
     const mainScreenshotsContainer = Array.from(popover.children).find(
@@ -582,7 +588,7 @@ class CommentOverlay {
         const img = document.createElement("img");
         img.className = CLASSES.SCREENSHOT_IMG;
         img.src = dataUrl;
-        img.alt = "Attached screenshot";
+        img.alt = this.strings.attachedScreenshot;
         img.onclick = () => this.showLightbox(dataUrl);
 
         const removeBtn = document.createElement("button");
@@ -631,7 +637,7 @@ class CommentOverlay {
       const repliesContainer = popover.querySelector(
         `.${CLASSES.THREAD_REPLIES}`
       );
-      const replyEl = createReplyElement(reply);
+      const replyEl = createReplyElement(reply, this.strings, this.locale);
       repliesContainer.appendChild(replyEl);
 
       replyEl
@@ -692,12 +698,12 @@ class CommentOverlay {
     const img = document.createElement("img");
     img.className = CLASSES.LIGHTBOX_IMG;
     img.src = imageSrc;
-    img.alt = "Screenshot preview";
+    img.alt = this.strings.screenshotPreview;
 
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.className = CLASSES.LIGHTBOX_CLOSE;
-    closeBtn.setAttribute("aria-label", "Close");
+    closeBtn.setAttribute("aria-label", this.strings.close);
     closeBtn.innerHTML = "&times;";
     closeBtn.addEventListener("click", () => this.closeLightbox());
 
@@ -722,7 +728,7 @@ class CommentOverlay {
     const reply = {
       id: Date.now(),
       text,
-      author: "Anonymous",
+      author: this.strings.anonymous,
       timestamp: new Date().toISOString(),
       screenshots,
     };

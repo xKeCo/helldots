@@ -225,3 +225,32 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   no simula interacción de usuario. El recorrido por teclado que ejercita
   popover/tooltip/comment box se verificó manualmente vía Playwright y se
   documentó en `TESTING.md`, no vía el gate automatizado de CI.
+
+## i18n (Tarea 9)
+
+- **`src/locales/en.js` / `es.js` en vez de `.json`**: el plan sugería
+  `.json`, pero importar JSON con ES Modules nativos en el navegador exige
+  la sintaxis `import x from './y.json' with { type: 'json' }`, cuyo
+  soporte entre navegadores es más reciente e irregular que un `import`
+  de módulo JS normal — y el playground carga `src/index.js` sin bundler,
+  directo en el navegador (Tarea 2). Un módulo `.js` con
+  `export default {...}` es funcionalmente idéntico a un `.json` para
+  este propósito, funciona igual en Vitest/esbuild/navegador sin
+  condicionales, y evita ese riesgo de compatibilidad por completo.
+- **Nombres de mes vía `Intl.DateTimeFormat` en vez de una tabla `MONTHS`
+  traducida a mano**: más simple, más correcto (usa datos reales de
+  localización del runtime en vez de una traducción propia que solo
+  cubriría `en`/`es`), y elimina una categoría entera de strings
+  hardcodeados sin tener que mantenerla.
+- **Cobertura de i18n limitada a `en`/`es`**: es lo que pide la Tarea 9
+  explícitamente ("locale: 'es' | 'en'"). `detectLocale()` cae a `en` para
+  cualquier idioma de navegador no soportado (no lanza error ni deja
+  strings vacíos), así que agregar más locales después es aditivo: un
+  archivo nuevo en `src/locales/` y una entrada en el mapa de `i18n.js`,
+  sin tocar `components.js`/`overlay.js`.
+- **Limitación conocida, no nueva de esta tarea**: `getShadowRoot()`
+  reutiliza un único host `<helldots-root>` por página (decisión de la
+  Tarea 1). Si una página monta dos instancias de `CommentOverlay` con
+  locales distintos, ambas comparten el mismo shadow root y "gana" quien
+  montó su toolbar primero — no es algo que esta tarea introduce ni
+  intenta resolver (el caso de uso real es una sola instancia por página).

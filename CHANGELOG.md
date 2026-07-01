@@ -96,3 +96,16 @@
   un punto de la página con el mouse (inherente a anclar comentarios a
   ubicaciones arbitrarias, igual que Vercel Toolbar/Userback/Marker.io);
   todo lo demás es 100% operable por teclado.
+- **i18n**: se agrega internacionalización mínima (Tarea 9, cierra P2). Todos
+  los strings visibles de `src/components.js` se extrajeron a
+  `src/locales/en.js` / `src/locales/es.js` (no `.json` — ver
+  `DECISIONS.md`). Nueva opción `locale: "en" | "es"` en
+  `createCommentOverlay(...)`, con detección automática desde
+  `navigator.language` como default (`src/i18n.js`). Los nombres de mes en
+  el tooltip de fecha completa (`data-full-date`) usan
+  `Intl.DateTimeFormat(locale, ...)` en vez de una tabla de meses en inglés
+  a mano, localizándose gratis para cualquier locale del navegador, no solo
+  `en`/`es`. Verificado: cero strings hardcodeados en `src/components.js`
+  (test de regresión con regex sobre el archivo fuente), y un cambio de
+  `locale: "es"` visible de punta a punta (toolbar, comment box, thread
+  popover, reply) tanto en Vitest como en un navegador real vía Playwright.

@@ -63,6 +63,39 @@ describe("CommentOverlay", () => {
       readyStateSpy.mockRestore();
     });
 
+    it("renders English UI text by default", () => {
+      overlay = makeOverlay();
+      const commentLabel = overlay.toolbar.querySelector(
+        `.${CLASSES.TOOLBAR_TEXT}`
+      );
+      expect(commentLabel.textContent).toBe("Comment");
+      expect(overlay.commentInput.placeholder).toBe("Type your comment...");
+    });
+
+    it("switching locale to 'es' visibly changes the rendered UI text", () => {
+      overlay = makeOverlay({ locale: "es" });
+      const commentLabel = overlay.toolbar.querySelector(
+        `.${CLASSES.TOOLBAR_TEXT}`
+      );
+      expect(commentLabel.textContent).toBe("Comentar");
+      expect(overlay.commentInput.placeholder).toBe("Escribe tu comentario...");
+      expect(overlay.commentBox.getAttribute("aria-label")).toBe(
+        "Nuevo comentario"
+      );
+    });
+
+    it("auto-detects the locale from the browser language when none is passed", () => {
+      const langSpy = vi
+        .spyOn(navigator, "language", "get")
+        .mockReturnValue("es-ES");
+      overlay = makeOverlay();
+      expect(overlay.locale).toBe("es");
+      expect(
+        overlay.toolbar.querySelector(`.${CLASSES.TOOLBAR_TEXT}`).textContent
+      ).toBe("Comentar");
+      langSpy.mockRestore();
+    });
+
     it("picks the Mac shortcut hint when the user agent looks like macOS", () => {
       const uaSpy = vi
         .spyOn(navigator, "userAgent", "get")

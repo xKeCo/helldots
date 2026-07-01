@@ -1,55 +1,40 @@
 import { CLASSES, IDS } from "./constants.js";
+import { formatTemplate } from "./i18n.js";
+import defaultStrings from "./locales/en.js";
 
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-const formatRelativeTime = (date) => {
+const formatRelativeTime = (date, strings) => {
   const diff = Date.now() - new Date(date).getTime();
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
 
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m`;
-  if (hours < 24) return `${hours}h`;
-  return `${days}d`;
+  if (minutes < 1) return strings.justNow;
+  if (minutes < 60) return formatTemplate(strings.minutesAgoTemplate, minutes);
+  if (hours < 24) return formatTemplate(strings.hoursAgoTemplate, hours);
+  return formatTemplate(strings.daysAgoTemplate, days);
 };
 
-const formatFullDate = (date) => {
-  const d = new Date(date);
-  const month = MONTHS[d.getMonth()];
-  const day = d.getDate();
-  let hours = d.getHours();
-  const minutes = d.getMinutes().toString().padStart(2, "0");
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12 || 12;
-  return `${month} ${day}, ${hours}:${minutes} ${ampm}`;
+const formatFullDate = (date, locale) => {
+  return new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(date));
 };
 
-const createMetaElement = (author, createdAt) => {
+const createMetaElement = (author, createdAt, strings, locale) => {
   const meta = document.createElement("div");
   meta.className = CLASSES.THREAD_META;
 
   const authorEl = document.createElement("span");
   authorEl.className = CLASSES.THREAD_AUTHOR;
-  authorEl.textContent = author || "Anonymous";
+  authorEl.textContent = author || strings.anonymous;
 
   const timeEl = document.createElement("span");
   timeEl.className = CLASSES.THREAD_TIME;
-  timeEl.textContent = formatRelativeTime(createdAt);
-  timeEl.dataset.fullDate = formatFullDate(createdAt);
+  timeEl.textContent = formatRelativeTime(createdAt, strings);
+  timeEl.dataset.fullDate = formatFullDate(createdAt, locale);
 
   meta.appendChild(authorEl);
   meta.appendChild(timeEl);
@@ -57,11 +42,11 @@ const createMetaElement = (author, createdAt) => {
   return meta;
 };
 
-const getShortcutText = (options) => {
+const getShortcutText = (options, strings) => {
   const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
   const modifierMap = {
-    alt: isMac ? "⌥" : "Alt",
-    ctrl: isMac ? "⌘" : "Ctrl",
+    alt: isMac ? "⌥" : strings.modifierAlt,
+    ctrl: isMac ? "⌘" : strings.modifierCtrl,
     shift: "⇧",
   };
 
@@ -90,16 +75,20 @@ const MENU_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 16 16" stroke-li
  * @param {string} options.inputPlaceholder
  * @param {string} [options.submitBtnId]
  * @param {string} [options.fileInputId]
+ * @param {typeof defaultStrings} strings
  */
-const createInputArea = ({
-  areaClassName,
-  inputTag = "textarea",
-  inputClassName,
-  inputId,
-  inputPlaceholder,
-  submitBtnId,
-  fileInputId,
-}) => {
+const createInputArea = (
+  {
+    areaClassName,
+    inputTag = "textarea",
+    inputClassName,
+    inputId,
+    inputPlaceholder,
+    submitBtnId,
+    fileInputId,
+  },
+  strings
+) => {
   const container = document.createElement("div");
   container.className = areaClassName;
 
@@ -121,7 +110,7 @@ const createInputArea = ({
   const attachBtn = document.createElement("button");
   attachBtn.className = CLASSES.ATTACH_IMAGE_BTN;
   attachBtn.type = "button";
-  attachBtn.setAttribute("aria-label", "Attach image");
+  attachBtn.setAttribute("aria-label", strings.attachImage);
   attachBtn.innerHTML = ATTACH_ICON_SVG;
 
   const fileInput = document.createElement("input");
@@ -134,7 +123,7 @@ const createInputArea = ({
   if (submitBtnId) submitBtn.id = submitBtnId;
   submitBtn.className = CLASSES.THREAD_SUBMIT;
   submitBtn.type = "button";
-  submitBtn.setAttribute("aria-label", "Send");
+  submitBtn.setAttribute("aria-label", strings.send);
   submitBtn.innerHTML = SEND_ICON_SVG;
 
   actionsBar.appendChild(attachBtn);
@@ -174,7 +163,7 @@ const createActionWithTooltip = (btnClass, btnSvg, tooltipContent, label) => {
   return wrapper;
 };
 
-export const createToolbar = (options = {}) => {
+export const createToolbar = (options = {}, strings = defaultStrings) => {
   const toolbar = document.createElement("div");
   toolbar.id = IDS.TOOLBAR;
 
@@ -183,17 +172,17 @@ export const createToolbar = (options = {}) => {
 
   const commentLabel = document.createElement("span");
   commentLabel.className = CLASSES.TOOLBAR_TEXT;
-  commentLabel.textContent = "Comment";
+  commentLabel.textContent = strings.toolbarComment;
 
   const shortcutKey = document.createElement("span");
   shortcutKey.className = CLASSES.SHORTCUT_HINT;
-  shortcutKey.textContent = getShortcutText(options);
+  shortcutKey.textContent = getShortcutText(options, strings);
 
   const commentWrapper = createActionWithTooltip(
     CLASSES.TOOLBAR_COMMENT_BTN,
     COMMENT_BUBBLE_SVG,
     [commentLabel, shortcutKey],
-    "Comment"
+    strings.toolbarComment
   );
   commentWrapper
     .querySelector(`.${CLASSES.TOOLBAR_COMMENT_BTN}`)
@@ -201,13 +190,13 @@ export const createToolbar = (options = {}) => {
 
   const inboxLabel = document.createElement("span");
   inboxLabel.className = CLASSES.TOOLBAR_TEXT;
-  inboxLabel.textContent = "Inbox";
+  inboxLabel.textContent = strings.toolbarInbox;
 
   const inboxWrapper = createActionWithTooltip(
     CLASSES.TOOLBAR_MENU_BTN,
     MENU_ICON_SVG,
     [inboxLabel],
-    "Inbox"
+    strings.toolbarInbox
   );
 
   actions.appendChild(commentWrapper);
@@ -217,34 +206,40 @@ export const createToolbar = (options = {}) => {
   return toolbar;
 };
 
-export const createCommentBox = () => {
+export const createCommentBox = (strings = defaultStrings) => {
   const commentBox = document.createElement("div");
   commentBox.id = IDS.COMMENT_BOX;
   commentBox.setAttribute("role", "dialog");
-  commentBox.setAttribute("aria-label", "New comment");
+  commentBox.setAttribute("aria-label", strings.commentBoxAriaLabel);
 
-  const { container: inputArea } = createInputArea({
-    areaClassName: CLASSES.COMMENT_INPUT_AREA,
-    inputTag: "textarea",
-    inputId: IDS.COMMENT_INPUT,
-    inputPlaceholder: "Type your comment...",
-    submitBtnId: IDS.SUBMIT_COMMENT,
-    fileInputId: IDS.ATTACH_IMAGE_INPUT,
-  });
+  const { container: inputArea } = createInputArea(
+    {
+      areaClassName: CLASSES.COMMENT_INPUT_AREA,
+      inputTag: "textarea",
+      inputId: IDS.COMMENT_INPUT,
+      inputPlaceholder: strings.commentPlaceholder,
+      submitBtnId: IDS.SUBMIT_COMMENT,
+      fileInputId: IDS.ATTACH_IMAGE_INPUT,
+    },
+    strings
+  );
 
   commentBox.appendChild(inputArea);
   commentBox.style.display = "none";
   return commentBox;
 };
 
-export const createCommentCircle = (comment) => {
+export const createCommentCircle = (comment, strings = defaultStrings) => {
   const circle = document.createElement("div");
   circle.className = CLASSES.CIRCLE;
   circle.dataset.commentId = comment.id;
   circle.dataset.commentText = comment.text;
   circle.setAttribute("role", "button");
   circle.setAttribute("tabindex", "0");
-  circle.setAttribute("aria-label", `Comment: ${comment.text}`);
+  circle.setAttribute(
+    "aria-label",
+    `${strings.commentAriaLabelPrefix}${comment.text}`
+  );
 
   // Basic positioning - will be updated by position validation system
   circle.style.cssText = `
@@ -255,7 +250,7 @@ export const createCommentCircle = (comment) => {
   return circle;
 };
 
-const createScreenshotsDisplay = (screenshots) => {
+const createScreenshotsDisplay = (screenshots, strings) => {
   const container = document.createElement("div");
   container.className = CLASSES.SCREENSHOTS_CONTAINER;
   container.classList.add(CLASSES.ACTIVE);
@@ -267,7 +262,7 @@ const createScreenshotsDisplay = (screenshots) => {
     const img = document.createElement("img");
     img.className = CLASSES.SCREENSHOT_IMG;
     img.src = src;
-    img.alt = "Attached screenshot";
+    img.alt = strings.attachedScreenshot;
 
     item.appendChild(img);
     container.appendChild(item);
@@ -276,21 +271,26 @@ const createScreenshotsDisplay = (screenshots) => {
   return container;
 };
 
-export const createTooltip = (comment) => {
+export const createTooltip = (comment, strings = defaultStrings, locale) => {
   const tooltip = document.createElement("div");
   tooltip.className = CLASSES.TOOLTIP;
   tooltip.dataset.for = comment.id;
   tooltip.setAttribute("role", "dialog");
-  tooltip.setAttribute("aria-label", "Comment preview");
+  tooltip.setAttribute("aria-label", strings.tooltipAriaLabel);
 
   const header = document.createElement("div");
   header.className = CLASSES.THREAD_HEADER;
 
-  const meta = createMetaElement(comment.author, comment.createdAt);
+  const meta = createMetaElement(
+    comment.author,
+    comment.createdAt,
+    strings,
+    locale
+  );
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = CLASSES.CLOSE_TOOLTIP;
-  closeButton.setAttribute("aria-label", "Close");
+  closeButton.setAttribute("aria-label", strings.close);
   closeButton.innerHTML = "&times;";
 
   header.appendChild(meta);
@@ -305,16 +305,21 @@ export const createTooltip = (comment) => {
   const tooltipScreenshots =
     comment.screenshots || (comment.screenshot ? [comment.screenshot] : []);
   if (tooltipScreenshots.length > 0) {
-    tooltip.appendChild(createScreenshotsDisplay(tooltipScreenshots));
+    tooltip.appendChild(createScreenshotsDisplay(tooltipScreenshots, strings));
   }
   return tooltip;
 };
 
-export const createReplyElement = (reply) => {
+export const createReplyElement = (reply, strings = defaultStrings, locale) => {
   const replyEl = document.createElement("div");
   replyEl.className = CLASSES.THREAD_REPLY;
 
-  const meta = createMetaElement(reply.author, reply.timestamp);
+  const meta = createMetaElement(
+    reply.author,
+    reply.timestamp,
+    strings,
+    locale
+  );
   const text = document.createElement("div");
   text.className = CLASSES.THREAD_BODY;
   text.textContent = reply.text;
@@ -324,26 +329,35 @@ export const createReplyElement = (reply) => {
   const replyScreenshots =
     reply.screenshots || (reply.screenshot ? [reply.screenshot] : []);
   if (replyScreenshots.length > 0) {
-    replyEl.appendChild(createScreenshotsDisplay(replyScreenshots));
+    replyEl.appendChild(createScreenshotsDisplay(replyScreenshots, strings));
   }
   return replyEl;
 };
 
-export const createThreadPopover = (comment) => {
+export const createThreadPopover = (
+  comment,
+  strings = defaultStrings,
+  locale
+) => {
   const popover = document.createElement("div");
   popover.className = CLASSES.THREAD_POPOVER;
   popover.dataset.for = comment.id;
   popover.setAttribute("role", "dialog");
-  popover.setAttribute("aria-label", "Comment thread");
+  popover.setAttribute("aria-label", strings.popoverAriaLabel);
 
   const header = document.createElement("div");
   header.className = CLASSES.THREAD_HEADER;
 
-  const meta = createMetaElement(comment.author, comment.createdAt);
+  const meta = createMetaElement(
+    comment.author,
+    comment.createdAt,
+    strings,
+    locale
+  );
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = CLASSES.CLOSE_TOOLTIP;
-  closeButton.setAttribute("aria-label", "Close");
+  closeButton.setAttribute("aria-label", strings.close);
   closeButton.innerHTML = "&times;";
 
   header.appendChild(meta);
@@ -357,23 +371,26 @@ export const createThreadPopover = (comment) => {
   replies.className = CLASSES.THREAD_REPLIES;
   if (comment.replies) {
     comment.replies.forEach((reply) => {
-      replies.appendChild(createReplyElement(reply));
+      replies.appendChild(createReplyElement(reply, strings, locale));
     });
   }
 
-  const { container: inputArea } = createInputArea({
-    areaClassName: CLASSES.THREAD_INPUT_AREA,
-    inputTag: "input",
-    inputClassName: CLASSES.THREAD_INPUT,
-    inputPlaceholder: "Reply...",
-  });
+  const { container: inputArea } = createInputArea(
+    {
+      areaClassName: CLASSES.THREAD_INPUT_AREA,
+      inputTag: "input",
+      inputClassName: CLASSES.THREAD_INPUT,
+      inputPlaceholder: strings.replyPlaceholder,
+    },
+    strings
+  );
 
   popover.appendChild(header);
   popover.appendChild(body);
   const popoverScreenshots =
     comment.screenshots || (comment.screenshot ? [comment.screenshot] : []);
   if (popoverScreenshots.length > 0) {
-    popover.appendChild(createScreenshotsDisplay(popoverScreenshots));
+    popover.appendChild(createScreenshotsDisplay(popoverScreenshots, strings));
   }
   popover.appendChild(replies);
   popover.appendChild(inputArea);
