@@ -3,6 +3,7 @@ import { CLASSES, IDS, SELECTORS } from "./constants.js";
 import { getStyles, getGlobalStyles } from "./styles.js";
 import { getShadowRoot } from "./root-element.js";
 import { getStrings, detectLocale } from "./i18n.js";
+import { createAnchor, resolveAnchor } from "./anchor.js";
 import {
   createToolbar,
   createCommentBox,
@@ -282,13 +283,22 @@ class CommentOverlay {
       underlying?.closest?.(SELECTORS.CONTAINER) || document.body;
     const containerRect = container.getBoundingClientRect();
 
-    const relativeX = (clientX - containerRect.left) / containerRect.width;
-    const relativeY = (clientY - containerRect.top) / containerRect.height;
+    // Zero-size containers (display:none, not yet laid out) would make the
+    // division blow up to Infinity — which isn't JSON-serializable either.
+    const relativeX =
+      containerRect.width > 0
+        ? (clientX - containerRect.left) / containerRect.width
+        : 0;
+    const relativeY =
+      containerRect.height > 0
+        ? (clientY - containerRect.top) / containerRect.height
+        : 0;
 
     this.currentPosition = {
       container,
       relativeX,
       relativeY,
+      anchor: createAnchor(container, relativeX, relativeY),
     };
 
     this.createPreviewCircle(clientX, clientY);
@@ -419,6 +429,8 @@ class CommentOverlay {
       container: this.currentPosition.container,
       relativeX: this.currentPosition.relativeX,
       relativeY: this.currentPosition.relativeY,
+      anchor: this.currentPosition.anchor,
+      anchorState: "anchored",
       id: Date.now(),
       replies: [],
       author: this.strings.anonymous,
@@ -429,6 +441,7 @@ class CommentOverlay {
     };
 
     this.comments.push(comment);
+    this.options.onCommentCreated?.(this._serializeComment(comment));
     this.renderCommentCircle(comment);
     this.hideCommentBox();
     this.toggleCommentMode();
@@ -733,7 +746,105 @@ class CommentOverlay {
       screenshots,
     };
     comment.replies.push(reply);
+    this.options.onReplyAdded?.(
+      this._serializeComment(comment),
+      this._serializeReply(reply)
+    );
     return reply;
+  }
+
+  _serializeReply({ id, text, author, timestamp }) {
+    return { id, text, author, timestamp };
+  }
+
+  /**
+   * Serializable snapshot of one comment: the live `container` element is
+   * replaced by its `anchor`; screenshots stay out (heavy data-URLs — the
+   * host app can persist them separately keyed by comment id).
+   */
+  _serializeComment(comment) {
+    return {
+      id: comment.id,
+      text: comment.text,
+      anchor: comment.anchor || null,
+      replies: (comment.replies || []).map((reply) =>
+        this._serializeReply(reply)
+      ),
+      author: comment.author,
+      createdAt: comment.createdAt,
+    };
+  }
+
+  /**
+   * @returns {import('./index.d.ts').SerializedComment[]}
+   */
+  serializeComments() {
+    return this.comments.map((comment) => this._serializeComment(comment));
+  }
+
+  _removeComment(id) {
+    this.cleanupResizeObserver(id);
+    if (this.mutationObservers.has(id)) {
+      try {
+        this.mutationObservers.get(id).disconnect();
+      } catch {}
+      this.mutationObservers.delete(id);
+    }
+    this.shadowRoot.querySelector(`[data-comment-id="${id}"]`)?.remove();
+    this.comments = this.comments.filter((comment) => comment.id !== id);
+  }
+
+  /**
+   * Restores serialized comments: each anchor is resolved back to a live
+   * element (circle re-rendered) or the comment is kept as an orphan —
+   * present in the list/inbox but never positioned over the wrong element.
+   * Loading the same id again replaces the previous copy (idempotent).
+   * @param {import('./index.d.ts').SerializedComment[]} data
+   * @returns {{ anchored: number, orphaned: number }}
+   */
+  loadComments(data) {
+    let anchored = 0;
+    let orphaned = 0;
+    if (!Array.isArray(data)) return { anchored, orphaned };
+
+    for (const item of data) {
+      if (!item || item.id == null || typeof item.text !== "string") {
+        console.warn("HellDots: skipping malformed serialized comment", item);
+        continue;
+      }
+      this._removeComment(item.id);
+
+      const comment = {
+        id: item.id,
+        text: item.text,
+        anchor: item.anchor || null,
+        anchorState: "orphaned",
+        container: null,
+        relativeX: 0,
+        relativeY: 0,
+        replies: Array.isArray(item.replies) ? [...item.replies] : [],
+        author: item.author || this.strings.anonymous,
+        createdAt: item.createdAt || new Date().toISOString(),
+        screenshots: [],
+      };
+
+      const resolved = item.anchor ? resolveAnchor(item.anchor) : null;
+      if (resolved) {
+        comment.container = resolved.element;
+        comment.relativeX = item.anchor.relativeX;
+        comment.relativeY = item.anchor.relativeY;
+        comment.anchorState = "anchored";
+        this.comments.push(comment);
+        this.renderCommentCircle(comment);
+        anchored++;
+      } else {
+        this.comments.push(comment);
+        orphaned++;
+        this.options.onAnchorLost?.(this._serializeComment(comment));
+      }
+    }
+
+    return { anchored, orphaned };
   }
 
   positionPopoverAtCircle(el, circle) {
