@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { createAnchor } from "../src/anchor.js";
+import { createAnchor, resolveAnchor } from "../src/anchor.js";
 
 const setBody = (html) => {
   document.body.innerHTML = html;
@@ -158,5 +158,107 @@ describe("createAnchor", () => {
       const anchor = createAnchor(el, 0.5, 0.5);
       expect(JSON.parse(JSON.stringify(anchor))).toEqual(anchor);
     });
+  });
+});
+
+describe("resolveAnchor", () => {
+  it("resolves via selector when the fingerprint matches", () => {
+    setBody(`<section id="hero">Welcome to the site</section>`);
+    const el = document.getElementById("hero");
+    const anchor = createAnchor(el, 0.5, 0.5);
+
+    const result = resolveAnchor(anchor);
+    expect(result).not.toBeNull();
+    expect(result.element).toBe(el);
+    expect(result.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it("resolves after a reload-like DOM rebuild (identical markup)", () => {
+    const markup = `<div class="plans"><section class="card">Pro plan</section></div>`;
+    setBody(markup);
+    const anchor = createAnchor(document.querySelector(".card"), 0.5, 0.5);
+
+    setBody(markup); // fresh, identical DOM — old element reference is gone
+    const result = resolveAnchor(anchor);
+    expect(result).not.toBeNull();
+    expect(result.element).toBe(document.querySelector(".card"));
+  });
+
+  it("rejects a selector match whose content is clearly different", () => {
+    setBody(`<section id="hero">Welcome to our amazing product page</section>`);
+    const anchor = createAnchor(document.getElementById("hero"), 0.5, 0.5);
+
+    setBody(`<section id="hero">Totally unrelated legal disclaimer text</section>`);
+    const result = resolveAnchor(anchor);
+    expect(result).toBeNull();
+  });
+
+  it("rescues by fingerprint when the selector is broken but content is intact", () => {
+    setBody(
+      `<div class="pricing"><section class="card">Compare our plans and pick one today</section></div>`
+    );
+    const anchor = createAnchor(document.querySelector(".card"), 0.5, 0.5);
+
+    // Classes renamed (selector broken), same content and position
+    setBody(
+      `<div class="pricing-v2"><section class="card-v2">Compare our plans and pick one today</section></div>`
+    );
+    const result = resolveAnchor(anchor);
+    expect(result).not.toBeNull();
+    expect(result.element).toBe(document.querySelector(".card-v2"));
+    expect(result.confidence).toBeGreaterThanOrEqual(0.7);
+  });
+
+  it("returns null when the element was removed", () => {
+    setBody(`<section id="gone">Ephemeral content here</section>`);
+    const anchor = createAnchor(document.getElementById("gone"), 0.5, 0.5);
+
+    setBody(`<div>Everything changed</div>`);
+    expect(resolveAnchor(anchor)).toBeNull();
+  });
+
+  it("degenerate fingerprint (no text, no attributes) resolves only via selector", () => {
+    setBody(`<main id="app"><div></div><div></div></main>`);
+    const el = document.querySelectorAll("main > div")[1];
+    const anchor = createAnchor(el, 0.5, 0.5);
+    expect(anchor.fingerprint.textSnippet).toBe("");
+    expect(Object.keys(anchor.fingerprint.attributes)).toHaveLength(0);
+
+    // Same DOM: selector still works
+    const result = resolveAnchor(anchor);
+    expect(result).not.toBeNull();
+    expect(result.element).toBe(el);
+
+    // Selector broken: rescue must NOT guess between anonymous divs
+    setBody(`<main><div></div><div></div></main>`);
+    expect(resolveAnchor(anchor)).toBeNull();
+  });
+
+  it("does not throw on a malformed selector and falls through to rescue", () => {
+    setBody(`<section>Compare our plans and pick one today</section>`);
+    const el = document.querySelector("section");
+    const anchor = createAnchor(el, 0.5, 0.5);
+    anchor.selector = ":::not-a-selector[";
+
+    const result = resolveAnchor(anchor);
+    expect(result).not.toBeNull();
+    expect(result.element).toBe(el);
+  });
+
+  it("returns null for null or fingerprint-less anchors", () => {
+    expect(resolveAnchor(null)).toBeNull();
+    expect(resolveAnchor({ version: 1, selector: "body" })).toBeNull();
+  });
+
+  it("reaches full confidence without attributes when text and position match", () => {
+    setBody(`<p>Some very specific paragraph text</p>`);
+    const el = document.querySelector("p");
+    const anchor = createAnchor(el, 0.5, 0.5);
+    anchor.selector = null; // force rescue path
+    expect(Object.keys(anchor.fingerprint.attributes)).toHaveLength(0);
+
+    const result = resolveAnchor(anchor);
+    expect(result).not.toBeNull();
+    expect(result.confidence).toBeCloseTo(1, 5);
   });
 });

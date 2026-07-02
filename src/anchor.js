@@ -7,6 +7,11 @@ const TEXT_SNIPPET_MAX = 64;
 const MAX_CLASS_PATH_DEPTH = 3;
 const MAX_STRUCTURAL_DEPTH = 5;
 
+// A selector match is verified against the fingerprint before being trusted;
+// the rescue path (fingerprint-only, no structural signal) demands more.
+const SELECTOR_THRESHOLD = 0.6;
+const RESCUE_THRESHOLD = 0.7;
+
 const GENERATED_CLASS_PREFIX_RE = /^(css|sc|jsx|emotion)-/i;
 const FRAMEWORK_DATA_ATTR_RE = /^data-(reactid|react-|v-|svelte-)/;
 const STABLE_ATTR_NAMES = ["id", "name", "role", "aria-label"];
@@ -152,4 +157,118 @@ export function createAnchor(element, relativeX, relativeY) {
     relativeX,
     relativeY,
   };
+}
+
+const textSimilarity = (a, b) => {
+  if (!a && !b) return 1;
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.startsWith(b) || b.startsWith(a)) return 0.8;
+  const tokensA = new Set(a.split(" "));
+  const tokensB = new Set(b.split(" "));
+  let common = 0;
+  for (const token of tokensA) if (tokensB.has(token)) common++;
+  return (2 * common) / (tokensA.size + tokensB.size);
+};
+
+const attributeSimilarity = (element, attrs) => {
+  const names = Object.keys(attrs);
+  if (!names.length) return 1;
+  let matched = 0;
+  for (const name of names) {
+    if ((element.getAttribute(name) || "").slice(0, TEXT_SNIPPET_MAX) === attrs[name]) {
+      matched++;
+    }
+  }
+  return matched / names.length;
+};
+
+const positionSimilarity = (element, fingerprint) => {
+  const { index, count } = siblingPosition(element);
+  const delta = Math.abs(index - fingerprint.siblingIndex);
+  const span = Math.max(fingerprint.siblingCount, count, 1);
+  return Math.max(0, 1 - delta / span);
+};
+
+const scoreElement = (element, fingerprint) => {
+  if (element.tagName !== fingerprint.tagName) return 0;
+
+  const hasText = Boolean(fingerprint.textSnippet);
+  const hasAttrs = Object.keys(fingerprint.attributes || {}).length > 0;
+
+  // Base weights (text 0.5 / attrs 0.3 / position 0.2); a missing signal's
+  // weight shifts to the other content signal so the scale stays 0–1.
+  let textWeight = 0.5;
+  let attrWeight = 0.3;
+  const posWeight = 0.2;
+  if (!hasAttrs) {
+    textWeight += attrWeight;
+    attrWeight = 0;
+  } else if (!hasText) {
+    attrWeight += textWeight;
+    textWeight = 0;
+  }
+
+  // Degenerate fingerprint: only structural signal remains.
+  if (!hasText && !hasAttrs) {
+    return positionSimilarity(element, fingerprint);
+  }
+
+  return (
+    textWeight *
+      textSimilarity(
+        normalizeText(element.textContent),
+        fingerprint.textSnippet
+      ) +
+    attrWeight * attributeSimilarity(element, fingerprint.attributes || {}) +
+    posWeight * positionSimilarity(element, fingerprint)
+  );
+};
+
+const bestMatch = (candidates, fingerprint) => {
+  let best = null;
+  for (const element of candidates) {
+    const confidence = scoreElement(element, fingerprint);
+    if (!best || confidence > best.confidence) best = { element, confidence };
+  }
+  return best;
+};
+
+/**
+ * Re-locates the element an anchor points at, or null if no candidate is
+ * trustworthy (orphaned comment). Never throws.
+ * @param {import('./index.d.ts').CommentAnchor} anchor
+ * @param {Document} [doc]
+ * @returns {{ element: HTMLElement, confidence: number } | null}
+ */
+export function resolveAnchor(anchor, doc = document) {
+  const fingerprint = anchor?.fingerprint;
+  if (!fingerprint || !fingerprint.tagName) return null;
+
+  if (anchor.selector) {
+    let candidates = [];
+    try {
+      candidates = [...doc.querySelectorAll(anchor.selector)];
+    } catch {
+      // Corrupt selector — the rescue search below still applies.
+    }
+    const best = bestMatch(candidates, fingerprint);
+    if (best && best.confidence >= SELECTOR_THRESHOLD) return best;
+  }
+
+  // Rescue search: only meaningful when the fingerprint carries content
+  // signal — anonymous elements would make any tag-wide match a guess.
+  const hasSignal =
+    Boolean(fingerprint.textSnippet) ||
+    Object.keys(fingerprint.attributes || {}).length > 0;
+  if (!hasSignal) return null;
+
+  let candidates = [];
+  try {
+    candidates = [...doc.querySelectorAll(fingerprint.tagName)];
+  } catch {
+    return null;
+  }
+  const best = bestMatch(candidates, fingerprint);
+  return best && best.confidence >= RESCUE_THRESHOLD ? best : null;
 }
