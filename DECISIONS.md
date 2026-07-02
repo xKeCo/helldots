@@ -255,6 +255,44 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   montó su toolbar primero — no es algo que esta tarea introduce ni
   intenta resolver (el caso de uso real es una sola instancia por página).
 
+## Anclaje serializable de comentarios (Requisito #1)
+
+- **Sin XPath, pese a que el requisito original decía "selector CSS/XPath"**:
+  acordado explícitamente con el usuario ("este requisito puede ser
+  modificado, solo quiero el mejor formato"). Un XPath estructural es
+  estrictamente más frágil que la combinación elegida (selector CSS en
+  cascada + fingerprint de contenido con scoring) y no aporta nada que el
+  selector CSS no cubra. Diseño completo en
+  `docs/superpowers/specs/2026-07-02-comment-anchoring-design.md`.
+- **Verificación obligatoria del fingerprint**: un match de
+  `querySelector` nunca se acepta a ciegas — se puntúa contra el
+  fingerprint (texto 0.5 / atributos 0.3 / posición entre hermanos 0.2,
+  con redistribución de pesos cuando falta una señal). Umbral 0.6 vía
+  selector, 0.7 vía búsqueda de rescate (sin señal estructural se exige
+  más confianza). Elementos "anónimos" (sin texto ni atributos) solo se
+  resuelven vía selector; el rescate se omite porque cualquier match
+  tag-wide sería una adivinanza.
+- **Screenshots fuera de la serialización v1**: son data-URLs de cientos
+  de KB; `SerializedComment` debe ser barato de persistir. La app
+  anfitriona puede guardarlos aparte usando el `id` del comentario.
+- **Persistencia delegada a la app anfitriona**: HellDots expone
+  `serializeComments()` / `loadComments()` y callbacks
+  (`onCommentCreated`, `onReplyAdded`, `onAnchorLost`); no incluye
+  `localStorage` ni backend propio — patrón de librería sin opiniones de
+  storage, decidido en el brainstorm.
+- **Bug real encontrado por el test de round-trip JSON**: un contenedor
+  con tamaño 0 (display:none, aún sin layout) producía
+  `relativeX/Y = Infinity` (división por cero), que ni siquiera es
+  JSON-serializable (`JSON.stringify` lo vuelve `null`). Se agregó un
+  guard en `_placeCommentAtPoint` que colapsa a 0 en ese caso.
+- **Inbox mínimo**: el botón de la toolbar era un stub; ahora abre un
+  panel que lista todos los comentarios y marca los huérfanos con un
+  badge localizado ("Unanchored"/"Desanclado"). Click en un huérfano abre
+  su thread popover centrado en el viewport (`showThreadPopover` acepta
+  `circle = null`), porque un comentario desanclado no tiene posición
+  válida en la página — nunca se posiciona "mejor esfuerzo" sobre
+  contenido equivocado.
+
 ## Fix de paridad visual post-Shadow DOM
 
 - **Bug real: cursor de modo comentario roto por el shadow root**: al

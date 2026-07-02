@@ -28,16 +28,16 @@ generación de selectores, persistencia ni re-anclaje.
 
 ```ts
 interface CommentAnchor {
-  version: 1;                    // migraciones futuras del formato
-  selector: string | null;       // CSS selector "mejor esfuerzo"; null si no hubo match único
+  version: 1; // migraciones futuras del formato
+  selector: string | null; // CSS selector "mejor esfuerzo"; null si no hubo match único
   fingerprint: {
-    tagName: string;             // "SECTION"
-    textSnippet: string;         // ~64 chars de textContent normalizado (trim + colapso de espacios)
+    tagName: string; // "SECTION"
+    textSnippet: string; // ~64 chars de textContent normalizado (trim + colapso de espacios)
     attributes: Record<string, string>; // subconjunto estable: id, name, role, aria-label, data-* no generados
-    siblingIndex: number;        // posición entre hermanos del mismo tagName (0-based)
-    siblingCount: number;        // total de hermanos del mismo tagName
+    siblingIndex: number; // posición entre hermanos del mismo tagName (0-based)
+    siblingCount: number; // total de hermanos del mismo tagName
   };
-  relativeX: number;             // fracción 0–1 dentro del contenedor
+  relativeX: number; // fracción 0–1 dentro del contenedor
   relativeY: number;
 }
 

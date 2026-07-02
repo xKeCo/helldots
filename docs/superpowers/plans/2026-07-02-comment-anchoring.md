@@ -22,10 +22,12 @@
 ### Task 1: `createAnchor` — selector cascade + fingerprint
 
 **Files:**
+
 - Create: `src/anchor.js`
 - Test: `test/anchor.test.js`
 
 **Interfaces:**
+
 - Produces: `createAnchor(element: HTMLElement, relativeX: number, relativeY: number): CommentAnchor` where `CommentAnchor = { version: 1, selector: string|null, fingerprint: { tagName, textSnippet, attributes, siblingIndex, siblingCount }, relativeX, relativeY }`.
 
 - [ ] **Step 1: Write failing tests** for the selector cascade (unique id → stable attribute → stable-class path → nth-of-type path → null), the generated-class filter, and fingerprint capture. Test cases (jsdom, `document.body.innerHTML` fixtures):
@@ -46,15 +48,17 @@
 ### Task 2: `resolveAnchor` — verification, rescue, orphan
 
 **Files:**
+
 - Modify: `src/anchor.js`
 - Test: `test/anchor.test.js`
 
 **Interfaces:**
+
 - Produces: `resolveAnchor(anchor: CommentAnchor, doc = document): { element: HTMLElement, confidence: number } | null`.
 
 - [ ] **Step 1: Write failing tests**:
   - selector resolves + fingerprint matches → element returned, confidence ≥ 0.6
-  - selector resolves to a *different* element (same selector, different text content) → rejected → rescue or null (acceptance criterion #5)
+  - selector resolves to a _different_ element (same selector, different text content) → rejected → rescue or null (acceptance criterion #5)
   - selector broken (classes renamed) but same content elsewhere → rescue by fingerprint finds it, confidence ≥ 0.7 (criterion #3)
   - element deleted → null (criterion #4)
   - fingerprint with no text and no attributes (degenerate) → resolvable only via selector + exact sibling position; rescue skipped
@@ -69,10 +73,12 @@
 ### Task 3: Overlay integration — capture, serialize, callbacks
 
 **Files:**
+
 - Modify: `src/overlay.js` (`_placeCommentAtPoint`, `saveComment`, `addReply`; new `serializeComments`, `_serializeComment`)
 - Test: `test/persistence.test.js` (new)
 
 **Interfaces:**
+
 - Consumes: `createAnchor` from Task 1.
 - Produces: `overlay.serializeComments(): SerializedComment[]`; options callbacks `onCommentCreated(sc)`, `onReplyAdded(sc, reply)`; in-memory comment gains `anchor` and `anchorState: "anchored"`.
 
@@ -89,10 +95,12 @@
 ### Task 4: `loadComments` — restore, orphans, `onAnchorLost`
 
 **Files:**
+
 - Modify: `src/overlay.js`
 - Test: `test/persistence.test.js`
 
 **Interfaces:**
+
 - Consumes: `resolveAnchor` (Task 2), `serializeComments` (Task 3).
 - Produces: `overlay.loadComments(data): { anchored: number, orphaned: number }`; orphans stay in `this.comments` with `anchorState: "orphaned"`, `container: null`, no circle.
 
@@ -110,10 +118,12 @@
 ### Task 5: Minimal Inbox panel
 
 **Files:**
+
 - Modify: `src/constants.js` (CLASSES: `INBOX_PANEL`, `INBOX_ITEM`, `INBOX_ITEM_TEXT`, `INBOX_ORPHAN_BADGE`, `INBOX_EMPTY`), `src/components.js` (`createInboxPanel(comments, strings, locale)`), `src/styles.js` (panel styles near toolbar), `src/locales/en.js` + `es.js` (`inboxAriaLabel`, `inboxEmpty`, `orphanedBadge`), `src/overlay.js` (toggle on `TOOLBAR_MENU_BTN` click, item click → scroll+popover for anchored / centered popover for orphaned, Escape + outside-click close, cleanup)
 - Test: `test/persistence.test.js` (or `test/overlay.test.js`)
 
 **Interfaces:**
+
 - Consumes: `comment.anchorState` (Tasks 3-4), `showThreadPopover` (modified to accept `circle = null` → centered positioning).
 
 - [ ] **Step 1: Write failing tests**:
@@ -130,6 +140,7 @@
 ### Task 6: Types, consistency check, gates, docs
 
 **Files:**
+
 - Modify: `src/index.d.ts` (new `CommentAnchor`, `CommentAnchorFingerprint`, `SerializedComment`, `AnchorState`; extend `CommentOverlayOptions` with the 3 callbacks; extend `Comment` with `anchor`, `anchorState`, `container: HTMLElement | null`; extend `CommentOverlay` with `serializeComments`, `loadComments`), `typecheck/consistency-check.ts`, `DECISIONS.md` (new section documenting anchor format decisions), `.changeset/` (new changeset, minor)
 - Test: existing gates
 

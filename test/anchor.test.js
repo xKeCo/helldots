@@ -40,9 +40,7 @@ describe("createAnchor", () => {
     });
 
     it("falls back to a stable attribute when there is no id", () => {
-      setBody(
-        `<button data-testid="cta">Buy</button><button>Other</button>`
-      );
+      setBody(`<button data-testid="cta">Buy</button><button>Other</button>`);
       const el = document.querySelector("button");
       const anchor = createAnchor(el, 0.5, 0.5);
       expect(anchor.selector).toBe('button[data-testid="cta"]');
@@ -80,9 +78,7 @@ describe("createAnchor", () => {
     });
 
     it("falls back to an nth-of-type structural path", () => {
-      setBody(
-        `<div><p>first</p></div><div><p>second</p><p>third</p></div>`
-      );
+      setBody(`<div><p>first</p></div><div><p>second</p><p>third</p></div>`);
       const el = document.querySelectorAll("div")[1].querySelectorAll("p")[1];
       const anchor = createAnchor(el, 0.5, 0.5);
       expect(anchor.selector).toBeTruthy();
@@ -91,9 +87,7 @@ describe("createAnchor", () => {
     });
 
     it("roots the structural path at the nearest ancestor with an id", () => {
-      setBody(
-        `<main id="app"><div><span>x</span><span>y</span></div></main>`
-      );
+      setBody(`<main id="app"><div><span>x</span><span>y</span></div></main>`);
       const el = document.querySelectorAll("span")[1];
       const anchor = createAnchor(el, 0.5, 0.5);
       expect(anchor.selector).toContain("#app");
@@ -188,7 +182,9 @@ describe("resolveAnchor", () => {
     setBody(`<section id="hero">Welcome to our amazing product page</section>`);
     const anchor = createAnchor(document.getElementById("hero"), 0.5, 0.5);
 
-    setBody(`<section id="hero">Totally unrelated legal disclaimer text</section>`);
+    setBody(
+      `<section id="hero">Totally unrelated legal disclaimer text</section>`
+    );
     const result = resolveAnchor(anchor);
     expect(result).toBeNull();
   });

@@ -304,7 +304,11 @@ class CommentOverlay {
       container,
       relativeX,
       relativeY,
-      anchor: createAnchor(container, relativeX, relativeY),
+      anchor: createAnchor(
+        /** @type {HTMLElement} */ (container),
+        relativeX,
+        relativeY
+      ),
     };
 
     this.createPreviewCircle(clientX, clientY);
@@ -554,36 +558,38 @@ class CommentOverlay {
     this.shadowRoot.appendChild(panel);
     this.activeInboxPanel = panel;
 
-    panel.querySelectorAll(`.${CLASSES.INBOX_ITEM}`).forEach((item) => {
-      const comment = this.comments.find(
-        (c) => String(c.id) === item.dataset.commentId
-      );
-      if (!comment) return;
-
-      const openThread = () => {
-        this.closeInbox();
-        if (comment.anchorState === "orphaned" || !comment.container) {
-          this.showThreadPopover(null, comment);
-          return;
-        }
-        const circle = this.shadowRoot.querySelector(
-          `[data-comment-id="${comment.id}"]`
+    panel
+      .querySelectorAll(`.${CLASSES.INBOX_ITEM}`)
+      .forEach((/** @type {HTMLElement} */ item) => {
+        const comment = this.comments.find(
+          (c) => String(c.id) === item.dataset.commentId
         );
-        comment.container.scrollIntoView?.({ block: "center" });
-        if (circle) this.showThreadPopover(circle, comment);
-      };
+        if (!comment) return;
 
-      item.addEventListener("click", (e) => {
-        e.stopPropagation();
-        openThread();
-      });
-      item.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
+        const openThread = () => {
+          this.closeInbox();
+          if (comment.anchorState === "orphaned" || !comment.container) {
+            this.showThreadPopover(null, comment);
+            return;
+          }
+          const circle = this.shadowRoot.querySelector(
+            `[data-comment-id="${comment.id}"]`
+          );
+          comment.container.scrollIntoView?.({ block: "center" });
+          if (circle) this.showThreadPopover(circle, comment);
+        };
+
+        item.addEventListener("click", (e) => {
+          e.stopPropagation();
           openThread();
-        }
+        });
+        item.addEventListener("keydown", (/** @type {KeyboardEvent} */ e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openThread();
+          }
+        });
       });
-    });
 
     setTimeout(() => {
       this._inboxClickHandler = (e) => {

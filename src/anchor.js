@@ -39,15 +39,14 @@ const normalizeText = (text) =>
 // either carry a known prefix or contain a long token with digits in it.
 const isStableClass = (cls) => {
   if (GENERATED_CLASS_PREFIX_RE.test(cls)) return false;
-  return !cls
-    .split(/[-_]/)
-    .some((part) => part.length >= 5 && /\d/.test(part));
+  return !cls.split(/[-_]/).some((part) => part.length >= 5 && /\d/.test(part));
 };
 
 const stableClassesOf = (element) =>
   [...element.classList].filter(isStableClass);
 
 const stableAttributes = (element) => {
+  /** @type {Record<string, string>} */
   const attrs = {};
   for (const { name, value } of element.attributes) {
     const isStable =
@@ -91,9 +90,7 @@ const classPathSelector = (element, doc) => {
     const classes = stableClassesOf(current);
     const tag = current.tagName.toLowerCase();
     segments.unshift(
-      classes.length
-        ? `${tag}.${classes.map(escapeCss).join(".")}`
-        : tag
+      classes.length ? `${tag}.${classes.map(escapeCss).join(".")}` : tag
     );
     // The element's own segment must carry at least one stable class for
     // this strategy to say anything a structural path wouldn't.
@@ -176,7 +173,10 @@ const attributeSimilarity = (element, attrs) => {
   if (!names.length) return 1;
   let matched = 0;
   for (const name of names) {
-    if ((element.getAttribute(name) || "").slice(0, TEXT_SNIPPET_MAX) === attrs[name]) {
+    if (
+      (element.getAttribute(name) || "").slice(0, TEXT_SNIPPET_MAX) ===
+      attrs[name]
+    ) {
       matched++;
     }
   }
@@ -263,7 +263,7 @@ export function resolveAnchor(anchor, doc = document) {
     Object.keys(fingerprint.attributes || {}).length > 0;
   if (!hasSignal) return null;
 
-  let candidates = [];
+  let candidates;
   try {
     candidates = [...doc.querySelectorAll(fingerprint.tagName)];
   } catch {

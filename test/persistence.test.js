@@ -76,7 +76,10 @@ describe("persistence", () => {
     it("fires onReplyAdded with the serialized comment and the reply", () => {
       const onReplyAdded = vi.fn();
       overlay = makeOverlay({ onReplyAdded });
-      const comment = createCommentOn(overlay, document.getElementById("target"));
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target")
+      );
 
       const reply = overlay.addReply(comment, "A reply");
 
@@ -108,7 +111,10 @@ describe("persistence", () => {
 
     it("serializes replies without screenshots", () => {
       overlay = makeOverlay();
-      const comment = createCommentOn(overlay, document.getElementById("target"));
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target")
+      );
       overlay.addReply(comment, "with screenshot", ["data:image/png;base64,x"]);
 
       const [serialized] = overlay.serializeComments();
@@ -248,14 +254,18 @@ describe("persistence", () => {
     it("shows the empty state when there are no comments", () => {
       overlay = makeOverlay({ locale: "en" });
       const panel = openInbox(overlay);
-      expect(
-        panel.querySelector(`.${CLASSES.INBOX_EMPTY}`).textContent
-      ).toBe("No comments yet");
+      expect(panel.querySelector(`.${CLASSES.INBOX_EMPTY}`).textContent).toBe(
+        "No comments yet"
+      );
     });
 
     it("flags orphaned comments with a localized badge", () => {
       overlay = makeOverlay();
-      createCommentOn(overlay, document.getElementById("target"), "will orphan");
+      createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "will orphan"
+      );
       const data = overlay.serializeComments();
       overlay.cleanup();
 
@@ -273,14 +283,16 @@ describe("persistence", () => {
       overlay = makeOverlay();
       createCommentOn(overlay, document.getElementById("target"), "anchored");
       const panel = openInbox(overlay);
-      expect(
-        panel.querySelector(`.${CLASSES.INBOX_ORPHAN_BADGE}`)
-      ).toBeNull();
+      expect(panel.querySelector(`.${CLASSES.INBOX_ORPHAN_BADGE}`)).toBeNull();
     });
 
     it("clicking an orphaned item opens its thread popover without a circle", () => {
       overlay = makeOverlay();
-      createCommentOn(overlay, document.getElementById("target"), "orphan thread");
+      createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "orphan thread"
+      );
       const data = overlay.serializeComments();
       overlay.cleanup();
 

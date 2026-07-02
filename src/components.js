@@ -398,7 +398,11 @@ export const createThreadPopover = (
   return popover;
 };
 
-export const createInboxPanel = (comments, strings = defaultStrings, locale) => {
+export const createInboxPanel = (
+  comments,
+  strings = defaultStrings,
+  locale
+) => {
   const panel = document.createElement("div");
   panel.className = CLASSES.INBOX_PANEL;
   panel.setAttribute("role", "dialog");
