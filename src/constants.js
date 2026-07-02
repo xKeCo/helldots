@@ -37,6 +37,11 @@ export const CLASSES = {
   TOOLBAR_ACTION_TOOLTIP: "toolbar-action-tooltip",
   TOOLBAR_COMMENT_BTN: "toolbar-comment-btn",
   TOOLBAR_MENU_BTN: "toolbar-menu-btn",
+  INBOX_PANEL: "inbox-panel",
+  INBOX_ITEM: "inbox-item",
+  INBOX_ITEM_TEXT: "inbox-item-text",
+  INBOX_ORPHAN_BADGE: "inbox-orphan-badge",
+  INBOX_EMPTY: "inbox-empty",
 };
 
 export const IDS = {

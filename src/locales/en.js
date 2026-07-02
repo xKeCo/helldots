@@ -20,4 +20,7 @@ export default {
   attachedScreenshot: "Attached screenshot",
   screenshotPreview: "Screenshot preview",
   removeScreenshot: "Remove screenshot",
+  inboxAriaLabel: "Comments inbox",
+  inboxEmpty: "No comments yet",
+  orphanedBadge: "Unanchored",
 };

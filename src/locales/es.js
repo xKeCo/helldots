@@ -20,4 +20,7 @@ export default {
   attachedScreenshot: "Captura de pantalla adjunta",
   screenshotPreview: "Vista previa de la captura",
   removeScreenshot: "Quitar captura de pantalla",
+  inboxAriaLabel: "Bandeja de comentarios",
+  inboxEmpty: "Aún no hay comentarios",
+  orphanedBadge: "Desanclado",
 };

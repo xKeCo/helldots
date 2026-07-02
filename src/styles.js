@@ -263,6 +263,59 @@ export const getStyles = () => `
         box-sizing: border-box;
     }
 
+    .${CLASSES.INBOX_PANEL} {
+        position: fixed;
+        bottom: 70px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1C1C1E;
+        border-radius: 12px;
+        padding: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        width: 320px;
+        max-height: 50vh;
+        overflow-y: auto;
+        z-index: ${Z_INDEX.COMMENT_BOX};
+        color: white;
+        font-size: 14px;
+        line-height: 1.5;
+        box-sizing: border-box;
+    }
+
+    .${CLASSES.INBOX_ITEM} {
+        padding: 10px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+    .${CLASSES.INBOX_ITEM}:hover {
+        background: rgba(255,255,255,0.08);
+    }
+
+    .${CLASSES.INBOX_ITEM_TEXT} {
+        margin-top: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .${CLASSES.INBOX_ORPHAN_BADGE} {
+        display: inline-block;
+        margin-top: 4px;
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: rgba(255, 159, 10, 0.2);
+        color: #FF9F0A;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .${CLASSES.INBOX_EMPTY} {
+        padding: 16px 12px;
+        color: rgba(255,255,255,0.55);
+        text-align: center;
+    }
+
     .${CLASSES.THREAD_HEADER} {
         display: flex;
         justify-content: space-between;

@@ -11,6 +11,7 @@ import {
   createTooltip,
   createThreadPopover,
   createReplyElement,
+  createInboxPanel,
 } from "./components.js";
 
 class CommentOverlay {
@@ -63,6 +64,7 @@ class CommentOverlay {
     this.commentBtn = this.toolbar.querySelector(
       `.${CLASSES.TOOLBAR_COMMENT_BTN}`
     );
+    this.inboxBtn = this.toolbar.querySelector(`.${CLASSES.TOOLBAR_MENU_BTN}`);
     /** @type {HTMLButtonElement} */
     this.submitButton = /** @type {any} */ (
       this.shadowRoot.getElementById(IDS.SUBMIT_COMMENT)
@@ -88,6 +90,7 @@ class CommentOverlay {
 
   bindEventListeners() {
     this.commentBtn.addEventListener("click", () => this.toggleCommentMode());
+    this.inboxBtn.addEventListener("click", () => this.toggleInbox());
     this.submitButton.addEventListener("click", () => this.saveComment());
 
     this.commentInput.addEventListener("keydown", (e) => {
@@ -133,6 +136,8 @@ class CommentOverlay {
           this.closeLightbox();
         } else if (this.activeThreadPopover) {
           this.closeThreadPopover();
+        } else if (this.activeInboxPanel) {
+          this.closeInbox();
         } else if (this.commentBox.style.display !== "none") {
           this.hideCommentBox();
           this.toggleCommentMode();
@@ -178,6 +183,7 @@ class CommentOverlay {
       target.closest?.(`.${CLASSES.CIRCLE}`) ||
       target.closest?.(`.${CLASSES.TOOLTIP}`) ||
       target.closest?.(`.${CLASSES.THREAD_POPOVER}`) ||
+      target.closest?.(`.${CLASSES.INBOX_PANEL}`) ||
       target.closest?.(`.${CLASSES.LIGHTBOX}`)
     ) {
       return;
@@ -533,6 +539,76 @@ class CommentOverlay {
     tooltip.addEventListener("mouseleave", () => tooltip.remove());
   }
 
+  toggleInbox() {
+    if (this.activeInboxPanel) {
+      this.closeInbox();
+    } else {
+      this.showInbox();
+    }
+  }
+
+  showInbox() {
+    this.closeThreadPopover();
+
+    const panel = createInboxPanel(this.comments, this.strings, this.locale);
+    this.shadowRoot.appendChild(panel);
+    this.activeInboxPanel = panel;
+
+    panel.querySelectorAll(`.${CLASSES.INBOX_ITEM}`).forEach((item) => {
+      const comment = this.comments.find(
+        (c) => String(c.id) === item.dataset.commentId
+      );
+      if (!comment) return;
+
+      const openThread = () => {
+        this.closeInbox();
+        if (comment.anchorState === "orphaned" || !comment.container) {
+          this.showThreadPopover(null, comment);
+          return;
+        }
+        const circle = this.shadowRoot.querySelector(
+          `[data-comment-id="${comment.id}"]`
+        );
+        comment.container.scrollIntoView?.({ block: "center" });
+        if (circle) this.showThreadPopover(circle, comment);
+      };
+
+      item.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openThread();
+      });
+      item.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openThread();
+        }
+      });
+    });
+
+    setTimeout(() => {
+      this._inboxClickHandler = (e) => {
+        const target = e.composedPath()[0] || e.target;
+        if (!panel.contains(target) && !this.inboxBtn.contains(target)) {
+          this.closeInbox();
+        }
+      };
+      document.addEventListener("mousedown", this._inboxClickHandler);
+    }, 0);
+  }
+
+  closeInbox() {
+    if (this.activeInboxPanel) {
+      this.activeInboxPanel.remove();
+      this.activeInboxPanel = null;
+    }
+    if (this._inboxClickHandler) {
+      document.removeEventListener("mousedown", this._inboxClickHandler);
+      this._inboxClickHandler = null;
+    }
+  }
+
+  // `circle` may be null for orphaned comments (opened from the inbox):
+  // the popover is centered in the viewport instead of pinned to a marker.
   showThreadPopover(circle, comment) {
     this.closeThreadPopover();
 
@@ -559,7 +635,11 @@ class CommentOverlay {
     }
 
     setTimeout(() => {
-      this.positionPopoverAtCircle(popover, circle);
+      if (circle) {
+        this.positionPopoverAtCircle(popover, circle);
+      } else {
+        this.centerPopover(popover);
+      }
     }, 10);
 
     popover
@@ -683,7 +763,7 @@ class CommentOverlay {
     setTimeout(() => {
       this._threadClickHandler = (e) => {
         const target = e.composedPath()[0] || e.target;
-        if (!popover.contains(target) && !circle.contains(target)) {
+        if (!popover.contains(target) && !circle?.contains(target)) {
           this.closeThreadPopover();
         }
       };
@@ -845,6 +925,14 @@ class CommentOverlay {
     }
 
     return { anchored, orphaned };
+  }
+
+  centerPopover(el) {
+    const elRect = el.getBoundingClientRect();
+    const x = Math.max(10, (window.innerWidth - (elRect.width || 400)) / 2);
+    const y = Math.max(10, (window.innerHeight - elRect.height) / 2);
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
   }
 
   positionPopoverAtCircle(el, circle) {
@@ -1143,6 +1231,7 @@ class CommentOverlay {
    */
   cleanup() {
     this.closeThreadPopover();
+    this.closeInbox();
     this.closeLightbox();
     this.removePreviewCircle();
     this._selectionRect?.remove();
