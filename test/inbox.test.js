@@ -420,6 +420,60 @@ describe("inbox sidebar", () => {
     });
   });
 
+  describe("cross-page navigation", () => {
+    afterEach(() => {
+      sessionStorage.clear();
+    });
+
+    it("clicking an inactive card stores the pending id and navigates to its page", () => {
+      overlay = makeOverlay();
+      overlay._navigateTo = vi.fn();
+      overlay.loadComments([otherPageComment(500)]);
+
+      const panel = openInbox(overlay);
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-page="all"]`));
+      click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
+
+      expect(sessionStorage.getItem("helldots-pending-detail")).toBe("500");
+      expect(overlay._navigateTo).toHaveBeenCalledWith("/otra-pagina");
+      // no detail opened here — it opens after the navigation
+      expect(panel.querySelector(`.${CLASSES.INBOX_DETAIL}`)).toBeNull();
+    });
+
+    it("on init with a pending id, opens the inbox directly on that detail and clears the key", () => {
+      // Seed storage with a comment belonging to the *current* page
+      overlay = makeOverlay({ persistence: "localStorage" });
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "arrived via redirect"
+      );
+      overlay.cleanup();
+      sessionStorage.setItem("helldots-pending-detail", String(comment.id));
+
+      overlay = makeOverlay({ persistence: "localStorage" });
+
+      const panel = overlay.shadowRoot.querySelector(
+        `.${CLASSES.INBOX_PANEL}`
+      );
+      expect(panel).toBeTruthy();
+      const detail = panel.querySelector(`.${CLASSES.INBOX_DETAIL}`);
+      expect(detail).toBeTruthy();
+      expect(detail.textContent).toContain("arrived via redirect");
+      expect(sessionStorage.getItem("helldots-pending-detail")).toBeNull();
+    });
+
+    it("a pending id that no longer exists is ignored and cleared", () => {
+      sessionStorage.setItem("helldots-pending-detail", "424242");
+      overlay = makeOverlay({ persistence: "localStorage" });
+      expect(
+        overlay.shadowRoot.querySelector(`.${CLASSES.INBOX_DETAIL}`)
+      ).toBeNull();
+      expect(sessionStorage.getItem("helldots-pending-detail")).toBeNull();
+    });
+  });
+
   describe("status lifecycle from the UI", () => {
     it("changing status from an inbox card persists it", () => {
       overlay = makeOverlay({ persistence: "localStorage" });

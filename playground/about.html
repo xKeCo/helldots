@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>About — HellDots Playground</title>
+    <link href="https://fonts.googleapis.com/css?family=Poppins:200,400,700" rel="stylesheet" />
+    <!-- DEV ONLY: resolves bare specifiers for the bundler-free playground -->
+    <script type="importmap">
+      {
+        "imports": {
+          "html2canvas": "https://esm.sh/html2canvas@1.4.1"
+        }
+      }
+    </script>
+    <style>
+      body {
+        margin: 0;
+        font-family: "Poppins", sans-serif;
+        color: #1c1c1e;
+      }
+      .page-header {
+        background: #16205e;
+        color: #fff;
+        padding: 24px 48px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .page-header a {
+        color: #2ee6d2;
+        text-decoration: none;
+        font-weight: 700;
+      }
+      main {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 48px 24px;
+      }
+      section {
+        margin-bottom: 48px;
+      }
+      .team-card {
+        border: 1px solid #e2e2e6;
+        border-radius: 12px;
+        padding: 24px;
+      }
+      img.about-illustration {
+        width: 100%;
+        max-height: 240px;
+        object-fit: contain;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="page-header">
+      <strong>HellDots Playground — About</strong>
+      <a href="./index.html">← Back to home</a>
+    </header>
+
+    <main>
+      <section id="mission">
+        <h1>About this page</h1>
+        <p>
+          This is a second playground route. Comments created here belong to
+          this page: on the home page they only appear in the inbox under
+          "All comments", tagged with this page's path, and clicking them
+          navigates back here and opens their thread automatically.
+        </p>
+      </section>
+
+      <section id="team" class="team-card">
+        <h2>The team</h2>
+        <p>
+          A tiny fake section with enough distinct text for anchors to
+          fingerprint reliably. Try commenting on this card, then visit the
+          home page and look for it in the inbox.
+        </p>
+        <img
+          class="about-illustration"
+          src="./images/yeo-feature-3.svg"
+          alt="Team illustration"
+        />
+      </section>
+    </main>
+  </body>
+  <script type="module">
+    import { createCommentOverlay } from '../src/index.js';
+
+    createCommentOverlay({
+      autoInit: true,
+      persistence: 'localStorage',
+      user: { name: 'Kevin Collazos' },
+    });
+  </script>
+</html>

@@ -7,6 +7,10 @@
 
 export const STORAGE_KEY = "helldots-comments";
 
+// sessionStorage handoff: set right before navigating to another page so
+// the overlay there opens the inbox directly on that comment's detail.
+export const PENDING_DETAIL_KEY = "helldots-pending-detail";
+
 /**
  * @returns {import('./index.d.ts').SerializedComment[]}
  */

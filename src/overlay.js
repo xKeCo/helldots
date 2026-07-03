@@ -12,6 +12,7 @@ import {
   readStoredComments,
   writeStoredComments,
   mergeForStorage,
+  PENDING_DETAIL_KEY,
 } from "./storage.js";
 import {
   createToolbar,
@@ -100,7 +101,29 @@ class CommentOverlay {
 
     if (this.options.persistence === "localStorage") {
       this.loadComments(readStoredComments());
+      this._openPendingDetail();
     }
+  }
+
+  _navigateTo(url) {
+    location.assign(url);
+  }
+
+  // Cross-page handoff: an inactive card click on the previous page left a
+  // comment id in sessionStorage; open the inbox on its detail here.
+  _openPendingDetail() {
+    let id = null;
+    try {
+      id = sessionStorage.getItem(PENDING_DETAIL_KEY);
+      if (id != null) sessionStorage.removeItem(PENDING_DETAIL_KEY);
+    } catch {
+      return;
+    }
+    if (!id) return;
+    const comment = this.comments.find((c) => String(c.id) === id);
+    if (!comment) return;
+    this.showInbox();
+    this.inboxView.openDetail(comment.id);
   }
 
   _syncStorage() {
@@ -609,6 +632,12 @@ class CommentOverlay {
             this.addReply(comment, text, screenshots),
           onDelete: (id) => this.deleteComment(id),
           onSetStatus: (id, status) => this.setCommentStatus(id, status),
+          onNavigateToPage: (comment) => {
+            try {
+              sessionStorage.setItem(PENDING_DETAIL_KEY, String(comment.id));
+            } catch {}
+            this._navigateTo(comment.page);
+          },
           onShowLightbox: (src) => this.showLightbox(src),
           onClose: () => this.closeInbox(),
         },

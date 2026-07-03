@@ -26,7 +26,7 @@ export class InboxView {
    * @param {string} deps.locale
    * @param {string} deps.currentPage
    * @param {() => Array<Object>} deps.getComments
-   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onSetStatus: Function, onShowLightbox: Function, onClose: Function }} deps.callbacks
+   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onSetStatus: Function, onNavigateToPage: Function, onShowLightbox: Function, onClose: Function }} deps.callbacks
    */
   constructor({
     shadowRoot,
@@ -106,6 +106,17 @@ export class InboxView {
       this.detailId = null;
       this._renderList(comments);
     }
+  }
+
+  /**
+   * Opens the panel (if needed) directly on a comment's detail. Used by
+   * the overlay for the cross-page handoff on startup.
+   * @param {number} id
+   */
+  openDetail(id) {
+    if (!this.el) this.open();
+    const comment = this.getComments().find((c) => c.id === id);
+    if (comment) this._openDetail(comment);
   }
 
   _openDetail(comment) {
@@ -285,21 +296,28 @@ export class InboxView {
       card.setAttribute("role", "button");
       card.setAttribute("tabindex", "0");
 
+      // Inactive comments belong to another page: activating them hands
+      // off to that page (the detail opens there after the redirect).
+      const activate = () =>
+        comment.anchorState === "inactive"
+          ? this.callbacks.onNavigateToPage(comment)
+          : this._openDetail(comment);
+
       const replyLink = document.createElement("button");
       replyLink.type = "button";
       replyLink.className = CLASSES.INBOX_CARD_REPLY_LINK;
       replyLink.textContent = this.strings.replyLink;
       replyLink.addEventListener("click", (e) => {
         e.stopPropagation();
-        this._openDetail(comment);
+        activate();
       });
       card.appendChild(replyLink);
 
-      card.addEventListener("click", () => this._openDetail(comment));
+      card.addEventListener("click", activate);
       card.addEventListener("keydown", (/** @type {KeyboardEvent} */ e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          this._openDetail(comment);
+          activate();
         }
       });
     }
