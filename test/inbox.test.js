@@ -86,20 +86,100 @@ describe("inbox sidebar", () => {
       expect(panel.textContent).not.toContain("comment from another page");
     });
 
-    it("the filter switch shows all comments with a page tag on foreign ones", () => {
+    it("the page filter shows all comments with a page tag on foreign ones", () => {
       overlay = makeOverlay();
       createCommentOn(overlay, document.getElementById("target"), "mine");
       overlay.loadComments([otherPageComment()]);
 
       const panel = openInbox(overlay);
       click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
-      const options = panel.querySelectorAll(`.${CLASSES.INBOX_FILTER_OPTION}`);
-      click(options[0]); // "All comments"
+      click(panel.querySelector(`[data-filter-page="all"]`));
 
       const cards = panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`);
       expect(cards).toHaveLength(2);
       const tags = [...panel.querySelectorAll(`.${CLASSES.INBOX_CARD_TAG}`)];
       expect(tags.some((t) => t.textContent === "/otra-pagina")).toBe(true);
+    });
+
+    it("the filter menu has page and status sections with checkmarks on the active options", () => {
+      overlay = makeOverlay({ locale: "en" });
+      const panel = openInbox(overlay);
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+
+      const menu = panel.querySelector(`.${CLASSES.INBOX_FILTER_MENU}`);
+      expect(menu.textContent).toContain("Filter by Page");
+      expect(menu.textContent).toContain("Filter by Status");
+
+      const checkedPage = menu.querySelector(
+        `[data-filter-page][aria-checked="true"]`
+      );
+      const checkedStatus = menu.querySelector(
+        `[data-filter-status][aria-checked="true"]`
+      );
+      expect(checkedPage.dataset.filterPage).toBe("page");
+      expect(checkedStatus.dataset.filterStatus).toBe("all");
+    });
+
+    it("combines the status filter with the page filter", () => {
+      overlay = makeOverlay();
+      const target = document.getElementById("target");
+      const open1 = createCommentOn(overlay, target, "still open");
+      const resolved1 = createCommentOn(overlay, target, "already resolved");
+      overlay.setCommentStatus(resolved1.id, "resolved");
+      overlay.loadComments([otherPageComment()]);
+
+      const panel = openInbox(overlay);
+
+      // current page + unresolved
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-status="unresolved"]`));
+      let cards = [...panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`)];
+      expect(cards.map((c) => c.dataset.commentId)).toEqual([
+        String(open1.id),
+      ]);
+
+      // all pages + resolved
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-page="all"]`));
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-status="resolved"]`));
+      cards = [...panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`)];
+      expect(cards.map((c) => c.dataset.commentId)).toEqual([
+        String(resolved1.id),
+      ]);
+    });
+
+    it("shows a combined label when a status filter is active", () => {
+      overlay = makeOverlay({ locale: "es" });
+      const panel = openInbox(overlay);
+      const label = () =>
+        panel.querySelector(`.${CLASSES.INBOX_FILTER} span`).textContent;
+      expect(label()).toBe("Página actual");
+
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-status="unresolved"]`));
+      expect(label()).toBe("Página actual · Sin resolver");
+    });
+
+    it("sorts resolved comments to the bottom and styles their card", () => {
+      overlay = makeOverlay();
+      const target = document.getElementById("target");
+      const resolvedFirst = createCommentOn(overlay, target, "resolved early");
+      const openLater = createCommentOn(overlay, target, "open later");
+      overlay.setCommentStatus(resolvedFirst.id, "resolved");
+
+      const panel = openInbox(overlay);
+      const cards = [...panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`)];
+      expect(cards.map((c) => c.dataset.commentId)).toEqual([
+        String(openLater.id),
+        String(resolvedFirst.id),
+      ]);
+      expect(
+        cards[1].classList.contains(`${CLASSES.INBOX_CARD}--resolved`)
+      ).toBe(true);
+      expect(
+        cards[0].classList.contains(`${CLASSES.INBOX_CARD}--resolved`)
+      ).toBe(false);
     });
 
     it("shows the localized empty state", () => {

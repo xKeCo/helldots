@@ -42,7 +42,8 @@ export class InboxView {
     this.currentPage = currentPage;
     this.getComments = getComments;
     this.callbacks = callbacks;
-    this.filter = "page";
+    this.pageFilter = "page"; // "all" | "page"
+    this.statusFilter = "all"; // "all" | "unresolved" | "resolved"
     this.detailId = null;
     /** @type {HTMLElement | null} */
     this.el = null;
@@ -73,9 +74,22 @@ export class InboxView {
   }
 
   filteredComments() {
-    const all = this.getComments();
-    if (this.filter === "all") return all;
-    return all.filter((comment) => comment.page === this.currentPage);
+    let comments = this.getComments();
+    if (this.pageFilter === "page") {
+      comments = comments.filter(
+        (comment) => comment.page === this.currentPage
+      );
+    }
+    if (this.statusFilter === "resolved") {
+      comments = comments.filter((comment) => comment.status === "resolved");
+    } else if (this.statusFilter === "unresolved") {
+      comments = comments.filter((comment) => comment.status !== "resolved");
+    }
+    // Resolved sink to the bottom; both partitions keep their original order.
+    return [
+      ...comments.filter((comment) => comment.status !== "resolved"),
+      ...comments.filter((comment) => comment.status === "resolved"),
+    ];
   }
 
   render() {
@@ -136,37 +150,81 @@ export class InboxView {
     }
   }
 
+  _pageFilterLabel(value) {
+    return value === "all"
+      ? this.strings.filterAll
+      : this.strings.filterCurrentPage;
+  }
+
+  _statusFilterLabel(value) {
+    if (value === "unresolved") return this.strings.filterUnresolved;
+    if (value === "resolved") return this.strings.filterResolved;
+    return this.strings.filterStatusAll;
+  }
+
   _buildFilter() {
     const wrapper = document.createElement("div");
     wrapper.className = CLASSES.INBOX_FILTER + "-wrapper";
 
-    const labelOf = (filter) =>
-      filter === "all"
-        ? this.strings.filterAll
-        : this.strings.filterCurrentPage;
+    const label =
+      this.statusFilter === "all"
+        ? this._pageFilterLabel(this.pageFilter)
+        : `${this._pageFilterLabel(this.pageFilter)} · ${this._statusFilterLabel(this.statusFilter)}`;
 
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = CLASSES.INBOX_FILTER;
     btn.setAttribute("aria-haspopup", "true");
     btn.setAttribute("aria-expanded", "false");
-    btn.innerHTML = `<span>${labelOf(this.filter)}</span>${CARET_ICON_SVG}`;
+    btn.innerHTML = `<span>${label}</span>${CARET_ICON_SVG}`;
 
     const menu = document.createElement("div");
     menu.className = CLASSES.INBOX_FILTER_MENU;
     menu.style.display = "none";
 
-    for (const filter of ["all", "page"]) {
+    const addSection = (title) => {
+      const section = document.createElement("div");
+      section.className = CLASSES.INBOX_FILTER_SECTION;
+      section.textContent = title;
+      menu.appendChild(section);
+    };
+
+    const addOption = (text, checked, dataAttr, value, onSelect) => {
       const option = document.createElement("button");
       option.type = "button";
       option.className = CLASSES.INBOX_FILTER_OPTION;
-      option.textContent = labelOf(filter);
+      option.dataset[dataAttr] = value;
+      option.setAttribute("role", "menuitemradio");
+      option.setAttribute("aria-checked", String(checked));
+      option.innerHTML = `<span>${text}</span>${checked ? "✓" : ""}`;
       option.addEventListener("click", (e) => {
         e.stopPropagation();
-        this.filter = filter;
+        onSelect();
         this.render();
       });
       menu.appendChild(option);
+    };
+
+    addSection(this.strings.filterByPage);
+    for (const value of ["all", "page"]) {
+      addOption(
+        this._pageFilterLabel(value),
+        this.pageFilter === value,
+        "filterPage",
+        value,
+        () => (this.pageFilter = value)
+      );
+    }
+
+    addSection(this.strings.filterByStatus);
+    for (const value of ["all", "unresolved", "resolved"]) {
+      addOption(
+        this._statusFilterLabel(value),
+        this.statusFilter === value,
+        "filterStatus",
+        value,
+        () => (this.statusFilter = value)
+      );
     }
 
     btn.addEventListener("click", (e) => {
@@ -184,6 +242,9 @@ export class InboxView {
   _buildCard(comment, { interactive }) {
     const card = document.createElement("div");
     card.className = CLASSES.INBOX_CARD;
+    if (comment.status === "resolved") {
+      card.classList.add(`${CLASSES.INBOX_CARD}--resolved`);
+    }
     card.dataset.commentId = comment.id;
 
     const header = document.createElement("div");

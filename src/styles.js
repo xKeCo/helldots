@@ -336,6 +336,27 @@ export const getStyles = () => `
         box-shadow: 0 4px 16px rgba(0,0,0,0.4);
     }
 
+    .${CLASSES.INBOX_FILTER_SECTION} {
+        padding: 8px 10px 4px;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.45);
+        text-transform: none;
+    }
+
+    .${CLASSES.INBOX_FILTER_SECTION}:not(:first-child) {
+        margin-top: 4px;
+        border-top: 1px solid rgba(255,255,255,0.1);
+        padding-top: 10px;
+    }
+
+    .${CLASSES.INBOX_FILTER_OPTION} {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
     .${CLASSES.INBOX_FILTER_OPTION},
     .${CLASSES.INBOX_MENU_ITEM} {
         display: block;
@@ -412,6 +433,16 @@ export const getStyles = () => `
 
     .${CLASSES.INBOX_LIST} .${CLASSES.INBOX_CARD}:hover {
         border-color: rgba(255,255,255,0.22);
+    }
+
+    .${CLASSES.INBOX_CARD}--resolved {
+        border-color: rgba(48, 209, 88, 0.4);
+        opacity: 0.75;
+    }
+
+    .${CLASSES.INBOX_LIST} .${CLASSES.INBOX_CARD}--resolved:hover {
+        border-color: rgba(48, 209, 88, 0.7);
+        opacity: 1;
     }
 
     .${CLASSES.INBOX_CARD_HEADER} {

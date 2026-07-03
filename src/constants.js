@@ -42,6 +42,7 @@ export const CLASSES = {
   INBOX_FILTER: "inbox-filter",
   INBOX_FILTER_MENU: "inbox-filter-menu",
   INBOX_FILTER_OPTION: "inbox-filter-option",
+  INBOX_FILTER_SECTION: "inbox-filter-section",
   INBOX_CLOSE: "inbox-close",
   INBOX_LIST: "inbox-list",
   INBOX_CARD: "inbox-card",
