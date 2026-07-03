@@ -16,8 +16,8 @@ import {
   createTooltip,
   createThreadPopover,
   createReplyElement,
-  createInboxPanel,
 } from "./components.js";
+import { InboxView } from "./inbox.js";
 
 class CommentOverlay {
   /**
@@ -156,7 +156,7 @@ class CommentOverlay {
           this.closeLightbox();
         } else if (this.activeThreadPopover) {
           this.closeThreadPopover();
-        } else if (this.activeInboxPanel) {
+        } else if (this.inboxView?.isOpen()) {
           this.closeInbox();
         } else if (this.commentBox.style.display !== "none") {
           this.hideCommentBox();
@@ -567,7 +567,7 @@ class CommentOverlay {
   }
 
   toggleInbox() {
-    if (this.activeInboxPanel) {
+    if (this.inboxView?.isOpen()) {
       this.closeInbox();
     } else {
       this.showInbox();
@@ -577,47 +577,33 @@ class CommentOverlay {
   showInbox() {
     this.closeThreadPopover();
 
-    const panel = createInboxPanel(this.comments, this.strings, this.locale);
-    this.shadowRoot.appendChild(panel);
-    this.activeInboxPanel = panel;
-
-    panel
-      .querySelectorAll(`.${CLASSES.INBOX_ITEM}`)
-      .forEach((/** @type {HTMLElement} */ item) => {
-        const comment = this.comments.find(
-          (c) => String(c.id) === item.dataset.commentId
-        );
-        if (!comment) return;
-
-        const openThread = () => {
-          this.closeInbox();
-          if (comment.anchorState === "orphaned" || !comment.container) {
-            this.showThreadPopover(null, comment);
-            return;
-          }
-          const circle = this.shadowRoot.querySelector(
-            `[data-comment-id="${comment.id}"]`
-          );
-          comment.container.scrollIntoView?.({ block: "center" });
-          if (circle) this.showThreadPopover(circle, comment);
-        };
-
-        item.addEventListener("click", (e) => {
-          e.stopPropagation();
-          openThread();
-        });
-        item.addEventListener("keydown", (/** @type {KeyboardEvent} */ e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            openThread();
-          }
-        });
+    if (!this.inboxView) {
+      this.inboxView = new InboxView({
+        shadowRoot: this.shadowRoot,
+        strings: this.strings,
+        locale: this.locale,
+        currentPage: location.pathname,
+        getComments: () => this.comments,
+        callbacks: {
+          onOpenDetailScroll: (comment) =>
+            comment.container?.scrollIntoView?.({ block: "center" }),
+          onReply: (comment, text, screenshots) =>
+            this.addReply(comment, text, screenshots),
+          onDelete: (id) => this.deleteComment(id),
+          onShowLightbox: (src) => this.showLightbox(src),
+          onClose: () => this.closeInbox(),
+        },
       });
+    }
+    this.inboxView.open();
 
     setTimeout(() => {
       this._inboxClickHandler = (e) => {
         const target = e.composedPath()[0] || e.target;
-        if (!panel.contains(target) && !this.inboxBtn.contains(target)) {
+        if (
+          !this.inboxView.el?.contains(target) &&
+          !this.inboxBtn.contains(target)
+        ) {
           this.closeInbox();
         }
       };
@@ -626,10 +612,7 @@ class CommentOverlay {
   }
 
   closeInbox() {
-    if (this.activeInboxPanel) {
-      this.activeInboxPanel.remove();
-      this.activeInboxPanel = null;
-    }
+    this.inboxView?.close();
     if (this._inboxClickHandler) {
       document.removeEventListener("mousedown", this._inboxClickHandler);
       this._inboxClickHandler = null;
@@ -1112,6 +1095,7 @@ class CommentOverlay {
    */
   updateCommentPosition(comment, circle) {
     const positionData = this.validateAndCalculatePosition(comment, circle);
+    const wasHidden = comment.hidden === true;
 
     if (!positionData) {
       // Anchor element currently invisible (zero-size container): hide the
@@ -1119,12 +1103,14 @@ class CommentOverlay {
       if (circle && comment.container) {
         comment.hidden = true;
         circle.style.display = "none";
+        if (!wasHidden && this.inboxView?.isOpen()) this.inboxView.refresh();
       }
       return;
     }
 
     comment.hidden = false;
     circle.style.display = "";
+    if (wasHidden && this.inboxView?.isOpen()) this.inboxView.refresh();
 
     // Offset so the circle's top-left tip (sharp corner) aligns with the stored position
     const circleRadius = 14;

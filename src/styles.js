@@ -265,43 +265,214 @@ export const getStyles = () => `
 
     .${CLASSES.INBOX_PANEL} {
         position: fixed;
-        bottom: 70px;
-        left: 50%;
-        transform: translateX(-50%);
+        top: 16px;
+        right: 16px;
+        bottom: 16px;
+        width: 380px;
+        display: flex;
+        flex-direction: column;
         background: #1C1C1E;
-        border-radius: 12px;
-        padding: 8px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        width: 320px;
-        max-height: 50vh;
-        overflow-y: auto;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 14px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
         z-index: ${Z_INDEX.COMMENT_BOX};
         color: white;
         font-size: 14px;
         line-height: 1.5;
         box-sizing: border-box;
+        overflow: hidden;
     }
 
-    .${CLASSES.INBOX_ITEM} {
-        padding: 10px 12px;
-        border-radius: 8px;
+    @media (max-width: 420px) {
+        .${CLASSES.INBOX_PANEL} {
+            left: 16px;
+            width: auto;
+        }
+    }
+
+    .${CLASSES.INBOX_HEADER},
+    .${CLASSES.INBOX_DETAIL_HEADER} {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        flex: none;
+    }
+
+    .${CLASSES.INBOX_FILTER}-wrapper {
+        position: relative;
+    }
+
+    .${CLASSES.INBOX_FILTER} {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 13px;
+        font-weight: 600;
         cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 6px;
     }
 
-    .${CLASSES.INBOX_ITEM}:hover {
+    .${CLASSES.INBOX_FILTER}:hover {
         background: rgba(255,255,255,0.08);
     }
 
-    .${CLASSES.INBOX_ITEM_TEXT} {
-        margin-top: 2px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+    .${CLASSES.INBOX_FILTER_MENU} {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        background: #2C2C2E;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        padding: 4px;
+        min-width: 190px;
+        z-index: 1;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
     }
 
-    .${CLASSES.INBOX_ORPHAN_BADGE} {
+    .${CLASSES.INBOX_FILTER_OPTION},
+    .${CLASSES.INBOX_MENU_ITEM} {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 13px;
+        padding: 7px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    .${CLASSES.INBOX_FILTER_OPTION}:hover,
+    .${CLASSES.INBOX_MENU_ITEM}:hover {
+        background: rgba(255,255,255,0.08);
+    }
+
+    .${CLASSES.INBOX_CLOSE},
+    .${CLASSES.INBOX_NAV_BTN},
+    .${CLASSES.INBOX_BACK} {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: transparent;
+        border: none;
+        color: rgba(255,255,255,0.75);
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .${CLASSES.INBOX_CLOSE} {
+        font-size: 20px;
+        line-height: 1;
+    }
+
+    .${CLASSES.INBOX_CLOSE}:hover,
+    .${CLASSES.INBOX_NAV_BTN}:not(:disabled):hover,
+    .${CLASSES.INBOX_BACK}:hover {
+        background: rgba(255,255,255,0.08);
+        color: white;
+    }
+
+    .${CLASSES.INBOX_NAV_BTN}:disabled {
+        opacity: 0.35;
+        cursor: default;
+    }
+
+    .${CLASSES.INBOX_LIST},
+    .${CLASSES.INBOX_DETAIL} {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .${CLASSES.INBOX_CARD} {
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .${CLASSES.INBOX_LIST} .${CLASSES.INBOX_CARD} {
+        cursor: pointer;
+    }
+
+    .${CLASSES.INBOX_LIST} .${CLASSES.INBOX_CARD}:hover {
+        border-color: rgba(255,255,255,0.22);
+    }
+
+    .${CLASSES.INBOX_CARD_HEADER} {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .${CLASSES.INBOX_CARD_ACTIONS} {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .${CLASSES.INBOX_ACTION_BTN} {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        color: rgba(255,255,255,0.65);
+        cursor: pointer;
+    }
+
+    .${CLASSES.INBOX_ACTION_BTN}:hover {
+        background: rgba(255,255,255,0.08);
+        color: white;
+    }
+
+    .${CLASSES.INBOX_STATUS_DOT} {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(255,255,255,0.45);
         display: inline-block;
-        margin-top: 4px;
+    }
+
+    .${CLASSES.INBOX_MENU} {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        background: #2C2C2E;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        padding: 4px;
+        min-width: 130px;
+        z-index: 1;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+
+    .${CLASSES.INBOX_CARD_TEXT} {
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .${CLASSES.INBOX_CARD_TAG} {
+        align-self: flex-start;
         padding: 1px 8px;
         border-radius: 999px;
         background: rgba(255, 159, 10, 0.2);
@@ -310,8 +481,29 @@ export const getStyles = () => `
         font-weight: 600;
     }
 
+    .${CLASSES.INBOX_CARD_REPLY_LINK} {
+        align-self: flex-start;
+        background: transparent;
+        border: none;
+        color: rgba(255,255,255,0.55);
+        font-size: 13px;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .${CLASSES.INBOX_CARD_REPLY_LINK}:hover {
+        color: white;
+    }
+
+    .${CLASSES.INBOX_REPLIES} {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 0 4px;
+    }
+
     .${CLASSES.INBOX_EMPTY} {
-        padding: 16px 12px;
+        padding: 24px 12px;
         color: rgba(255,255,255,0.55);
         text-align: center;
     }

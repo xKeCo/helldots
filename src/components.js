@@ -23,7 +23,7 @@ const formatFullDate = (date, locale) => {
   }).format(new Date(date));
 };
 
-const createMetaElement = (author, createdAt, strings, locale) => {
+export const createMetaElement = (author, createdAt, strings, locale) => {
   const meta = document.createElement("div");
   meta.className = CLASSES.THREAD_META;
 
@@ -77,7 +77,7 @@ const MENU_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 16 16" stroke-li
  * @param {string} [options.fileInputId]
  * @param {typeof defaultStrings} strings
  */
-const createInputArea = (
+export const createInputArea = (
   {
     areaClassName,
     inputTag = "textarea",
@@ -250,7 +250,7 @@ export const createCommentCircle = (comment, strings = defaultStrings) => {
   return circle;
 };
 
-const createScreenshotsDisplay = (screenshots, strings) => {
+export const createScreenshotsDisplay = (screenshots, strings) => {
   const container = document.createElement("div");
   container.className = CLASSES.SCREENSHOTS_CONTAINER;
   container.classList.add(CLASSES.ACTIVE);
@@ -396,57 +396,4 @@ export const createThreadPopover = (
   popover.appendChild(inputArea);
 
   return popover;
-};
-
-export const createInboxPanel = (
-  comments,
-  strings = defaultStrings,
-  locale
-) => {
-  const panel = document.createElement("div");
-  panel.className = CLASSES.INBOX_PANEL;
-  panel.setAttribute("role", "dialog");
-  panel.setAttribute("aria-label", strings.inboxAriaLabel);
-
-  if (comments.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = CLASSES.INBOX_EMPTY;
-    empty.textContent = strings.inboxEmpty;
-    panel.appendChild(empty);
-    return panel;
-  }
-
-  comments.forEach((comment) => {
-    const item = document.createElement("div");
-    item.className = CLASSES.INBOX_ITEM;
-    item.dataset.commentId = comment.id;
-    item.setAttribute("role", "button");
-    item.setAttribute("tabindex", "0");
-
-    const meta = createMetaElement(
-      comment.author,
-      comment.createdAt,
-      strings,
-      locale
-    );
-
-    const text = document.createElement("div");
-    text.className = CLASSES.INBOX_ITEM_TEXT;
-    text.textContent =
-      comment.text.length > 80 ? `${comment.text.slice(0, 80)}…` : comment.text;
-
-    item.appendChild(meta);
-    item.appendChild(text);
-
-    if (comment.anchorState === "orphaned") {
-      const badge = document.createElement("span");
-      badge.className = CLASSES.INBOX_ORPHAN_BADGE;
-      badge.textContent = strings.orphanedBadge;
-      item.appendChild(badge);
-    }
-
-    panel.appendChild(item);
-  });
-
-  return panel;
 };
