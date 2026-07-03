@@ -5,6 +5,11 @@ import { getShadowRoot } from "./root-element.js";
 import { getStrings, detectLocale } from "./i18n.js";
 import { createAnchor, resolveAnchor } from "./anchor.js";
 import {
+  readStoredComments,
+  writeStoredComments,
+  mergeForStorage,
+} from "./storage.js";
+import {
   createToolbar,
   createCommentBox,
   createCommentCircle,
@@ -86,6 +91,21 @@ class CommentOverlay {
     this.setupKeyboardShortcut();
     this.setupResizeHandlers();
     this.injectStyles();
+
+    if (this.options.persistence === "localStorage") {
+      this.loadComments(readStoredComments());
+    }
+  }
+
+  _syncStorage() {
+    if (this.options.persistence !== "localStorage") return;
+    writeStoredComments(
+      mergeForStorage(
+        readStoredComments(),
+        this.serializeComments(),
+        location.pathname
+      )
+    );
   }
 
   bindEventListeners() {
@@ -453,6 +473,7 @@ class CommentOverlay {
     };
 
     this.comments.push(comment);
+    this._syncStorage();
     this.options.onCommentCreated?.(this._serializeComment(comment));
     this.renderCommentCircle(comment);
     this.hideCommentBox();
@@ -834,6 +855,7 @@ class CommentOverlay {
       screenshots,
     };
     comment.replies.push(reply);
+    this._syncStorage();
     this.options.onReplyAdded?.(
       this._serializeComment(comment),
       this._serializeReply(reply)
@@ -870,6 +892,20 @@ class CommentOverlay {
    */
   serializeComments() {
     return this.comments.map((comment) => this._serializeComment(comment));
+  }
+
+  /**
+   * Removes a comment everywhere: page marker, memory and (when the
+   * localStorage mode is on) persisted storage.
+   * @param {number} id
+   * @returns {boolean} false when the id is unknown
+   */
+  deleteComment(id) {
+    if (!this.comments.some((comment) => comment.id === id)) return false;
+    this._removeComment(id);
+    this._syncStorage();
+    this.options.onCommentDeleted?.(id);
+    return true;
   }
 
   _removeComment(id) {

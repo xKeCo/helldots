@@ -307,6 +307,95 @@ describe("persistence", () => {
     });
   });
 
+  describe("localStorage persistence option", () => {
+    afterEach(() => {
+      localStorage.clear();
+    });
+
+    it("auto-saves and auto-restores comments across overlay instances", () => {
+      overlay = makeOverlay({ persistence: "localStorage" });
+      createCommentOn(overlay, document.getElementById("target"), "persisted");
+      overlay.cleanup();
+
+      overlay = makeOverlay({ persistence: "localStorage" });
+      expect(overlay.comments).toHaveLength(1);
+      expect(overlay.comments[0].text).toBe("persisted");
+      expect(overlay.comments[0].anchorState).toBe("anchored");
+    });
+
+    it("persists replies", () => {
+      overlay = makeOverlay({ persistence: "localStorage" });
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "with reply"
+      );
+      overlay.addReply(comment, "the reply");
+      overlay.cleanup();
+
+      overlay = makeOverlay({ persistence: "localStorage" });
+      expect(overlay.comments[0].replies).toHaveLength(1);
+      expect(overlay.comments[0].replies[0].text).toBe("the reply");
+    });
+
+    it("does not touch localStorage without the option", () => {
+      overlay = makeOverlay();
+      createCommentOn(overlay, document.getElementById("target"), "volatile");
+      expect(localStorage.getItem("helldots-comments")).toBeNull();
+    });
+
+    it("preserves other pages' stored comments when syncing", () => {
+      localStorage.setItem(
+        "helldots-comments",
+        JSON.stringify([
+          {
+            id: 99,
+            text: "other page",
+            page: "/otra",
+            anchor: null,
+            replies: [],
+            author: "X",
+            createdAt: "2026-07-03T00:00:00.000Z",
+            screenshots: [],
+          },
+        ])
+      );
+      overlay = makeOverlay({ persistence: "localStorage" });
+      createCommentOn(overlay, document.getElementById("target"), "mine");
+
+      const stored = JSON.parse(localStorage.getItem("helldots-comments"));
+      expect(stored.map((c) => c.text).sort()).toEqual(["mine", "other page"]);
+    });
+
+    it("deleteComment removes circle, memory, storage and notifies", () => {
+      const onCommentDeleted = vi.fn();
+      overlay = makeOverlay({
+        persistence: "localStorage",
+        onCommentDeleted,
+      });
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "doomed"
+      );
+
+      expect(overlay.deleteComment(comment.id)).toBe(true);
+      expect(overlay.comments).toHaveLength(0);
+      expect(
+        overlay.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`)
+      ).toBeNull();
+      expect(JSON.parse(localStorage.getItem("helldots-comments"))).toEqual(
+        []
+      );
+      expect(onCommentDeleted).toHaveBeenCalledWith(comment.id);
+    });
+
+    it("deleteComment returns false for unknown ids", () => {
+      overlay = makeOverlay();
+      expect(overlay.deleteComment(123456)).toBe(false);
+    });
+  });
+
   describe("inbox panel", () => {
     const openInbox = (ov) => {
       ov.toolbar
