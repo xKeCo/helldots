@@ -195,7 +195,11 @@ describe("inbox sidebar", () => {
       click(
         panel.querySelector(`.${CLASSES.INBOX_ACTION_BTN}[data-action="menu"]`)
       );
-      click(panel.querySelector(`.${CLASSES.INBOX_MENU_ITEM}`));
+      click(
+        panel.querySelector(
+          `.${CLASSES.INBOX_MENU_ITEM}:not([data-status-option])`
+        )
+      );
 
       expect(overlay.comments).toHaveLength(0);
       expect(
@@ -325,10 +329,122 @@ describe("inbox sidebar", () => {
       click(
         panel.querySelector(`.${CLASSES.INBOX_ACTION_BTN}[data-action="menu"]`)
       );
-      click(panel.querySelector(`.${CLASSES.INBOX_MENU_ITEM}`));
+      click(
+        panel.querySelector(
+          `.${CLASSES.INBOX_MENU_ITEM}:not([data-status-option])`
+        )
+      );
 
       expect(panel.querySelector(`.${CLASSES.INBOX_DETAIL}`)).toBeNull();
       expect(overlay.comments).toHaveLength(0);
+    });
+  });
+
+  describe("status lifecycle from the UI", () => {
+    it("changing status from an inbox card persists it", () => {
+      overlay = makeOverlay({ persistence: "localStorage" });
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "to progress"
+      );
+
+      const panel = openInbox(overlay);
+      click(
+        panel.querySelector(`.${CLASSES.INBOX_ACTION_BTN}[data-action="status"]`)
+      );
+      click(panel.querySelector(`[data-status-option="in_progress"]`));
+
+      expect(comment.status).toBe("in_progress");
+      const stored = JSON.parse(localStorage.getItem("helldots-comments"));
+      expect(stored[0].status).toBe("in_progress");
+    });
+  });
+
+  describe("thread popover actions", () => {
+    const openPopover = (ov, comment) => {
+      const circle = ov.shadowRoot.querySelector(
+        `[data-comment-id="${comment.id}"]`
+      );
+      click(circle);
+      return ov.shadowRoot.querySelector(`.${CLASSES.THREAD_POPOVER}`);
+    };
+
+    it("shows copy, status and more actions in the popover header", () => {
+      overlay = makeOverlay();
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "popover actions"
+      );
+
+      const popover = openPopover(overlay, comment);
+      expect(popover.querySelector(`[data-action="copy"]`)).toBeTruthy();
+      expect(popover.querySelector(`[data-action="status"]`)).toBeTruthy();
+      expect(popover.querySelector(`[data-action="menu"]`)).toBeTruthy();
+      expect(
+        popover.querySelector(`[data-action="copy"]`).dataset.hdTooltip
+      ).toBe("Copy agent context");
+    });
+
+    it("changing status from the popover updates the comment", () => {
+      const onCommentStatusChanged = vi.fn();
+      overlay = makeOverlay({ onCommentStatusChanged });
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "status via popover"
+      );
+
+      const popover = openPopover(overlay, comment);
+      click(popover.querySelector(`[data-action="status"]`));
+      click(popover.querySelector(`[data-status-option="resolved"]`));
+
+      expect(comment.status).toBe("resolved");
+      expect(onCommentStatusChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it("deleting from the popover closes it and removes the comment", () => {
+      overlay = makeOverlay();
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "delete via popover"
+      );
+
+      const popover = openPopover(overlay, comment);
+      click(popover.querySelector(`[data-action="menu"]`));
+      click(
+        popover.querySelector(
+          `.${CLASSES.INBOX_MENU_ITEM}:not([data-status-option])`
+        )
+      );
+
+      expect(
+        overlay.shadowRoot.querySelector(`.${CLASSES.THREAD_POPOVER}`)
+      ).toBeNull();
+      expect(overlay.comments).toHaveLength(0);
+    });
+
+    it("copies the agent context including the status line", () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText },
+        configurable: true,
+      });
+      overlay = makeOverlay();
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "copy from popover"
+      );
+      overlay.setCommentStatus(comment.id, "in_progress");
+
+      const popover = openPopover(overlay, comment);
+      click(popover.querySelector(`[data-action="copy"]`));
+
+      expect(writeText).toHaveBeenCalledTimes(1);
+      expect(writeText.mock.calls[0][0]).toContain("Status: in_progress");
     });
   });
 });

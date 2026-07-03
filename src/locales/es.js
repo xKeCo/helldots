@@ -35,4 +35,9 @@ export default {
   nextComment: "Comentario siguiente",
   replyLink: "Responder",
   commentOptions: "Opciones del comentario",
+  moreOptions: "Más",
+  statusOpen: "Abierto",
+  statusInProgress: "En progreso",
+  statusResolved: "Resuelto",
+  statusClosed: "Cerrado",
 };

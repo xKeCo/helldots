@@ -22,6 +22,8 @@ import {
   createReplyElement,
 } from "./components.js";
 import { InboxView } from "./inbox.js";
+import { createCommentActions, copyToClipboard } from "./comment-actions.js";
+import { buildAgentContext } from "./agent-context.js";
 
 class CommentOverlay {
   /**
@@ -606,6 +608,7 @@ class CommentOverlay {
           onReply: (comment, text, screenshots) =>
             this.addReply(comment, text, screenshots),
           onDelete: (id) => this.deleteComment(id),
+          onSetStatus: (id, status) => this.setCommentStatus(id, status),
           onShowLightbox: (src) => this.showLightbox(src),
           onClose: () => this.closeInbox(),
         },
@@ -647,6 +650,33 @@ class CommentOverlay {
 
     const popover = createThreadPopover(comment, this.strings, this.locale);
     this.shadowRoot.appendChild(popover);
+
+    // Same action strip as the inbox cards: copy agent context, lifecycle
+    // status picker (RF09) and the ⋯ menu.
+    const headerEl = popover.querySelector(`.${CLASSES.THREAD_HEADER}`);
+    const actionsEl = createCommentActions(comment, {
+      strings: this.strings,
+      onCopy: (c) =>
+        copyToClipboard(
+          buildAgentContext(c, {
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+          })
+        ),
+      onSetStatus: (c, status) => {
+        this.setCommentStatus(c.id, status);
+        if (this.inboxView?.isOpen()) this.inboxView.refresh();
+      },
+      onDelete: (c) => {
+        this.closeThreadPopover();
+        this.deleteComment(c.id);
+        if (this.inboxView?.isOpen()) this.inboxView.refresh();
+      },
+    });
+    headerEl.insertBefore(
+      actionsEl,
+      headerEl.querySelector(`.${CLASSES.CLOSE_TOOLTIP}`)
+    );
 
     const mainScreenshotsContainer = Array.from(popover.children).find(
       (child) => child.classList.contains(CLASSES.SCREENSHOTS_CONTAINER)

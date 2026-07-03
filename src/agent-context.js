@@ -56,6 +56,7 @@ export function buildAgentContext(comment, { viewportWidth, viewportHeight }) {
     `Page: ${comment.page}`,
     `Viewport: ${viewportWidth}x${viewportHeight}`,
     `Anchor state: ${state}`,
+    `Status: ${comment.status || "open"}`,
     `Selector: ${anchor?.selector || "(none)"}`,
     `Element: ${element}`,
     `DOM path: ${path}`,

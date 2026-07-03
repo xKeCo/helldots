@@ -451,6 +451,51 @@ export const getStyles = () => `
         border-radius: 50%;
         border: 1.5px solid rgba(255,255,255,0.45);
         display: inline-block;
+        flex: none;
+    }
+
+    .${CLASSES.INBOX_MENU_ITEM} .${CLASSES.INBOX_STATUS_DOT} {
+        width: 9px;
+        height: 9px;
+        border: none;
+        margin-right: 8px;
+        vertical-align: baseline;
+    }
+
+    .${CLASSES.INBOX_MENU_ITEM}[aria-checked="true"] {
+        background: rgba(255,255,255,0.08);
+    }
+
+    .${CLASSES.THREAD_HEADER} .${CLASSES.INBOX_CARD_ACTIONS} {
+        margin-left: auto;
+        margin-right: 8px;
+    }
+
+    /* Generic hover tooltip, same look as .thread-time[data-full-date] */
+    [data-hd-tooltip] {
+        position: relative;
+    }
+
+    [data-hd-tooltip]::after {
+        content: attr(data-hd-tooltip);
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: #000;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.12s ease;
+        z-index: 2;
+    }
+
+    [data-hd-tooltip]:hover::after {
+        opacity: 1;
     }
 
     .${CLASSES.INBOX_MENU} {

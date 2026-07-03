@@ -5,6 +5,7 @@
 
 import { CLASSES } from "./constants.js";
 import { buildAgentContext } from "./agent-context.js";
+import { createCommentActions, copyToClipboard } from "./comment-actions.js";
 import {
   createMetaElement,
   createScreenshotsDisplay,
@@ -12,30 +13,10 @@ import {
   createReplyElement,
 } from "./components.js";
 
-const COPY_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
-const CHECK_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-const DOTS_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>`;
 const CARET_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
 const CHEVRON_LEFT_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`;
 const ARROW_UP_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`;
 const ARROW_DOWN_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
-
-const copyToClipboard = (text) => {
-  if (navigator.clipboard?.writeText) {
-    return navigator.clipboard.writeText(text).catch(() => {});
-  }
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  try {
-    document.execCommand("copy");
-  } catch {}
-  textarea.remove();
-  return Promise.resolve();
-};
 
 export class InboxView {
   /**
@@ -45,7 +26,7 @@ export class InboxView {
    * @param {string} deps.locale
    * @param {string} deps.currentPage
    * @param {() => Array<Object>} deps.getComments
-   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onShowLightbox: Function, onClose: Function }} deps.callbacks
+   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onSetStatus: Function, onShowLightbox: Function, onClose: Function }} deps.callbacks
    */
   constructor({
     shadowRoot,
@@ -279,76 +260,22 @@ export class InboxView {
   }
 
   _buildCardActions(comment) {
-    const actions = document.createElement("div");
-    actions.className = CLASSES.INBOX_CARD_ACTIONS;
-
-    const copyBtn = document.createElement("button");
-    copyBtn.type = "button";
-    copyBtn.className = CLASSES.INBOX_ACTION_BTN;
-    copyBtn.dataset.action = "copy";
-    copyBtn.setAttribute("aria-label", this.strings.copyAgentContext);
-    copyBtn.title = this.strings.copyAgentContext;
-    copyBtn.innerHTML = COPY_ICON_SVG;
-    copyBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      copyToClipboard(
-        buildAgentContext(comment, {
-          viewportWidth: window.innerWidth,
-          viewportHeight: window.innerHeight,
-        })
-      );
-      copyBtn.innerHTML = CHECK_ICON_SVG;
-      copyBtn.title = this.strings.copied;
-      setTimeout(() => {
-        copyBtn.innerHTML = COPY_ICON_SVG;
-        copyBtn.title = this.strings.copyAgentContext;
-      }, 1500);
+    return createCommentActions(comment, {
+      strings: this.strings,
+      onCopy: (c) =>
+        copyToClipboard(
+          buildAgentContext(c, {
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+          })
+        ),
+      onSetStatus: (c, status) => this.callbacks.onSetStatus(c.id, status),
+      onDelete: (c) => {
+        if (this.detailId === c.id) this.detailId = null;
+        this.callbacks.onDelete(c.id);
+        this.render();
+      },
     });
-    actions.appendChild(copyBtn);
-
-    // Status workflow lands later — the dot is a visual placeholder only.
-    const statusDot = document.createElement("span");
-    statusDot.className = CLASSES.INBOX_STATUS_DOT;
-    statusDot.title = this.strings.statusLabel;
-    actions.appendChild(statusDot);
-
-    const menuWrapper = document.createElement("div");
-    menuWrapper.style.position = "relative";
-
-    const menuBtn = document.createElement("button");
-    menuBtn.type = "button";
-    menuBtn.className = CLASSES.INBOX_ACTION_BTN;
-    menuBtn.dataset.action = "menu";
-    menuBtn.setAttribute("aria-label", this.strings.commentOptions);
-    menuBtn.title = this.strings.commentOptions;
-    menuBtn.innerHTML = DOTS_ICON_SVG;
-
-    const menu = document.createElement("div");
-    menu.className = CLASSES.INBOX_MENU;
-    menu.style.display = "none";
-
-    const deleteItem = document.createElement("button");
-    deleteItem.type = "button";
-    deleteItem.className = CLASSES.INBOX_MENU_ITEM;
-    deleteItem.textContent = this.strings.deleteComment;
-    deleteItem.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (this.detailId === comment.id) this.detailId = null;
-      this.callbacks.onDelete(comment.id);
-      this.render();
-    });
-    menu.appendChild(deleteItem);
-
-    menuBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      menu.style.display = menu.style.display === "none" ? "block" : "none";
-    });
-
-    menuWrapper.appendChild(menuBtn);
-    menuWrapper.appendChild(menu);
-    actions.appendChild(menuWrapper);
-
-    return actions;
   }
 
   _renderDetail(comment, comments) {
