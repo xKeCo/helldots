@@ -186,10 +186,61 @@ describe("persistence", () => {
       overlay = makeOverlay();
       const result = overlay.loadComments(data);
 
-      expect(result).toEqual({ anchored: 1, orphaned: 0 });
+      expect(result).toEqual({ anchored: 1, orphaned: 0, inactive: 0 });
       expect(overlay.comments[0].container).toBe(
         document.querySelector(".renamed")
       );
+    });
+
+    it("marks other-page comments inactive: no circle, no onAnchorLost", () => {
+      const onAnchorLost = vi.fn();
+      overlay = makeOverlay({ onAnchorLost });
+
+      const result = overlay.loadComments([
+        {
+          id: 42,
+          text: "from another page",
+          page: "/otra-pagina",
+          anchor: {
+            version: 1,
+            selector: "#nope",
+            fingerprint: {
+              tagName: "DIV",
+              textSnippet: "something",
+              attributes: {},
+              siblingIndex: 0,
+              siblingCount: 1,
+            },
+            relativeX: 0.5,
+            relativeY: 0.5,
+          },
+          replies: [],
+          author: "Test",
+          createdAt: "2026-07-03T00:00:00.000Z",
+          screenshots: [],
+        },
+      ]);
+
+      expect(result).toEqual({ anchored: 0, orphaned: 0, inactive: 1 });
+      const inactive = overlay.comments[0];
+      expect(inactive.anchorState).toBe("inactive");
+      expect(inactive.page).toBe("/otra-pagina");
+      expect(
+        overlay.shadowRoot.querySelector(`[data-comment-id="42"]`)
+      ).toBeNull();
+      expect(onAnchorLost).not.toHaveBeenCalled();
+    });
+
+    it("legacy entries without page still resolve on the current page", () => {
+      overlay = makeOverlay();
+      createCommentOn(overlay, document.getElementById("target"), "legacy");
+      const [serialized] = overlay.serializeComments();
+      delete serialized.page;
+      overlay.cleanup();
+
+      overlay = makeOverlay();
+      const result = overlay.loadComments([serialized]);
+      expect(result).toEqual({ anchored: 1, orphaned: 0, inactive: 0 });
     });
 
     it("orphans comments whose element is gone and fires onAnchorLost", () => {
@@ -203,7 +254,7 @@ describe("persistence", () => {
       overlay = makeOverlay({ onAnchorLost });
       const result = overlay.loadComments(data);
 
-      expect(result).toEqual({ anchored: 0, orphaned: 1 });
+      expect(result).toEqual({ anchored: 0, orphaned: 1, inactive: 0 });
       const orphan = overlay.comments[0];
       expect(orphan.anchorState).toBe("orphaned");
       expect(orphan.container).toBeNull();
@@ -240,7 +291,7 @@ describe("persistence", () => {
         null,
       ]);
 
-      expect(result).toEqual({ anchored: 0, orphaned: 1 });
+      expect(result).toEqual({ anchored: 0, orphaned: 1, inactive: 0 });
       expect(overlay.comments).toHaveLength(1);
       expect(overlay.comments[0].anchorState).toBe("orphaned");
       expect(warn).toHaveBeenCalled();
@@ -251,6 +302,7 @@ describe("persistence", () => {
       expect(overlay.loadComments(undefined)).toEqual({
         anchored: 0,
         orphaned: 0,
+        inactive: 0,
       });
     });
   });

@@ -895,7 +895,8 @@ class CommentOverlay {
   loadComments(data) {
     let anchored = 0;
     let orphaned = 0;
-    if (!Array.isArray(data)) return { anchored, orphaned };
+    let inactive = 0;
+    if (!Array.isArray(data)) return { anchored, orphaned, inactive };
 
     for (const item of data) {
       if (!item || item.id == null || typeof item.text !== "string") {
@@ -922,6 +923,16 @@ class CommentOverlay {
           : [],
       };
 
+      // Comments from other pages aren't broken — their elements just
+      // don't exist here. They stay listed (inbox "all" filter) without a
+      // marker and without an onAnchorLost false alarm.
+      if (item.page && item.page !== location.pathname) {
+        comment.anchorState = "inactive";
+        this.comments.push(comment);
+        inactive++;
+        continue;
+      }
+
       const resolved = item.anchor ? resolveAnchor(item.anchor) : null;
       if (resolved) {
         comment.container = resolved.element;
@@ -938,7 +949,7 @@ class CommentOverlay {
       }
     }
 
-    return { anchored, orphaned };
+    return { anchored, orphaned, inactive };
   }
 
   centerPopover(el) {
