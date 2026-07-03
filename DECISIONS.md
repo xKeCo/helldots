@@ -293,6 +293,40 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   válida en la página — nunca se posiciona "mejor esfuerzo" sobre
   contenido equivocado.
 
+## Inbox sidebar, persistencia localStorage y estado oculto
+
+- **Enmienda a la serialización v1**: `SerializedComment` ahora SÍ incluye
+  `screenshots` (y `replies[].screenshots`). El modo `localStorage` y las
+  cards del inbox los necesitan; mantener dos formatos de serialización
+  (con y sin screenshots) costaba más que el ahorro. También se agregó
+  `page` (`location.pathname` al crear) para el filtro por página.
+- **`anchorState: "inactive"` para comentarios de otras páginas**: al
+  restaurar, un comentario cuyo `page` no coincide con el pathname actual
+  no está "roto" — su elemento simplemente no existe aquí. No se intenta
+  resolver su ancla, no renderiza círculo y no dispara `onAnchorLost`
+  (evita falsas alarmas); solo aparece en el filtro "Todos" del inbox con
+  su pathname como tag.
+- **`hidden` es estado runtime, no serializado**: depende del viewport del
+  momento (media queries). Se detecta con tamaño 0 del contenedor en
+  `updateCommentPosition` — el `console.warn` de "invalid dimensions" se
+  eliminó porque tamaño cero dejó de ser anomalía: es el estado normal de
+  un elemento con `display:none` responsive (caso `slogan-img`).
+- **El botón "copiar" genera contexto para agentes**, no copia el texto:
+  decisión del usuario inspirada en Vercel Toolbar. El template
+  (`src/agent-context.js`) incluye page/viewport/estado/selector/elemento/
+  DOM path/texto cercano/thread — sin árbol de componentes de framework
+  (HellDots es framework-agnóstico; el DOM real es lo que puede ofrecer).
+- **`InboxView` como vista pura** (`src/inbox.js`): toda mutación
+  (responder, eliminar) vuelve al overlay vía callbacks; el sidebar nunca
+  toca storage ni los marcadores directamente. El panel bottom-center de
+  la iteración anterior se eliminó por completo.
+- **El modal del playground usa `class="modal-content"`** deliberadamente:
+  el selector de contenedores de anclaje
+  (`section, div[class*="container"], div[class*="content"]`) debe
+  matchear el dialog para que los comentarios anclen al modal y no a
+  `document.body` — si anclaran a body, cerrar el modal no ocultaría el
+  marcador.
+
 ## Fix de paridad visual post-Shadow DOM
 
 - **Bug real: cursor de modo comentario roto por el shadow root**: al

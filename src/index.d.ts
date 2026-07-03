@@ -19,15 +19,18 @@ export interface CommentAnchor {
   relativeY: number;
 }
 
-export type AnchorState = "anchored" | "orphaned";
+export type AnchorState = "anchored" | "orphaned" | "inactive";
 
 export interface SerializedComment {
   id: number;
   text: string;
   anchor: CommentAnchor | null;
+  /** location.pathname where the comment was created. */
+  page: string;
   replies: CommentReply[];
   author: string;
   createdAt: string;
+  screenshots: string[];
 }
 
 export interface CommentOverlayOptions {
@@ -36,12 +39,18 @@ export interface CommentOverlayOptions {
   autoInit?: boolean;
   /** UI language. Defaults to the browser's language when supported, else "en". */
   locale?: "en" | "es";
+  /** Auto save/restore comments. Default: "none" (host app persists via callbacks). */
+  persistence?: "localStorage" | "none";
+  /** Identity used as the author of new comments and replies. */
+  user?: { name: string };
   /** Fired after a new comment is saved. */
   onCommentCreated?: (comment: SerializedComment) => void;
   /** Fired after a reply is added to any comment. */
   onReplyAdded?: (comment: SerializedComment, reply: CommentReply) => void;
   /** Fired for each comment that could not be re-anchored by loadComments. */
   onAnchorLost?: (comment: SerializedComment) => void;
+  /** Fired after deleteComment removes a comment. */
+  onCommentDeleted?: (id: number) => void;
 }
 
 export interface CommentReply {
@@ -49,21 +58,26 @@ export interface CommentReply {
   text: string;
   author: string;
   timestamp: string;
+  screenshots?: string[];
 }
 
 export interface Comment {
   id: number;
   text: string;
-  /** Live anchor element; null while the comment is orphaned. */
+  /** Live anchor element; null while the comment is orphaned or inactive. */
   container: HTMLElement | null;
   relativeX: number;
   relativeY: number;
   anchor: CommentAnchor | null;
   anchorState: AnchorState;
+  /** Runtime-only: anchor element currently has zero size (not serialized). */
+  hidden: boolean;
+  /** location.pathname where the comment was created. */
+  page: string;
   replies: CommentReply[];
   author: string;
   createdAt: string;
-  screenshot: string | null;
+  screenshots: string[];
 }
 
 export declare class CommentOverlay {
@@ -78,7 +92,9 @@ export declare class CommentOverlay {
   loadComments(data: SerializedComment[]): {
     anchored: number;
     orphaned: number;
+    inactive: number;
   };
+  deleteComment(id: number): boolean;
   cleanup(): void;
 }
 

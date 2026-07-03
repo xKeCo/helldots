@@ -909,7 +909,7 @@ class CommentOverlay {
    * present in the list/inbox but never positioned over the wrong element.
    * Loading the same id again replaces the previous copy (idempotent).
    * @param {import('./index.d.ts').SerializedComment[]} data
-   * @returns {{ anchored: number, orphaned: number }}
+   * @returns {{ anchored: number, orphaned: number, inactive: number }}
    */
   loadComments(data) {
     let anchored = 0;

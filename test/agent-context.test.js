@@ -56,11 +56,15 @@ describe("buildAgentContext", () => {
     expect(out).toContain("Viewport: 1557x1077");
     expect(out).toContain("Anchor state: anchored");
     expect(out).toContain("Selector: #pricing-section");
-    expect(out).toContain('Element: <section id="pricing-section" class="plans">');
+    expect(out).toContain(
+      'Element: <section id="pricing-section" class="plans">'
+    );
     expect(out).toContain(
       "DOM path: body > main.flex.layout > section#pricing-section.plans"
     );
-    expect(out).toContain('Nearby text: "Compare our plans and pick one today"');
+    expect(out).toContain(
+      'Nearby text: "Compare our plans and pick one today"'
+    );
     expect(out).toContain(
       "Comment by Kevin Collazos (2026-07-03T10:00:00.000Z):"
     );

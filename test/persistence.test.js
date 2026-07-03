@@ -429,9 +429,7 @@ describe("persistence", () => {
       expect(
         overlay.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`)
       ).toBeNull();
-      expect(JSON.parse(localStorage.getItem("helldots-comments"))).toEqual(
-        []
-      );
+      expect(JSON.parse(localStorage.getItem("helldots-comments"))).toEqual([]);
       expect(onCommentDeleted).toHaveBeenCalledWith(comment.id);
     });
 

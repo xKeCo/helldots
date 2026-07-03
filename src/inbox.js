@@ -160,7 +160,9 @@ export class InboxView {
     wrapper.className = CLASSES.INBOX_FILTER + "-wrapper";
 
     const labelOf = (filter) =>
-      filter === "all" ? this.strings.filterAll : this.strings.filterCurrentPage;
+      filter === "all"
+        ? this.strings.filterAll
+        : this.strings.filterCurrentPage;
 
     const btn = document.createElement("button");
     btn.type = "button";
@@ -223,12 +225,14 @@ export class InboxView {
 
     if (comment.screenshots?.length) {
       const shots = createScreenshotsDisplay(comment.screenshots, this.strings);
-      shots.querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`).forEach((img) => {
-        img.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.callbacks.onShowLightbox(img.src);
+      shots
+        .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
+        .forEach((/** @type {HTMLImageElement} */ img) => {
+          img.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.callbacks.onShowLightbox(img.src);
+          });
         });
-      });
       card.appendChild(shots);
     }
 
@@ -399,12 +403,14 @@ export class InboxView {
     replies.className = CLASSES.INBOX_REPLIES;
     for (const reply of comment.replies || []) {
       const replyEl = createReplyElement(reply, this.strings, this.locale);
-      replyEl.querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`).forEach((img) => {
-        img.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.callbacks.onShowLightbox(img.src);
+      replyEl
+        .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
+        .forEach((/** @type {HTMLImageElement} */ img) => {
+          img.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.callbacks.onShowLightbox(img.src);
+          });
         });
-      });
       replies.appendChild(replyEl);
     }
     detail.appendChild(replies);

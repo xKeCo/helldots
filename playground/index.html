@@ -353,12 +353,63 @@
         </div>
       </div>
     </div>
+    <!-- HellDots playground modal: exercises anchoring inside an
+         initially-hidden container and the runtime hidden state when it
+         closes (display:none => zero-size anchor container). -->
+    <button
+      id="hd-open-modal"
+      type="button"
+      style="position: fixed; bottom: 24px; left: 24px; z-index: 9000; padding: 10px 16px; border-radius: 8px; border: none; background: #2e90fa; color: #fff; font-size: 14px; cursor: pointer"
+    >
+      Open modal
+    </button>
+    <div
+      id="hd-modal-backdrop"
+      style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 9001"
+    >
+      <div
+        id="hd-modal"
+        class="modal-content"
+        role="dialog"
+        aria-label="Demo modal"
+        style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(480px, 90vw); background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3)"
+      >
+        <h3 id="hd-modal-title" style="margin: 0 0 8px">Demo modal</h3>
+        <p id="hd-modal-text" style="margin: 0 0 16px">
+          Comment on this modal content to test anchoring inside dialogs.
+          Close the modal and the marker should hide; reopen it and the
+          marker should come back.
+        </p>
+        <img
+          src="./images/yeo-feature-2.svg"
+          alt="Modal illustration"
+          style="width: 100%; max-height: 160px; object-fit: contain"
+        />
+        <button
+          id="hd-close-modal"
+          type="button"
+          style="margin-top: 16px; padding: 8px 14px; border-radius: 8px; border: none; background: #1c1c1e; color: #fff; cursor: pointer"
+        >
+          Close
+        </button>
+      </div>
+    </div>
   </body>
   <script type="module">
     import { createCommentOverlay } from '../src/index.js';
 
     const overlay = createCommentOverlay({
       autoInit: true,
+      persistence: 'localStorage',
+      user: { name: 'Kevin Collazos' },
+    });
+
+    const backdrop = document.getElementById('hd-modal-backdrop');
+    document.getElementById('hd-open-modal').addEventListener('click', () => {
+      backdrop.style.display = 'block';
+    });
+    document.getElementById('hd-close-modal').addEventListener('click', () => {
+      backdrop.style.display = 'none';
     });
 
     // Add some test content to demonstrate dynamic positioning

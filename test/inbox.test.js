@@ -172,7 +172,9 @@ describe("inbox sidebar", () => {
       createCommentOn(overlay, document.getElementById("target"), "copy me");
 
       const panel = openInbox(overlay);
-      click(panel.querySelector(`.${CLASSES.INBOX_ACTION_BTN}[data-action="copy"]`));
+      click(
+        panel.querySelector(`.${CLASSES.INBOX_ACTION_BTN}[data-action="copy"]`)
+      );
 
       expect(writeText).toHaveBeenCalledTimes(1);
       const copied = writeText.mock.calls[0][0];
@@ -190,7 +192,9 @@ describe("inbox sidebar", () => {
       );
 
       const panel = openInbox(overlay);
-      click(panel.querySelector(`.${CLASSES.INBOX_ACTION_BTN}[data-action="menu"]`));
+      click(
+        panel.querySelector(`.${CLASSES.INBOX_ACTION_BTN}[data-action="menu"]`)
+      );
       click(panel.querySelector(`.${CLASSES.INBOX_MENU_ITEM}`));
 
       expect(overlay.comments).toHaveLength(0);
@@ -208,7 +212,7 @@ describe("inbox sidebar", () => {
         overlay.shadowRoot.querySelector(`.${CLASSES.INBOX_PANEL}`)
       ).toBeNull();
 
-      panel = openInbox(overlay);
+      openInbox(overlay);
       document.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
       );
