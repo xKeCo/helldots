@@ -72,6 +72,17 @@ export const IDS = {
   ATTACH_IMAGE_INPUT: "attach-image-input",
 };
 
+// RF09 — comment lifecycle. Order matters: it's the order shown in the
+// status picker menu.
+export const STATUSES = ["open", "in_progress", "resolved", "closed"];
+
+export const STATUS_COLORS = {
+  open: "#2E90FA",
+  in_progress: "#FF9F0A",
+  resolved: "#30D158",
+  closed: "#8E8E93",
+};
+
 export const SELECTORS = {
   CONTAINER: 'section, div[class*="container"], div[class*="content"]',
 };

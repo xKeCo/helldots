@@ -1,5 +1,5 @@
 import html2canvas from "html2canvas";
-import { CLASSES, IDS, SELECTORS } from "./constants.js";
+import { CLASSES, IDS, SELECTORS, STATUSES } from "./constants.js";
 import { getStyles, getGlobalStyles } from "./styles.js";
 import { getShadowRoot } from "./root-element.js";
 import { getStrings, detectLocale } from "./i18n.js";
@@ -477,6 +477,7 @@ class CommentOverlay {
       anchorState: "anchored",
       target: this.currentPosition.target,
       hidden: false,
+      status: "open",
       page: location.pathname,
       id: Date.now(),
       replies: [],
@@ -882,7 +883,25 @@ class CommentOverlay {
       author: comment.author,
       createdAt: comment.createdAt,
       screenshots: comment.screenshots || [],
+      status: comment.status || "open",
     };
+  }
+
+  /**
+   * RF09 — moves a comment through its lifecycle
+   * (open → in_progress → resolved → closed, in any order).
+   * @param {number} id
+   * @param {import('./index.d.ts').CommentStatus} status
+   * @returns {boolean} false when the id or status is unknown
+   */
+  setCommentStatus(id, status) {
+    if (!STATUSES.includes(status)) return false;
+    const comment = this.comments.find((c) => c.id === id);
+    if (!comment) return false;
+    comment.status = status;
+    this._syncStorage();
+    this.options.onCommentStatusChanged?.(this._serializeComment(comment));
+    return true;
   }
 
   /**
@@ -966,6 +985,7 @@ class CommentOverlay {
         screenshots: Array.isArray(item.screenshots)
           ? [...item.screenshots]
           : [],
+        status: STATUSES.includes(item.status) ? item.status : "open",
       };
 
       // Comments from other pages aren't broken — their elements just

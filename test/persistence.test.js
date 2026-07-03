@@ -514,4 +514,82 @@ describe("persistence", () => {
       expect(JSON.parse(localStorage.getItem("helldots-comments"))).toEqual([]);
     });
   });
+
+  describe("comment status lifecycle (RF09)", () => {
+    afterEach(() => {
+      localStorage.clear();
+    });
+
+    it("new comments start as open and serialize their status", () => {
+      overlay = makeOverlay();
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "fresh"
+      );
+      expect(comment.status).toBe("open");
+      expect(overlay.serializeComments()[0].status).toBe("open");
+    });
+
+    it("setCommentStatus updates, persists and notifies", () => {
+      const onCommentStatusChanged = vi.fn();
+      overlay = makeOverlay({
+        persistence: "localStorage",
+        onCommentStatusChanged,
+      });
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "lifecycle"
+      );
+
+      expect(overlay.setCommentStatus(comment.id, "in_progress")).toBe(true);
+      expect(comment.status).toBe("in_progress");
+      expect(onCommentStatusChanged).toHaveBeenCalledTimes(1);
+      expect(onCommentStatusChanged.mock.calls[0][0].status).toBe(
+        "in_progress"
+      );
+
+      const stored = JSON.parse(localStorage.getItem("helldots-comments"));
+      expect(stored[0].status).toBe("in_progress");
+    });
+
+    it("status survives a reload round-trip", () => {
+      overlay = makeOverlay({ persistence: "localStorage" });
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "kept"
+      );
+      overlay.setCommentStatus(comment.id, "resolved");
+      overlay.cleanup();
+
+      overlay = makeOverlay({ persistence: "localStorage" });
+      expect(overlay.comments[0].status).toBe("resolved");
+    });
+
+    it("restores legacy entries without status as open", () => {
+      overlay = makeOverlay();
+      createCommentOn(overlay, document.getElementById("target"), "legacy");
+      const data = overlay.serializeComments();
+      delete data[0].status;
+      overlay.cleanup();
+
+      overlay = makeOverlay();
+      overlay.loadComments(data);
+      expect(overlay.comments[0].status).toBe("open");
+    });
+
+    it("rejects unknown ids and invalid statuses", () => {
+      overlay = makeOverlay();
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "guarded"
+      );
+      expect(overlay.setCommentStatus(999999, "resolved")).toBe(false);
+      expect(overlay.setCommentStatus(comment.id, "banana")).toBe(false);
+      expect(comment.status).toBe("open");
+    });
+  });
 });
