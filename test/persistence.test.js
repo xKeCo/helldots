@@ -307,6 +307,51 @@ describe("persistence", () => {
     });
   });
 
+  describe("hidden runtime state", () => {
+    const rect = (w, h) => () => ({
+      left: 0,
+      top: 0,
+      right: w,
+      bottom: h,
+      width: w,
+      height: h,
+    });
+
+    it("hides the circle while the anchor element has zero size and restores it after", () => {
+      overlay = makeOverlay();
+      const target = document.getElementById("target");
+      target.getBoundingClientRect = rect(200, 100);
+      const comment = createCommentOn(overlay, target, "hideable");
+      const circle = overlay.shadowRoot.querySelector(
+        `[data-comment-id="${comment.id}"]`
+      );
+      expect(comment.hidden).toBe(false);
+      expect(circle.style.display).not.toBe("none");
+
+      target.getBoundingClientRect = rect(0, 0);
+      overlay.updateCommentPosition(comment, circle);
+      expect(comment.hidden).toBe(true);
+      expect(circle.style.display).toBe("none");
+
+      target.getBoundingClientRect = rect(200, 100);
+      overlay.updateCommentPosition(comment, circle);
+      expect(comment.hidden).toBe(false);
+      expect(circle.style.display).not.toBe("none");
+    });
+
+    it("does not serialize the hidden flag", () => {
+      overlay = makeOverlay();
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "x"
+      );
+      comment.hidden = true;
+      const [serialized] = overlay.serializeComments();
+      expect(serialized.hidden).toBeUndefined();
+    });
+  });
+
   describe("localStorage persistence option", () => {
     afterEach(() => {
       localStorage.clear();

@@ -1068,11 +1068,10 @@ class CommentOverlay {
     const containerWidth = containerRect.width;
     const containerHeight = containerRect.height;
 
-    // Validate that container has valid dimensions
+    // Zero size isn't an anomaly: it's what display:none (e.g. responsive
+    // media queries) looks like. The caller hides the marker until the
+    // element gets its size back.
     if (containerWidth <= 0 || containerHeight <= 0) {
-      console.warn(
-        "Container has invalid dimensions, skipping position calculation"
-      );
       return null;
     }
 
@@ -1114,7 +1113,18 @@ class CommentOverlay {
   updateCommentPosition(comment, circle) {
     const positionData = this.validateAndCalculatePosition(comment, circle);
 
-    if (!positionData) return;
+    if (!positionData) {
+      // Anchor element currently invisible (zero-size container): hide the
+      // marker; it comes back automatically when the observers fire again.
+      if (circle && comment.container) {
+        comment.hidden = true;
+        circle.style.display = "none";
+      }
+      return;
+    }
+
+    comment.hidden = false;
+    circle.style.display = "";
 
     // Offset so the circle's top-left tip (sharp corner) aligns with the stored position
     const circleRadius = 14;
