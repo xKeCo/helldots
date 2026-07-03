@@ -67,8 +67,31 @@ describe("persistence", () => {
       expect(serialized.text).toBe("Callback test");
       expect(serialized.anchor.selector).toBe("#target");
       expect(serialized.container).toBeUndefined();
-      expect(serialized.screenshots).toBeUndefined();
       expect(JSON.parse(JSON.stringify(serialized))).toEqual(serialized);
+    });
+
+    it("captures the page (pathname) and screenshots in serialized form", () => {
+      overlay = makeOverlay();
+      const target = document.getElementById("target");
+      const comment = createCommentOn(overlay, target, "with page");
+      comment.screenshots = ["data:image/png;base64,shot"];
+
+      const [serialized] = overlay.serializeComments();
+      expect(serialized.page).toBe(location.pathname);
+      expect(serialized.screenshots).toEqual(["data:image/png;base64,shot"]);
+    });
+
+    it("uses options.user.name as the author of comments and replies", () => {
+      overlay = makeOverlay({ user: { name: "Kevin Collazos" } });
+      const comment = createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "authored"
+      );
+      const reply = overlay.addReply(comment, "reply");
+
+      expect(comment.author).toBe("Kevin Collazos");
+      expect(reply.author).toBe("Kevin Collazos");
     });
   });
 
@@ -109,7 +132,7 @@ describe("persistence", () => {
       }
     });
 
-    it("serializes replies without screenshots", () => {
+    it("serializes reply screenshots", () => {
       overlay = makeOverlay();
       const comment = createCommentOn(
         overlay,
@@ -120,7 +143,9 @@ describe("persistence", () => {
       const [serialized] = overlay.serializeComments();
       expect(serialized.replies).toHaveLength(1);
       expect(serialized.replies[0].text).toBe("with screenshot");
-      expect(serialized.replies[0].screenshots).toBeUndefined();
+      expect(serialized.replies[0].screenshots).toEqual([
+        "data:image/png;base64,x",
+      ]);
     });
   });
 
@@ -135,11 +160,12 @@ describe("persistence", () => {
       overlay = makeOverlay();
       const result = overlay.loadComments(data);
 
-      expect(result).toEqual({ anchored: 1, orphaned: 0 });
+      expect(result).toMatchObject({ anchored: 1, orphaned: 0 });
       const restored = overlay.comments[0];
       expect(restored.anchorState).toBe("anchored");
       expect(restored.container).toBe(target);
       expect(restored.text).toBe("round trip");
+      expect(restored.page).toBe(location.pathname);
       expect(restored.relativeX).toBeCloseTo(original.relativeX, 5);
       const circle = overlay.shadowRoot.querySelector(
         `[data-comment-id="${restored.id}"]`

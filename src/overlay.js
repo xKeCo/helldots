@@ -441,9 +441,11 @@ class CommentOverlay {
       relativeY: this.currentPosition.relativeY,
       anchor: this.currentPosition.anchor,
       anchorState: "anchored",
+      hidden: false,
+      page: location.pathname,
       id: Date.now(),
       replies: [],
-      author: this.strings.anonymous,
+      author: this.options.user?.name || this.strings.anonymous,
       createdAt: new Date().toISOString(),
       screenshots: this._pendingScreenshots
         ? [...this._pendingScreenshots]
@@ -827,7 +829,7 @@ class CommentOverlay {
     const reply = {
       id: Date.now(),
       text,
-      author: this.strings.anonymous,
+      author: this.options.user?.name || this.strings.anonymous,
       timestamp: new Date().toISOString(),
       screenshots,
     };
@@ -839,25 +841,27 @@ class CommentOverlay {
     return reply;
   }
 
-  _serializeReply({ id, text, author, timestamp }) {
-    return { id, text, author, timestamp };
+  _serializeReply({ id, text, author, timestamp, screenshots }) {
+    return { id, text, author, timestamp, screenshots: screenshots || [] };
   }
 
   /**
    * Serializable snapshot of one comment: the live `container` element is
-   * replaced by its `anchor`; screenshots stay out (heavy data-URLs — the
-   * host app can persist them separately keyed by comment id).
+   * replaced by its `anchor`. Screenshots (data-URLs) are included — the
+   * localStorage mode and the inbox cards need them.
    */
   _serializeComment(comment) {
     return {
       id: comment.id,
       text: comment.text,
       anchor: comment.anchor || null,
+      page: comment.page || location.pathname,
       replies: (comment.replies || []).map((reply) =>
         this._serializeReply(reply)
       ),
       author: comment.author,
       createdAt: comment.createdAt,
+      screenshots: comment.screenshots || [],
     };
   }
 
@@ -905,13 +909,17 @@ class CommentOverlay {
         text: item.text,
         anchor: item.anchor || null,
         anchorState: "orphaned",
+        hidden: false,
+        page: item.page || location.pathname,
         container: null,
         relativeX: 0,
         relativeY: 0,
         replies: Array.isArray(item.replies) ? [...item.replies] : [],
         author: item.author || this.strings.anonymous,
         createdAt: item.createdAt || new Date().toISOString(),
-        screenshots: [],
+        screenshots: Array.isArray(item.screenshots)
+          ? [...item.screenshots]
+          : [],
       };
 
       const resolved = item.anchor ? resolveAnchor(item.anchor) : null;
