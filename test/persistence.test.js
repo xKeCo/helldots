@@ -350,6 +350,58 @@ describe("persistence", () => {
       const [serialized] = overlay.serializeComments();
       expect(serialized.hidden).toBeUndefined();
     });
+
+    it("hides the circle when the clicked element vanishes even if the container stays visible", () => {
+      // Real case: an <img class="slogan-img"> inside a large .container —
+      // responsive media queries hide the image but never the container.
+      document.body.innerHTML = `<div class="container slogan">Some surrounding content that stays<img id="pic" src="x.png" alt=""></div>`;
+      const container = document.querySelector(".container");
+      const img = document.getElementById("pic");
+      container.getBoundingClientRect = rect(800, 600);
+      img.getBoundingClientRect = rect(120, 80);
+
+      overlay = makeOverlay();
+      const comment = createCommentOn(overlay, img, "on the image");
+      expect(comment.container).toBe(container);
+      expect(comment.anchor.targetSelector).toBe("#pic");
+      const circle = overlay.shadowRoot.querySelector(
+        `[data-comment-id="${comment.id}"]`
+      );
+      expect(comment.hidden).toBe(false);
+
+      img.getBoundingClientRect = rect(0, 0); // media query hid the image
+      overlay.updateCommentPosition(comment, circle);
+      expect(comment.hidden).toBe(true);
+      expect(circle.style.display).toBe("none");
+
+      img.getBoundingClientRect = rect(120, 80);
+      overlay.updateCommentPosition(comment, circle);
+      expect(comment.hidden).toBe(false);
+    });
+
+    it("re-derives the target from targetSelector after a restore", () => {
+      document.body.innerHTML = `<div class="container slogan">Persistent content around<img id="pic" src="x.png" alt=""></div>`;
+      const container = document.querySelector(".container");
+      const img = document.getElementById("pic");
+      container.getBoundingClientRect = rect(800, 600);
+      img.getBoundingClientRect = rect(120, 80);
+
+      overlay = makeOverlay();
+      createCommentOn(overlay, img, "restored target");
+      const data = overlay.serializeComments();
+      overlay.cleanup();
+
+      overlay = makeOverlay();
+      overlay.loadComments(data);
+      const restored = overlay.comments[0];
+      const circle = overlay.shadowRoot.querySelector(
+        `[data-comment-id="${restored.id}"]`
+      );
+
+      img.getBoundingClientRect = rect(0, 0);
+      overlay.updateCommentPosition(restored, circle);
+      expect(restored.hidden).toBe(true);
+    });
   });
 
   describe("localStorage persistence option", () => {
@@ -436,6 +488,30 @@ describe("persistence", () => {
     it("deleteComment returns false for unknown ids", () => {
       overlay = makeOverlay();
       expect(overlay.deleteComment(123456)).toBe(false);
+    });
+
+    it("deleting an inactive other-page comment also removes it from storage", () => {
+      localStorage.setItem(
+        "helldots-comments",
+        JSON.stringify([
+          {
+            id: 777,
+            text: "foreign",
+            page: "/otra",
+            anchor: null,
+            replies: [],
+            author: "X",
+            createdAt: "2026-07-03T00:00:00.000Z",
+            screenshots: [],
+          },
+        ])
+      );
+      overlay = makeOverlay({ persistence: "localStorage" });
+      expect(overlay.comments).toHaveLength(1);
+
+      expect(overlay.deleteComment(777)).toBe(true);
+
+      expect(JSON.parse(localStorage.getItem("helldots-comments"))).toEqual([]);
     });
   });
 });

@@ -3,7 +3,11 @@ import { CLASSES, IDS, SELECTORS } from "./constants.js";
 import { getStyles, getGlobalStyles } from "./styles.js";
 import { getShadowRoot } from "./root-element.js";
 import { getStrings, detectLocale } from "./i18n.js";
-import { createAnchor, resolveAnchor } from "./anchor.js";
+import {
+  createAnchor,
+  resolveAnchor,
+  generateElementSelector,
+} from "./anchor.js";
 import {
   readStoredComments,
   writeStoredComments,
@@ -320,15 +324,25 @@ class CommentOverlay {
         ? (clientY - containerRect.top) / containerRect.height
         : 0;
 
+    const anchor = createAnchor(
+      /** @type {HTMLElement} */ (container),
+      relativeX,
+      relativeY
+    );
+    // The clicked element can disappear (responsive display:none) while the
+    // coarse anchor container stays visible — track it separately so the
+    // marker hides with what the user actually commented on.
+    anchor.targetSelector =
+      underlying && underlying !== container
+        ? generateElementSelector(/** @type {HTMLElement} */ (underlying))
+        : null;
+
     this.currentPosition = {
       container,
       relativeX,
       relativeY,
-      anchor: createAnchor(
-        /** @type {HTMLElement} */ (container),
-        relativeX,
-        relativeY
-      ),
+      anchor,
+      target: /** @type {HTMLElement} */ (underlying || container),
     };
 
     this.createPreviewCircle(clientX, clientY);
@@ -461,6 +475,7 @@ class CommentOverlay {
       relativeY: this.currentPosition.relativeY,
       anchor: this.currentPosition.anchor,
       anchorState: "anchored",
+      target: this.currentPosition.target,
       hidden: false,
       page: location.pathname,
       id: Date.now(),
@@ -886,7 +901,17 @@ class CommentOverlay {
   deleteComment(id) {
     if (!this.comments.some((comment) => comment.id === id)) return false;
     this._removeComment(id);
-    this._syncStorage();
+    if (this.options.persistence === "localStorage") {
+      // The merge preserves other-page entries missing from memory, which
+      // would resurrect a deleted inactive comment — drop the id explicitly.
+      writeStoredComments(
+        mergeForStorage(
+          readStoredComments().filter((comment) => comment.id !== id),
+          this.serializeComments(),
+          location.pathname
+        )
+      );
+    }
     this.options.onCommentDeleted?.(id);
     return true;
   }
@@ -929,6 +954,7 @@ class CommentOverlay {
         text: item.text,
         anchor: item.anchor || null,
         anchorState: "orphaned",
+        target: null,
         hidden: false,
         page: item.page || location.pathname,
         container: null,
@@ -1093,8 +1119,32 @@ class CommentOverlay {
    * @param {Object} comment - The comment object
    * @param {HTMLElement} circle - The comment circle element
    */
+  /**
+   * The exact element the user clicked on can vanish (responsive
+   * display:none) while its coarse anchor container stays visible. When we
+   * have a live target — or can re-derive one from the serialized
+   * targetSelector — the marker follows ITS visibility too.
+   */
+  _isAnchorTargetVisible(comment) {
+    let target = comment.target;
+    if ((!target || !target.isConnected) && comment.anchor?.targetSelector) {
+      try {
+        target = document.querySelector(comment.anchor.targetSelector);
+      } catch {
+        target = null;
+      }
+      comment.target = target || null;
+    }
+    if (!target || !target.isConnected) return true; // no signal — assume visible
+    const rect = target.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
   updateCommentPosition(comment, circle) {
-    const positionData = this.validateAndCalculatePosition(comment, circle);
+    let positionData = this.validateAndCalculatePosition(comment, circle);
+    if (positionData && !this._isAnchorTargetVisible(comment)) {
+      positionData = null;
+    }
     const wasHidden = comment.hidden === true;
 
     if (!positionData) {

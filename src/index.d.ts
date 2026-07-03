@@ -13,6 +13,8 @@ export interface CommentAnchor {
   version: 1;
   /** Best-effort unique CSS selector, or null when none could be generated. */
   selector: string | null;
+  /** Selector for the exact clicked element when deeper than the container. */
+  targetSelector?: string | null;
   fingerprint: CommentAnchorFingerprint;
   /** Fraction (0–1) of the anchor element's box, captured at creation. */
   relativeX: number;
@@ -72,6 +74,8 @@ export interface Comment {
   anchorState: AnchorState;
   /** Runtime-only: anchor element currently has zero size (not serialized). */
   hidden: boolean;
+  /** Runtime-only: exact element the user clicked on (not serialized). */
+  target?: HTMLElement | null;
   /** location.pathname where the comment was created. */
   page: string;
   replies: CommentReply[];

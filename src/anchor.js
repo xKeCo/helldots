@@ -132,6 +132,16 @@ const generateSelector = (element, doc) =>
   structuralSelector(element, doc);
 
 /**
+ * Best-effort unique CSS selector for any element (or null). Exposed for
+ * the overlay's target-visibility tracking; same cascade used by anchors.
+ * @param {HTMLElement} element
+ * @returns {string | null}
+ */
+export function generateElementSelector(element) {
+  return generateSelector(element, element.ownerDocument);
+}
+
+/**
  * Captures a serializable anchor for `element` at creation time.
  * @param {HTMLElement} element
  * @param {number} relativeX
