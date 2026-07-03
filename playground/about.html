@@ -4,7 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>About — HellDots Playground</title>
-    <link href="https://fonts.googleapis.com/css?family=Poppins:200,400,700" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css?family=Poppins:200,400,700"
+      rel="stylesheet"
+    />
     <!-- DEV ONLY: resolves bare specifiers for the bundler-free playground -->
     <script type="importmap">
       {
@@ -63,9 +66,9 @@
         <h1>About this page</h1>
         <p>
           This is a second playground route. Comments created here belong to
-          this page: on the home page they only appear in the inbox under
-          "All comments", tagged with this page's path, and clicking them
-          navigates back here and opens their thread automatically.
+          this page: on the home page they only appear in the inbox under "All
+          comments", tagged with this page's path, and clicking them navigates
+          back here and opens their thread automatically.
         </p>
       </section>
 
@@ -73,8 +76,8 @@
         <h2>The team</h2>
         <p>
           A tiny fake section with enough distinct text for anchors to
-          fingerprint reliably. Try commenting on this card, then visit the
-          home page and look for it in the inbox.
+          fingerprint reliably. Try commenting on this card, then visit the home
+          page and look for it in the inbox.
         </p>
         <img
           class="about-illustration"
@@ -85,12 +88,12 @@
     </main>
   </body>
   <script type="module">
-    import { createCommentOverlay } from '../src/index.js';
+    import { createCommentOverlay } from "../src/index.js";
 
     createCommentOverlay({
       autoInit: true,
-      persistence: 'localStorage',
-      user: { name: 'Kevin Collazos' },
+      persistence: "localStorage",
+      user: { name: "Kevin Collazos" },
     });
   </script>
 </html>

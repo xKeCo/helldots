@@ -64,6 +64,7 @@ export class InboxView {
   }
 
   close() {
+    this._clearHighlight();
     this.el?.remove();
     this.el = null;
     this.detailId = null;
@@ -71,6 +72,28 @@ export class InboxView {
 
   refresh() {
     if (this.el) this.render();
+  }
+
+  _highlight(comment) {
+    this._clearHighlight();
+    if (
+      comment.anchorState !== "anchored" ||
+      comment.hidden ||
+      comment.status === "resolved"
+    ) {
+      return;
+    }
+    const element = comment.target?.isConnected
+      ? comment.target
+      : comment.container;
+    if (!element?.isConnected) return;
+    element.classList.add(CLASSES.HIGHLIGHT);
+    this._highlightedEl = element;
+  }
+
+  _clearHighlight() {
+    this._highlightedEl?.classList.remove(CLASSES.HIGHLIGHT);
+    this._highlightedEl = null;
   }
 
   filteredComments() {
@@ -94,6 +117,7 @@ export class InboxView {
 
   render() {
     if (!this.el) return;
+    this._clearHighlight();
     this.el.innerHTML = "";
     const comments = this.filteredComments();
     const detail =
@@ -320,6 +344,11 @@ export class InboxView {
           activate();
         }
       });
+
+      // Hovering a card spotlights its element on the page — only when the
+      // marker is actually there (anchored, visible, not resolved).
+      card.addEventListener("mouseenter", () => this._highlight(comment));
+      card.addEventListener("mouseleave", () => this._clearHighlight());
     }
 
     return card;

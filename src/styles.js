@@ -900,4 +900,11 @@ export const getGlobalStyles = () => `
     .${CLASSES.COMMENT_CURSOR} * {
         cursor: url('${CURSOR_SVG}') 6 6, auto !important;
     }
+
+    .${CLASSES.HIGHLIGHT} {
+        outline: 2px solid #2E90FA !important;
+        outline-offset: 2px;
+        border-radius: 4px;
+        transition: outline 0.15s ease;
+    }
 `;

@@ -24,7 +24,7 @@ export interface CommentAnchor {
 export type AnchorState = "anchored" | "orphaned" | "inactive";
 
 /** RF09 — comment lifecycle state. */
-export type CommentStatus = "open" | "in_progress" | "resolved" | "closed";
+export type CommentStatus = "open" | "in_progress" | "resolved";
 
 export interface SerializedComment {
   id: number;

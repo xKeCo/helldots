@@ -134,9 +134,7 @@ describe("inbox sidebar", () => {
       click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
       click(panel.querySelector(`[data-filter-status="unresolved"]`));
       let cards = [...panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`)];
-      expect(cards.map((c) => c.dataset.commentId)).toEqual([
-        String(open1.id),
-      ]);
+      expect(cards.map((c) => c.dataset.commentId)).toEqual([String(open1.id)]);
 
       // all pages + resolved
       click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
@@ -454,9 +452,7 @@ describe("inbox sidebar", () => {
 
       overlay = makeOverlay({ persistence: "localStorage" });
 
-      const panel = overlay.shadowRoot.querySelector(
-        `.${CLASSES.INBOX_PANEL}`
-      );
+      const panel = overlay.shadowRoot.querySelector(`.${CLASSES.INBOX_PANEL}`);
       expect(panel).toBeTruthy();
       const detail = panel.querySelector(`.${CLASSES.INBOX_DETAIL}`);
       expect(detail).toBeTruthy();
@@ -471,6 +467,50 @@ describe("inbox sidebar", () => {
         overlay.shadowRoot.querySelector(`.${CLASSES.INBOX_DETAIL}`)
       ).toBeNull();
       expect(sessionStorage.getItem("helldots-pending-detail")).toBeNull();
+    });
+  });
+
+  describe("hover highlight", () => {
+    const hover = (el, type) =>
+      el.dispatchEvent(new MouseEvent(type, { bubbles: true }));
+
+    it("highlights the anchored element on card hover and clears it on leave", () => {
+      overlay = makeOverlay();
+      const target = document.getElementById("target");
+      createCommentOn(overlay, target, "highlight me");
+
+      const panel = openInbox(overlay);
+      const card = panel.querySelector(`.${CLASSES.INBOX_CARD}`);
+
+      hover(card, "mouseenter");
+      expect(target.classList.contains("helldots-highlight")).toBe(true);
+
+      hover(card, "mouseleave");
+      expect(target.classList.contains("helldots-highlight")).toBe(false);
+    });
+
+    it("does not highlight resolved comments (no on-page marker)", () => {
+      overlay = makeOverlay();
+      const target = document.getElementById("target");
+      const comment = createCommentOn(overlay, target, "resolved one");
+      overlay.setCommentStatus(comment.id, "resolved");
+
+      const panel = openInbox(overlay);
+      hover(panel.querySelector(`.${CLASSES.INBOX_CARD}`), "mouseenter");
+      expect(target.classList.contains("helldots-highlight")).toBe(false);
+    });
+
+    it("closing the panel clears any active highlight", () => {
+      overlay = makeOverlay();
+      const target = document.getElementById("target");
+      createCommentOn(overlay, target, "sticky highlight");
+
+      const panel = openInbox(overlay);
+      hover(panel.querySelector(`.${CLASSES.INBOX_CARD}`), "mouseenter");
+      expect(target.classList.contains("helldots-highlight")).toBe(true);
+
+      click(panel.querySelector(`.${CLASSES.INBOX_CLOSE}`));
+      expect(target.classList.contains("helldots-highlight")).toBe(false);
     });
   });
 

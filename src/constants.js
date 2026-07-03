@@ -61,6 +61,7 @@ export const CLASSES = {
   INBOX_NAV_BTN: "inbox-nav-btn",
   INBOX_REPLIES: "inbox-replies",
   INBOX_EMPTY: "inbox-empty",
+  HIGHLIGHT: "helldots-highlight",
 };
 
 export const IDS = {
