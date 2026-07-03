@@ -929,6 +929,11 @@ class CommentOverlay {
     const comment = this.comments.find((c) => c.id === id);
     if (!comment) return false;
     comment.status = status;
+    // Resolving removes the on-page marker; reopening restores it.
+    const circle = /** @type {HTMLElement} */ (
+      this.shadowRoot?.querySelector(`[data-comment-id="${id}"]`)
+    );
+    if (circle) this.updateCommentPosition(comment, circle);
     this._syncStorage();
     this.options.onCommentStatusChanged?.(this._serializeComment(comment));
     return true;
@@ -1015,7 +1020,13 @@ class CommentOverlay {
         screenshots: Array.isArray(item.screenshots)
           ? [...item.screenshots]
           : [],
-        status: STATUSES.includes(item.status) ? item.status : "open",
+        // "closed" existed briefly and was folded into "resolved".
+        status:
+          item.status === "closed"
+            ? "resolved"
+            : STATUSES.includes(item.status)
+              ? item.status
+              : "open",
       };
 
       // Comments from other pages aren't broken — their elements just
@@ -1191,6 +1202,13 @@ class CommentOverlay {
   }
 
   updateCommentPosition(comment, circle) {
+    // Resolved comments have no on-page marker (RF09). This is not the
+    // "hidden" state — the anchor is fine, the issue is just done.
+    if (comment.status === "resolved") {
+      if (circle) circle.style.display = "none";
+      return;
+    }
+
     let positionData = this.validateAndCalculatePosition(comment, circle);
     if (positionData && !this._isAnchorTargetVisible(comment)) {
       positionData = null;

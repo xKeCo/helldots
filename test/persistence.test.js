@@ -580,7 +580,7 @@ describe("persistence", () => {
       expect(overlay.comments[0].status).toBe("open");
     });
 
-    it("rejects unknown ids and invalid statuses", () => {
+    it("rejects unknown ids and invalid statuses, including the removed closed", () => {
       overlay = makeOverlay();
       const comment = createCommentOn(
         overlay,
@@ -589,7 +589,47 @@ describe("persistence", () => {
       );
       expect(overlay.setCommentStatus(999999, "resolved")).toBe(false);
       expect(overlay.setCommentStatus(comment.id, "banana")).toBe(false);
+      expect(overlay.setCommentStatus(comment.id, "closed")).toBe(false);
       expect(comment.status).toBe("open");
+    });
+
+    it("migrates legacy closed entries to resolved on load", () => {
+      overlay = makeOverlay();
+      createCommentOn(overlay, document.getElementById("target"), "legacy");
+      const data = overlay.serializeComments();
+      data[0].status = "closed";
+      overlay.cleanup();
+
+      overlay = makeOverlay();
+      overlay.loadComments(data);
+      expect(overlay.comments[0].status).toBe("resolved");
+    });
+
+    it("resolving a comment removes its marker; reopening restores it", () => {
+      const rect = (w, h) => () => ({
+        left: 0,
+        top: 0,
+        right: w,
+        bottom: h,
+        width: w,
+        height: h,
+      });
+      overlay = makeOverlay();
+      const target = document.getElementById("target");
+      target.getBoundingClientRect = rect(300, 200);
+      const comment = createCommentOn(overlay, target, "resolve me");
+      const circle = overlay.shadowRoot.querySelector(
+        `[data-comment-id="${comment.id}"]`
+      );
+      expect(circle.style.display).not.toBe("none");
+
+      overlay.setCommentStatus(comment.id, "resolved");
+      expect(circle.style.display).toBe("none");
+      // resolved is not "hidden" — the inbox must not show the Hidden tag
+      expect(comment.hidden).toBe(false);
+
+      overlay.setCommentStatus(comment.id, "open");
+      expect(circle.style.display).not.toBe("none");
     });
   });
 });

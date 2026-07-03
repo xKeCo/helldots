@@ -31,7 +31,6 @@ export const statusLabelOf = (status, strings) =>
     open: strings.statusOpen,
     in_progress: strings.statusInProgress,
     resolved: strings.statusResolved,
-    closed: strings.statusClosed,
   })[status] || strings.statusOpen;
 
 /**

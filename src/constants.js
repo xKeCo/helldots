@@ -74,13 +74,12 @@ export const IDS = {
 
 // RF09 — comment lifecycle. Order matters: it's the order shown in the
 // status picker menu.
-export const STATUSES = ["open", "in_progress", "resolved", "closed"];
+export const STATUSES = ["open", "in_progress", "resolved"];
 
 export const STATUS_COLORS = {
   open: "#2E90FA",
   in_progress: "#FF9F0A",
   resolved: "#30D158",
-  closed: "#8E8E93",
 };
 
 export const SELECTORS = {

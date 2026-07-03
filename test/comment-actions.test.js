@@ -66,7 +66,6 @@ describe("createCommentActions", () => {
       "Abierto",
       "En progreso",
       "Resuelto",
-      "Cerrado",
     ]);
     const checked = options.find(
       (o) => o.getAttribute("aria-checked") === "true"

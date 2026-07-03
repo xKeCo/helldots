@@ -39,5 +39,4 @@ export default {
   statusOpen: "Abierto",
   statusInProgress: "En progreso",
   statusResolved: "Resuelto",
-  statusClosed: "Cerrado",
 };
