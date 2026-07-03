@@ -23,6 +23,9 @@ export interface CommentAnchor {
 
 export type AnchorState = "anchored" | "orphaned" | "inactive";
 
+/** RF09 — comment lifecycle state. */
+export type CommentStatus = "open" | "in_progress" | "resolved" | "closed";
+
 export interface SerializedComment {
   id: number;
   text: string;
@@ -33,6 +36,7 @@ export interface SerializedComment {
   author: string;
   createdAt: string;
   screenshots: string[];
+  status: CommentStatus;
 }
 
 export interface CommentOverlayOptions {
@@ -53,6 +57,8 @@ export interface CommentOverlayOptions {
   onAnchorLost?: (comment: SerializedComment) => void;
   /** Fired after deleteComment removes a comment. */
   onCommentDeleted?: (id: number) => void;
+  /** Fired after setCommentStatus changes a comment's lifecycle state. */
+  onCommentStatusChanged?: (comment: SerializedComment) => void;
 }
 
 export interface CommentReply {
@@ -82,6 +88,7 @@ export interface Comment {
   author: string;
   createdAt: string;
   screenshots: string[];
+  status: CommentStatus;
 }
 
 export declare class CommentOverlay {
@@ -99,6 +106,7 @@ export declare class CommentOverlay {
     inactive: number;
   };
   deleteComment(id: number): boolean;
+  setCommentStatus(id: number, status: CommentStatus): boolean;
   cleanup(): void;
 }
 

@@ -115,9 +115,7 @@ export const createCommentActions = (
     optionDot.className = CLASSES.INBOX_STATUS_DOT;
     optionDot.style.backgroundColor = STATUS_COLORS[status];
     option.appendChild(optionDot);
-    option.appendChild(
-      document.createTextNode(statusLabelOf(status, strings))
-    );
+    option.appendChild(document.createTextNode(statusLabelOf(status, strings)));
 
     option.addEventListener("click", (e) => {
       e.stopPropagation();

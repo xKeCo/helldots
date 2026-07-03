@@ -61,9 +61,7 @@ describe("createCommentActions", () => {
     document.body.appendChild(el);
 
     click(el.querySelector('[data-action="status"]'));
-    const options = [
-      ...el.querySelectorAll('[data-status-option]'),
-    ];
+    const options = [...el.querySelectorAll("[data-status-option]")];
     expect(options.map((o) => o.textContent)).toEqual([
       "Abierto",
       "En progreso",

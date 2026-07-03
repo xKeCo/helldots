@@ -351,7 +351,9 @@ describe("inbox sidebar", () => {
 
       const panel = openInbox(overlay);
       click(
-        panel.querySelector(`.${CLASSES.INBOX_ACTION_BTN}[data-action="status"]`)
+        panel.querySelector(
+          `.${CLASSES.INBOX_ACTION_BTN}[data-action="status"]`
+        )
       );
       click(panel.querySelector(`[data-status-option="in_progress"]`));
 
