@@ -3,10 +3,8 @@ import CommentOverlay from "../src/overlay.js";
 import { CLASSES, IDS } from "../src/constants.js";
 import { TAG_NAME } from "../src/root-element.js";
 
-vi.mock("html2canvas", () => ({
-  default: vi.fn().mockResolvedValue({
-    toDataURL: () => "data:image/png;base64,mocked",
-  }),
+vi.mock("../src/capture.js", () => ({
+  captureRegion: vi.fn().mockResolvedValue("data:image/png;base64,mocked"),
 }));
 
 const cleanupDom = () => {
@@ -284,7 +282,7 @@ describe("CommentOverlay", () => {
       expect(overlay.currentPosition).toBeTruthy();
     });
 
-    it("dragging a large rectangle captures a screenshot via html2canvas", async () => {
+    it("dragging a large rectangle captures a screenshot of the region", async () => {
       overlay = makeOverlay();
       overlay.toggleCommentMode();
 
@@ -315,9 +313,11 @@ describe("CommentOverlay", () => {
       );
     });
 
-    it("logs a warning and still places the comment when html2canvas rejects", async () => {
-      const html2canvas = (await import("html2canvas")).default;
-      html2canvas.mockRejectedValueOnce(new Error("capture failed"));
+    it("logs a warning and still places the comment when capture rejects", async () => {
+      const { captureRegion } = await import("../src/capture.js");
+      vi.mocked(captureRegion).mockRejectedValueOnce(
+        new Error("capture failed")
+      );
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
       overlay = makeOverlay();

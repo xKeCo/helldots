@@ -34,9 +34,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "html2canvas": "^1.4.1"
-  },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10.0.1",
@@ -49,5 +46,8 @@
     "prettier": "^3.9.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "modern-screenshot": "^4.7.0"
   }
 }

@@ -3,10 +3,8 @@ import CommentOverlay from "../src/overlay.js";
 import { CLASSES } from "../src/constants.js";
 import { TAG_NAME } from "../src/root-element.js";
 
-vi.mock("html2canvas", () => ({
-  default: vi.fn().mockResolvedValue({
-    toDataURL: () => "data:image/png;base64,mocked",
-  }),
+vi.mock("../src/capture.js", () => ({
+  captureRegion: vi.fn().mockResolvedValue("data:image/png;base64,mocked"),
 }));
 
 const cleanupDom = () => {

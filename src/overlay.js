@@ -1,4 +1,4 @@
-import html2canvas from "html2canvas";
+import { captureRegion } from "./capture.js";
 import { CLASSES, IDS, SELECTORS, STATUSES } from "./constants.js";
 import { getStyles, getGlobalStyles } from "./styles.js";
 import { getShadowRoot } from "./root-element.js";
@@ -302,16 +302,9 @@ class CommentOverlay {
         this.overlay.style.display = "none";
         try {
           if (!this._pendingScreenshots) this._pendingScreenshots = [];
-          const canvas = await html2canvas(document.body, {
-            x: left + window.scrollX,
-            y: top + window.scrollY,
-            width,
-            height,
-            windowWidth: document.documentElement.scrollWidth,
-            windowHeight: document.documentElement.scrollHeight,
-          });
-          if (this._pendingScreenshots.length < 5) {
-            this._pendingScreenshots.push(canvas.toDataURL("image/png"));
+          const dataUrl = await captureRegion({ left, top, width, height });
+          if (dataUrl && this._pendingScreenshots.length < 5) {
+            this._pendingScreenshots.push(dataUrl);
           }
         } catch (err) {
           console.warn("Screenshot capture failed:", err);

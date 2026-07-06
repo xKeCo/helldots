@@ -327,6 +327,31 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   `document.body` — si anclaran a body, cerrar el modal no ocultaría el
   marcador.
 
+## Migración de html2canvas a modern-screenshot (captura de pantalla)
+
+- **Bug real que motivó el cambio**: con la página con scroll, la captura
+  por arrastre devolvía contenido desplazado hacia arriba exactamente
+  `window.scrollY` px (aparecía el hero al capturar secciones inferiores).
+  Reproducido y aislado con Playwright: html2canvas v1.4.1 usa por defecto
+  `scrollX/scrollY = window.pageXOffset/pageYOffset` y desplaza el render
+  del clon; nuestro recorte ya sumaba el scroll a `x/y` → doble conteo
+  (issues conocidos #1878/#2333 de html2canvas). Verificado empíricamente:
+  `scrollX: 0, scrollY: 0` producía el recorte correcto.
+- **Migración en vez de solo el fix** (decisión del usuario): html2canvas
+  está sin mantenimiento desde 2022 y no soporta CSS moderno (funciones de
+  color `oklch`/`lab` que usa p. ej. Tailwind v4 — rompería la captura en
+  páginas modernas). `modern-screenshot` (fork mantenido de html-to-image,
+  ~10 KB gzip vs ~45 KB) usa SVG foreignObject con mejor fidelidad.
+- **El recorte ahora es nuestro** (`src/capture.js`): se renderiza la
+  página completa una vez (`domToCanvas`, `scale: 1` = píxeles CSS) y el
+  recorte se hace con `drawImage` en coordenadas de página
+  (`viewport + scroll`). Al no delegar el crop a la librería, la clase de
+  bug de doble-scroll queda eliminada por diseño, y cambiar de motor de
+  render en el futuro no toca la lógica de coordenadas.
+- **Mismo tratamiento de dependencia**: external en el bundle ESM (dentro
+  del presupuesto de 50 KB), bundleada en el UMD autocontenido; import
+  maps del playground actualizados a esm.sh/modern-screenshot@4.7.0.
+
 ## Fix de paridad visual post-Shadow DOM
 
 - **Bug real: cursor de modo comentario roto por el shadow root**: al
