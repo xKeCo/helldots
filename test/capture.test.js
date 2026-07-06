@@ -20,6 +20,8 @@ const makeFakeCanvas = () => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.mocked(domToCanvas).mockReset();
+  document.documentElement.style.backgroundColor = "";
+  document.body.style.backgroundColor = "";
 });
 
 describe("captureRegion", () => {
@@ -58,6 +60,40 @@ describe("captureRegion", () => {
       220
     );
     expect(dataUrl).toBe("data:image/png;base64,cropped");
+  });
+
+  it("falls back to a white background when the page paints none", async () => {
+    // Pages often rely on the browser's default white canvas — CSS-wise
+    // html/body are transparent, so the render must not come out as an
+    // invisible transparent PNG.
+    vi.mocked(domToCanvas).mockResolvedValue({ width: 100, height: 100 });
+    const { canvas } = makeFakeCanvas();
+    vi.spyOn(document, "createElement").mockReturnValue(
+      /** @type {any} */ (canvas)
+    );
+
+    await captureRegion({ left: 0, top: 0, width: 50, height: 50 });
+
+    expect(domToCanvas).toHaveBeenCalledWith(
+      document.body,
+      expect.objectContaining({ backgroundColor: "#ffffff" })
+    );
+  });
+
+  it("uses the page's own background color when one is painted", async () => {
+    document.body.style.backgroundColor = "rgb(28, 28, 30)";
+    vi.mocked(domToCanvas).mockResolvedValue({ width: 100, height: 100 });
+    const { canvas } = makeFakeCanvas();
+    vi.spyOn(document, "createElement").mockReturnValue(
+      /** @type {any} */ (canvas)
+    );
+
+    await captureRegion({ left: 0, top: 0, width: 50, height: 50 });
+
+    expect(domToCanvas).toHaveBeenCalledWith(
+      document.body,
+      expect.objectContaining({ backgroundColor: "rgb(28, 28, 30)" })
+    );
   });
 
   it("returns null when the 2d context is unavailable", async () => {

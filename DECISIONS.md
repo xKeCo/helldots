@@ -351,6 +351,15 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
 - **Mismo tratamiento de dependencia**: external en el bundle ESM (dentro
   del presupuesto de 50 KB), bundleada en el UMD autocontenido; import
   maps del playground actualizados a esm.sh/modern-screenshot@4.7.0.
+- **Fondo efectivo de página, no blanco fijo**: los renders DOM-based
+  producen PNG transparente cuando `<html>`/`<body>` no pintan fondo (el
+  blanco que se ve en pantalla lo pinta el navegador, fuera del DOM) — la
+  captura quedaba invisible sobre la UI oscura del inbox. Se pasa
+  `backgroundColor` a `domToCanvas` resolviendo el color computado de
+  html → body → `#ffffff` como fallback (replica lo que el usuario ve:
+  páginas oscuras salen oscuras, páginas sin fondo salen blancas).
+  Verificado midiendo el alfa de los píxeles del PNG capturado en
+  `/about` antes (0) y después (255).
 
 ## Fix de paridad visual post-Shadow DOM
 
