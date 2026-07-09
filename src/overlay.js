@@ -1,7 +1,7 @@
 import { captureRegion } from "./capture.js";
 import { CLASSES, IDS, SELECTORS, STATUSES } from "./constants.js";
 import { getStyles, getGlobalStyles } from "./styles.js";
-import { getShadowRoot } from "./root-element.js";
+import { getShadowRoot, TAG_NAME } from "./root-element.js";
 import { getStrings, detectLocale } from "./i18n.js";
 import {
   createAnchor,
@@ -685,10 +685,7 @@ class CommentOverlay {
             viewportHeight: window.innerHeight,
           })
         ),
-      onSetStatus: (c, status) => {
-        this.setCommentStatus(c.id, status);
-        if (this.inboxView?.isOpen()) this.inboxView.refresh();
-      },
+      onSetStatus: (c, status) => this.setCommentStatus(c.id, status),
       onDelete: (c) => {
         this.closeThreadPopover();
         this.deleteComment(c.id);
@@ -957,6 +954,10 @@ class CommentOverlay {
     );
     if (circle) this.updateCommentPosition(comment, circle);
     this._syncStorage();
+    // Re-render the inbox so the card picks up the new status right away
+    // (resolved styling + sink-to-bottom sorting) no matter where the
+    // change came from — card, detail or thread popover.
+    if (this.inboxView?.isOpen()) this.inboxView.refresh();
     this.options.onCommentStatusChanged?.(this._serializeComment(comment));
     return true;
   }
@@ -1044,7 +1045,7 @@ class CommentOverlay {
           : [],
         // "closed" existed briefly and was folded into "resolved".
         status:
-          item.status === "closed"
+          /** @type {string} */ (item.status) === "closed"
             ? "resolved"
             : STATUSES.includes(item.status)
               ? item.status
@@ -1223,6 +1224,84 @@ class CommentOverlay {
     return rect.width > 0 && rect.height > 0;
   }
 
+  /**
+   * A marker floats above the whole page (own shadow host, high z-index),
+   * so a host-page modal overlay can never cover it with CSS alone. Hit-test
+   * the marker's point instead: if the topmost page element there is
+   * unrelated to the comment's anchor (neither ancestor nor descendant),
+   * something like a modal backdrop is covering it and the marker should
+   * hide with it.
+   */
+  _isMarkerOccluded(comment, x, y) {
+    if (typeof document.elementsFromPoint !== "function") return false;
+    // Off-viewport points can't be hit-tested; the marker isn't visible
+    // there anyway, so keep the current (visible) state.
+    if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) {
+      return false;
+    }
+    const stack = document.elementsFromPoint(x, y);
+    // Our own shadow host shows up first (the marker itself, toolbar, …).
+    const top = stack.find(
+      (el) => el.tagName.toLowerCase() !== TAG_NAME.toLowerCase()
+    );
+    if (!top) return false;
+
+    const target = comment.target?.isConnected ? comment.target : null;
+    // The precise element the comment was left on (or its subtree /
+    // ancestors) is what should be under the marker — never an occluder.
+    if (target && (target.contains(top) || top.contains(target))) {
+      return false;
+    }
+
+    const container = comment.container;
+    if (!container?.isConnected) return false;
+    // Something entirely unrelated to the anchor sits on top of it.
+    if (!container.contains(top) && !top.contains(container)) return true;
+
+    // `top` lives inside the anchor container — usually normal content of
+    // the anchored subtree. But broad containers (body, page wrappers) also
+    // contain the page's modals, so walk the chain up to the container: if
+    // it crosses a modal-looking layer the anchor doesn't belong to, the
+    // marker is covered after all.
+    if (container.contains(top) && top !== container) {
+      for (let el = top; el && el !== container; el = el.parentElement) {
+        if (this._looksLikeModalLayer(el, target)) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Heuristic for "this element is a modal/backdrop layer": explicit dialog
+   * semantics, or a hit-testable fixed element covering most of the
+   * viewport. Elements that contain the comment's own target are the layer
+   * the comment lives in, never an occluder.
+   */
+  _looksLikeModalLayer(el, target) {
+    if (target && el.contains(target)) return false;
+    if (el.matches?.('dialog, [aria-modal="true"], [role="dialog"]')) {
+      return true;
+    }
+    if (getComputedStyle(el).position !== "fixed") return false;
+    const rect = el.getBoundingClientRect();
+    return (
+      rect.width >= window.innerWidth * 0.5 &&
+      rect.height >= window.innerHeight * 0.5
+    );
+  }
+
+  // A marker that just went away must not leave its hover tooltip or its
+  // open thread popover floating on the page (e.g. above the modal that
+  // now covers the marker).
+  _dismissMarkerUi(comment) {
+    this.shadowRoot
+      .querySelector(`.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`)
+      ?.remove();
+    if (this.activeThreadPopover?.dataset.for === String(comment.id)) {
+      this.closeThreadPopover();
+    }
+  }
+
   updateCommentPosition(comment, circle) {
     // Resolved comments have no on-page marker (RF09). This is not the
     // "hidden" state — the anchor is fine, the issue is just done.
@@ -1243,14 +1322,11 @@ class CommentOverlay {
       if (circle && comment.container) {
         comment.hidden = true;
         circle.style.display = "none";
+        this._dismissMarkerUi(comment);
         if (!wasHidden && this.inboxView?.isOpen()) this.inboxView.refresh();
       }
       return;
     }
-
-    comment.hidden = false;
-    circle.style.display = "";
-    if (wasHidden && this.inboxView?.isOpen()) this.inboxView.refresh();
 
     // Offset so the circle's top-left tip (sharp corner) aligns with the stored position
     const circleRadius = 14;
@@ -1258,6 +1334,20 @@ class CommentOverlay {
       positionData.containerLeft + positionData.absoluteX + circleRadius;
     const viewportY =
       positionData.containerTop + positionData.absoluteY + circleRadius;
+
+    // A host-page modal (or any unrelated overlay) covering the anchor also
+    // hides the marker — it must not float above the modal's backdrop.
+    if (this._isMarkerOccluded(comment, viewportX, viewportY)) {
+      comment.hidden = true;
+      circle.style.display = "none";
+      this._dismissMarkerUi(comment);
+      if (!wasHidden && this.inboxView?.isOpen()) this.inboxView.refresh();
+      return;
+    }
+
+    comment.hidden = false;
+    circle.style.display = "";
+    if (wasHidden && this.inboxView?.isOpen()) this.inboxView.refresh();
 
     circle.style.left = `${viewportX}px`;
     circle.style.top = `${viewportY}px`;
@@ -1310,6 +1400,23 @@ class CommentOverlay {
       this.scheduleUpdatePositions();
     };
     window.addEventListener("load", this.loadHandler);
+
+    // Modals open/close outside any comment's container (backdrops are
+    // usually appended to <body> or toggled via style/class), so the
+    // per-comment observers never see them. One page-wide observer keeps
+    // the occlusion check honest; shadow-root internals don't bubble into
+    // it, so our own marker updates can't retrigger it.
+    if (window.MutationObserver) {
+      this._globalMutationObserver = new MutationObserver(() => {
+        this.scheduleUpdatePositions();
+      });
+      this._globalMutationObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["style", "class", "hidden", "open"],
+      });
+    }
   }
 
   /**
@@ -1450,6 +1557,11 @@ class CommentOverlay {
 
     if (this.loadHandler) {
       window.removeEventListener("load", this.loadHandler);
+    }
+
+    if (this._globalMutationObserver) {
+      this._globalMutationObserver.disconnect();
+      this._globalMutationObserver = null;
     }
 
     // Cleanup all resize observers

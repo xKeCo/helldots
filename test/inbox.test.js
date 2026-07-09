@@ -472,19 +472,24 @@ describe("inbox sidebar", () => {
     const hover = (el, type) =>
       el.dispatchEvent(new MouseEvent(type, { bubbles: true }));
 
-    it("highlights the anchored element on card hover and clears it on leave", () => {
+    const circleOf = (ov, comment) =>
+      ov.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`);
+
+    it("highlights the comment's marker on card hover and clears it on leave", () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      createCommentOn(overlay, target, "highlight me");
+      const comment = createCommentOn(overlay, target, "highlight me");
+      const circle = circleOf(overlay, comment);
 
       const panel = openInbox(overlay);
       const card = panel.querySelector(`.${CLASSES.INBOX_CARD}`);
 
       hover(card, "mouseenter");
-      expect(target.classList.contains("helldots-highlight")).toBe(true);
+      expect(circle.classList.contains(CLASSES.HIGHLIGHT)).toBe(true);
+      expect(target.classList.contains(CLASSES.HIGHLIGHT)).toBe(false);
 
       hover(card, "mouseleave");
-      expect(target.classList.contains("helldots-highlight")).toBe(false);
+      expect(circle.classList.contains(CLASSES.HIGHLIGHT)).toBe(false);
     });
 
     it("does not highlight resolved comments (no on-page marker)", () => {
@@ -492,23 +497,25 @@ describe("inbox sidebar", () => {
       const target = document.getElementById("target");
       const comment = createCommentOn(overlay, target, "resolved one");
       overlay.setCommentStatus(comment.id, "resolved");
+      const circle = circleOf(overlay, comment);
 
       const panel = openInbox(overlay);
       hover(panel.querySelector(`.${CLASSES.INBOX_CARD}`), "mouseenter");
-      expect(target.classList.contains("helldots-highlight")).toBe(false);
+      expect(circle.classList.contains(CLASSES.HIGHLIGHT)).toBe(false);
     });
 
     it("closing the panel clears any active highlight", () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      createCommentOn(overlay, target, "sticky highlight");
+      const comment = createCommentOn(overlay, target, "sticky highlight");
+      const circle = circleOf(overlay, comment);
 
       const panel = openInbox(overlay);
       hover(panel.querySelector(`.${CLASSES.INBOX_CARD}`), "mouseenter");
-      expect(target.classList.contains("helldots-highlight")).toBe(true);
+      expect(circle.classList.contains(CLASSES.HIGHLIGHT)).toBe(true);
 
       click(panel.querySelector(`.${CLASSES.INBOX_CLOSE}`));
-      expect(target.classList.contains("helldots-highlight")).toBe(false);
+      expect(circle.classList.contains(CLASSES.HIGHLIGHT)).toBe(false);
     });
   });
 
@@ -532,6 +539,28 @@ describe("inbox sidebar", () => {
       expect(comment.status).toBe("in_progress");
       const stored = JSON.parse(localStorage.getItem("helldots-comments"));
       expect(stored[0].status).toBe("in_progress");
+    });
+
+    it("resolving from an inbox card re-renders the list immediately", () => {
+      overlay = makeOverlay();
+      const target = document.getElementById("target");
+      const first = createCommentOn(overlay, target, "resolve me");
+      createCommentOn(overlay, target, "still open");
+
+      const panel = openInbox(overlay);
+      const card = panel.querySelector(
+        `.${CLASSES.INBOX_CARD}[data-comment-id="${first.id}"]`
+      );
+      click(card.querySelector(`[data-action="status"]`));
+      click(card.querySelector(`[data-status-option="resolved"]`));
+
+      // The list is re-rendered on the spot: resolved card sinks to the
+      // bottom and gets the resolved styling.
+      const cards = panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`);
+      expect(cards[1].dataset.commentId).toBe(String(first.id));
+      expect(
+        cards[1].classList.contains(`${CLASSES.INBOX_CARD}--resolved`)
+      ).toBe(true);
     });
   });
 

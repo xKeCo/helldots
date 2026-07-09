@@ -83,12 +83,12 @@ export class InboxView {
     ) {
       return;
     }
-    const element = comment.target?.isConnected
-      ? comment.target
-      : comment.container;
-    if (!element?.isConnected) return;
-    element.classList.add(CLASSES.HIGHLIGHT);
-    this._highlightedEl = element;
+    const circle = this.shadowRoot.querySelector(
+      `[data-comment-id="${comment.id}"]`
+    );
+    if (!circle) return;
+    circle.classList.add(CLASSES.HIGHLIGHT);
+    this._highlightedEl = circle;
   }
 
   _clearHighlight() {
@@ -345,7 +345,7 @@ export class InboxView {
         }
       });
 
-      // Hovering a card spotlights its element on the page — only when the
+      // Hovering a card spotlights its marker on the page — only when the
       // marker is actually there (anchored, visible, not resolved).
       card.addEventListener("mouseenter", () => this._highlight(comment));
       card.addEventListener("mouseleave", () => this._clearHighlight());

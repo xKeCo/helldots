@@ -1109,6 +1109,203 @@ describe("CommentOverlay", () => {
     });
   });
 
+  describe("marker occlusion by host-page overlays", () => {
+    const anchorComment = (overlay, id = 7) => {
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      container.getBoundingClientRect = () => ({
+        left: 0,
+        top: 0,
+        width: 200,
+        height: 200,
+      });
+      const comment = {
+        id,
+        text: "occlusion test",
+        author: "Tester",
+        createdAt: new Date().toISOString(),
+        container,
+        relativeX: 0.5,
+        relativeY: 0.5,
+        replies: [],
+        status: "open",
+        anchorState: "anchored",
+      };
+      overlay.comments.push(comment);
+      overlay.renderCommentCircle(comment);
+      return comment;
+    };
+
+    afterEach(() => {
+      delete document.elementsFromPoint;
+    });
+
+    it("hides the marker when an unrelated overlay covers its point and restores it when uncovered", () => {
+      overlay = makeOverlay();
+      const comment = anchorComment(overlay);
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      expect(circle.style.display).not.toBe("none");
+
+      // A modal backdrop unrelated to the anchor sits on top; our own
+      // shadow host (the marker itself) is skipped by the hit test.
+      const backdrop = document.createElement("div");
+      document.body.appendChild(backdrop);
+      const host = document.querySelector(TAG_NAME);
+      document.elementsFromPoint = () => [host, backdrop];
+
+      overlay.updateCommentPosition(comment, circle);
+      expect(circle.style.display).toBe("none");
+      expect(comment.hidden).toBe(true);
+
+      document.elementsFromPoint = () => [host, comment.container];
+      overlay.updateCommentPosition(comment, circle);
+      expect(circle.style.display).toBe("");
+      expect(comment.hidden).toBe(false);
+    });
+
+    it("keeps the marker when the element on top belongs to the anchored subtree", () => {
+      overlay = makeOverlay();
+      const comment = anchorComment(overlay, 8);
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="8"]');
+
+      const child = document.createElement("span");
+      comment.container.appendChild(child);
+      document.elementsFromPoint = () => [child];
+
+      overlay.updateCommentPosition(comment, circle);
+      expect(circle.style.display).toBe("");
+      expect(comment.hidden).toBe(false);
+    });
+
+    it("hides the marker when a modal layer inside its broad container covers it", () => {
+      overlay = makeOverlay();
+      const comment = anchorComment(overlay, 10);
+      const circle = overlay.shadowRoot.querySelector(
+        '[data-comment-id="10"]'
+      );
+
+      // Broad containers (body-like wrappers) also contain the page's
+      // modals: a fixed, viewport-covering backdrop inside the container.
+      const backdrop = document.createElement("div");
+      backdrop.style.position = "fixed";
+      backdrop.getBoundingClientRect = () => ({
+        left: 0,
+        top: 0,
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+      comment.container.appendChild(backdrop);
+      const modalContent = document.createElement("p");
+      backdrop.appendChild(modalContent);
+
+      document.elementsFromPoint = () => [modalContent];
+      overlay.updateCommentPosition(comment, circle);
+      expect(circle.style.display).toBe("none");
+      expect(comment.hidden).toBe(true);
+    });
+
+    it("treats explicit dialog semantics as an occluding layer", () => {
+      overlay = makeOverlay();
+      const comment = anchorComment(overlay, 11);
+      const circle = overlay.shadowRoot.querySelector(
+        '[data-comment-id="11"]'
+      );
+
+      const dialog = document.createElement("div");
+      dialog.setAttribute("role", "dialog");
+      comment.container.appendChild(dialog);
+
+      document.elementsFromPoint = () => [dialog];
+      overlay.updateCommentPosition(comment, circle);
+      expect(circle.style.display).toBe("none");
+    });
+
+    it("keeps the marker of a comment whose target lives inside the open modal", () => {
+      overlay = makeOverlay();
+      const comment = anchorComment(overlay, 12);
+      const circle = overlay.shadowRoot.querySelector(
+        '[data-comment-id="12"]'
+      );
+
+      const backdrop = document.createElement("div");
+      backdrop.setAttribute("role", "dialog");
+      comment.container.appendChild(backdrop);
+      const modalText = document.createElement("p");
+      modalText.getBoundingClientRect = () => ({
+        left: 10,
+        top: 10,
+        width: 100,
+        height: 20,
+      });
+      backdrop.appendChild(modalText);
+      comment.target = modalText;
+
+      document.elementsFromPoint = () => [modalText];
+      overlay.updateCommentPosition(comment, circle);
+      expect(circle.style.display).toBe("");
+    });
+
+    it("closes the comment's open thread popover when its marker gets covered", () => {
+      overlay = makeOverlay();
+      const comment = anchorComment(overlay, 13);
+      const circle = overlay.shadowRoot.querySelector(
+        '[data-comment-id="13"]'
+      );
+
+      circle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(
+        overlay.shadowRoot.querySelector(`.${CLASSES.THREAD_POPOVER}`)
+      ).toBeTruthy();
+
+      const backdrop = document.createElement("div");
+      document.body.appendChild(backdrop);
+      document.elementsFromPoint = () => [backdrop];
+      overlay.updateCommentPosition(comment, circle);
+
+      expect(circle.style.display).toBe("none");
+      expect(
+        overlay.shadowRoot.querySelector(`.${CLASSES.THREAD_POPOVER}`)
+      ).toBeNull();
+    });
+
+    it("skips the hit test when the marker point falls outside the viewport", () => {
+      overlay = makeOverlay();
+      const comment = anchorComment(overlay, 9);
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="9"]');
+
+      // Scrolled far off-screen: container is above the viewport.
+      comment.container.getBoundingClientRect = () => ({
+        left: 0,
+        top: -5000,
+        width: 200,
+        height: 200,
+      });
+      const backdrop = document.createElement("div");
+      document.body.appendChild(backdrop);
+      document.elementsFromPoint = () => [backdrop];
+
+      overlay.updateCommentPosition(comment, circle);
+      expect(circle.style.display).toBe("");
+      expect(comment.hidden).toBe(false);
+    });
+
+    it("watches page-wide DOM changes (modal toggles) and disconnects on cleanup", async () => {
+      overlay = makeOverlay();
+      expect(overlay._globalMutationObserver).toBeTruthy();
+
+      const spy = vi.spyOn(overlay, "scheduleUpdatePositions");
+      const backdrop = document.createElement("div");
+      document.body.appendChild(backdrop);
+      backdrop.style.display = "block";
+      // MutationObserver callbacks are microtasks.
+      await Promise.resolve();
+      expect(spy).toHaveBeenCalled();
+
+      overlay.cleanup();
+      expect(overlay._globalMutationObserver).toBeNull();
+    });
+  });
+
   describe("cleanup", () => {
     it("removes UI, listeners, observers, and comment circles", () => {
       overlay = makeOverlay();

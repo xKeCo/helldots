@@ -217,6 +217,12 @@ export const getStyles = () => `
         background: rgb(0, 123, 255);
     }
 
+    .${CLASSES.CIRCLE}.${CLASSES.HIGHLIGHT} {
+        transform: translate(-50%, -50%) scale(1.2) !important;
+        background: rgb(0, 123, 255);
+        box-shadow: 0 0 0 4px rgba(46, 144, 250, 0.35), 0 1px 5px rgba(0,0,0,0.2);
+    }
+
     .${CLASSES.CIRCLE_WRAPPER} {
         position: absolute;
         left: 0;
@@ -899,12 +905,5 @@ export const getGlobalStyles = () => `
     .${CLASSES.COMMENT_CURSOR},
     .${CLASSES.COMMENT_CURSOR} * {
         cursor: url('${CURSOR_SVG}') 6 6, auto !important;
-    }
-
-    .${CLASSES.HIGHLIGHT} {
-        outline: 2px solid #2E90FA !important;
-        outline-offset: 2px;
-        border-radius: 4px;
-        transition: outline 0.15s ease;
     }
 `;
