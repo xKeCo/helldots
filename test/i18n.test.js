@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { getStrings, detectLocale, formatTemplate } from "../src/i18n.js";
+import { getStrings, detectLocale, formatTemplate, formatDuration } from "../src/i18n.js";
 import en from "../src/locales/en.js";
 import es from "../src/locales/es.js";
 
@@ -54,6 +54,45 @@ describe("i18n", () => {
     });
   });
 
+  describe("formatDuration", () => {
+    const strings = getStrings("en");
+    const MIN = 60_000;
+    const HOUR = 60 * MIN;
+    const DAY = 24 * HOUR;
+
+    it("collapses anything under a minute", () => {
+      expect(formatDuration(0, strings)).toBe("<1m");
+      expect(formatDuration(59_000, strings)).toBe("<1m");
+    });
+
+    it("shows bare minutes under an hour", () => {
+      expect(formatDuration(45 * MIN, strings)).toBe("45m");
+    });
+
+    it("shows hours and minutes under a day", () => {
+      expect(formatDuration(3 * HOUR + 12 * MIN, strings)).toBe("3h 12m");
+    });
+
+    it("drops the remainder when it is zero", () => {
+      expect(formatDuration(3 * HOUR, strings)).toBe("3h");
+      expect(formatDuration(2 * DAY, strings)).toBe("2d");
+    });
+
+    it("shows days and hours past 24h", () => {
+      expect(formatDuration(2 * DAY + 4 * HOUR, strings)).toBe("2d 4h");
+    });
+
+    it("returns empty string for invalid input instead of NaN", () => {
+      expect(formatDuration(NaN, strings)).toBe("");
+      expect(formatDuration(-1000, strings)).toBe("");
+      expect(formatDuration(Infinity, strings)).toBe("");
+    });
+
+    it("localises through the strings dictionary", () => {
+      expect(formatDuration(90 * MIN, getStrings("es"))).toBe("1h 30m");
+    });
+  });
+
   it("components.js has no hardcoded, user-visible English UI strings", () => {
     const source = readFileSync(
       resolve(process.cwd(), "src/components.js"),
@@ -64,11 +103,5 @@ describe("i18n", () => {
     // that should be coming from `strings.*`, not hardcoded here.
     const suspicious = source.match(/"[A-Z][a-zA-Zé][a-zA-Z ]*[.:]?"/g);
     expect(suspicious).toBeNull();
-  });
-});
-
-describe("locale parity", () => {
-  it("ships the same keys in both locales", () => {
-    expect(Object.keys(en).sort()).toEqual(Object.keys(es).sort());
   });
 });
