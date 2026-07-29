@@ -23,6 +23,34 @@
 - **Estado neutro:** `type` y `priority` son `null` por defecto y deben poder volver a `null` desde la UI.
 - **Helper de tests:** `test/overlay.test.js`, `test/inbox.test.js` y `test/persistence.test.js` construyen instancias con `makeOverlay(options)`, no `createOverlay`.
 
+### Helpers reales del inbox (afecta a las Tasks 12, 13 y 14)
+
+Los snippets de test de esas tres tareas escriben `createInbox(comments)` por
+brevedad. **Ese helper no existe.** `test/inbox.test.js` ya tiene el patrón real,
+que es el que hay que usar:
+
+```js
+const overlay = makeOverlay(); // o { locale: "en" }
+overlay.loadComments([/* comentarios serializados */]);
+const panel = openInbox(overlay); // devuelve el .inbox-panel
+```
+
+Equivalencias:
+
+| En los snippets                      | Real                                                                      |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| `createInbox(comments)`              | `makeOverlay()` + `overlay.loadComments(comments)` + `openInbox(overlay)` |
+| `inbox.el`                           | el `panel` que devuelve `openInbox(overlay)`                              |
+| `inbox.filteredComments()`           | `overlay.inboxView.filteredComments()`                                    |
+| `inbox.typeFilter = "bug"`           | `overlay.inboxView.typeFilter = "bug"`                                    |
+| `inbox.openDetail(id)`               | `overlay.inboxView.openDetail(id)`                                        |
+| `inbox.render()`                     | `overlay.inboxView.render()`                                              |
+| `createInbox(c, { onShowLightbox })` | espiar `overlay.showLightbox` con `vi.spyOn`                              |
+
+El archivo también tiene `click(el)` y `createCommentOn(overlay, container, text)`
+(este último es **async**). Los comentarios que pases a `loadComments` deben
+llevar `page: location.pathname` para no quedar filtrados como `inactive`.
+
 ### Trampa conocida: los mocks de `capture.js` (afecta a la Task 8)
 
 `test/overlay.test.js`, `test/inbox.test.js` y `test/persistence.test.js`
