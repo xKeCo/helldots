@@ -1704,6 +1704,7 @@ Refactor puro: sin cambios observables. El picker de estado sigue comportándose
 
 ```js
 createPicker({
+  action,         // string — becomes data-action on the button ("status" | "type" | "priority")
   options,        // Array<string|null> — null renders the "Unset" entry
   value,          // string|null, initial selection
   colorOf,        // (option) => string  ("" for the null entry)
@@ -1814,6 +1815,7 @@ Añadir después de `statusLabelOf`:
  * @returns {HTMLElement}
  */
 export const createPicker = ({
+  action,
   options,
   value,
   colorOf,
@@ -1827,6 +1829,7 @@ export const createPicker = ({
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = CLASSES.INBOX_ACTION_BTN;
+  btn.dataset.action = action;
   btn.setAttribute("aria-haspopup", "true");
 
   const dot = document.createElement("span");
@@ -1898,6 +1901,7 @@ En `createCommentActions`, borrar todo el bloque `// --- lifecycle status picker
 // --- lifecycle status picker (RF09) ---
 actions.appendChild(
   createPicker({
+    action: "status",
     options: STATUSES,
     value: comment.status || "open",
     colorOf: (status) => STATUS_COLORS[status] || "",
@@ -1911,7 +1915,24 @@ actions.appendChild(
 - [ ] **Step 5: Correr los tests y verificar que pasan**
 
 Run: `npx vitest run test/comment-actions.test.js`
-Expected: PASS — los tests preexistentes del picker de estado siguen verdes sin tocarlos. Si alguno falla, el refactor cambió comportamiento observable y hay que corregirlo, no adaptar el test.
+
+Los tests preexistentes consultan las opciones del menú por `[data-status-option]`
+y leen `.dataset.statusOption`. El picker genérico emite `data-picker-option`,
+así que **tres tests necesitan un renombrado mecánico de selector**:
+
+| Antes                                                 | Después                                               |
+| ----------------------------------------------------- | ----------------------------------------------------- |
+| `el.querySelectorAll("[data-status-option]")`         | `el.querySelectorAll("[data-picker-option]")`         |
+| `checked.dataset.statusOption`                        | `checked.dataset.pickerOption`                        |
+| `el.querySelector('[data-status-option="resolved"]')` | `el.querySelector('[data-picker-option="resolved"]')` |
+
+Eso es lo único que cambia. **Ninguna aserción se toca**: los valores esperados
+(`"Abierto"`, `"En progreso"`, `"Resuelto"`, `"in_progress"`, `"Status: Resolved"`,
+los colores) se quedan idénticos. Las consultas por `[data-action="status"]`
+siguen funcionando gracias al parámetro `action`.
+
+Si falla algo más que esos selectores, el refactor cambió comportamiento
+observable: corrige el código, no el test.
 
 - [ ] **Step 6: Commit**
 
@@ -1966,18 +1987,21 @@ describe("type and priority pickers in the actions bar", () => {
 
   it("labels the type picker with the current type", () => {
     const actions = build({ type: "bug" });
-    const btn = [...actions.querySelectorAll("button")].find((b) =>
-      b.dataset.hdTooltip?.startsWith("Type")
-    );
+    const btn = actions.querySelector('[data-action="type"]');
     expect(btn.dataset.hdTooltip).toBe("Type: Bug");
   });
 
   it("shows Unset when the type is neutral", () => {
     const actions = build({ type: null });
-    const btn = [...actions.querySelectorAll("button")].find((b) =>
-      b.dataset.hdTooltip?.startsWith("Type")
-    );
+    const btn = actions.querySelector('[data-action="type"]');
     expect(btn.dataset.hdTooltip).toBe("Type: Unset");
+  });
+
+  it("gives each picker its own data-action hook", () => {
+    const actions = build({});
+    expect(actions.querySelector('[data-action="status"]')).not.toBeNull();
+    expect(actions.querySelector('[data-action="type"]')).not.toBeNull();
+    expect(actions.querySelector('[data-action="priority"]')).not.toBeNull();
   });
 
   it("reports a type selection", () => {
@@ -2063,6 +2087,7 @@ Y añadir, justo después del `appendChild` del picker de estado:
 // --- category picker (RF3) ---
 actions.appendChild(
   createPicker({
+    action: "type",
     // `null` first: returning to the neutral state must be reachable.
     options: [null, ...COMMENT_TYPES],
     value: comment.type || null,
@@ -2076,6 +2101,7 @@ actions.appendChild(
 // --- priority picker (RF4) ---
 actions.appendChild(
   createPicker({
+    action: "priority",
     options: [null, ...PRIORITIES],
     value: comment.priority || null,
     colorOf: (priority) => PRIORITY_COLORS[priority] || "transparent",
@@ -2351,6 +2377,7 @@ export const createClassifyRow = (strings) => {
     container.replaceChildren();
     container.appendChild(
       createPicker({
+        action: "type",
         options: [null, ...COMMENT_TYPES],
         value: null,
         colorOf: (value) => TYPE_COLORS[value] || "transparent",
@@ -2361,6 +2388,7 @@ export const createClassifyRow = (strings) => {
     );
     container.appendChild(
       createPicker({
+        action: "priority",
         options: [null, ...PRIORITIES],
         value: null,
         colorOf: (value) => PRIORITY_COLORS[value] || "transparent",
