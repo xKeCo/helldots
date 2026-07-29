@@ -1402,4 +1402,92 @@ describe("CommentOverlay", () => {
       expect(document.getElementById(IDS.GLOBAL_STYLES)).toBeNull();
     });
   });
+
+  describe("classification setters", () => {
+    const seed = (overlay) =>
+      overlay.loadComments([
+        {
+          id: 20,
+          text: "t",
+          anchor: null,
+          page: location.pathname,
+          replies: [],
+          author: "Ana",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          screenshots: [],
+          status: "open",
+        },
+      ]);
+
+    it("sets and clears the type", () => {
+      const overlay = makeOverlay();
+      seed(overlay);
+      expect(overlay.setCommentType(20, "bug")).toBe(true);
+      expect(overlay.comments[0].type).toBe("bug");
+      expect(overlay.setCommentType(20, null)).toBe(true);
+      expect(overlay.comments[0].type).toBeNull();
+    });
+
+    it("sets and clears the priority", () => {
+      const overlay = makeOverlay();
+      seed(overlay);
+      expect(overlay.setCommentPriority(20, "high")).toBe(true);
+      expect(overlay.comments[0].priority).toBe("high");
+      expect(overlay.setCommentPriority(20, null)).toBe(true);
+      expect(overlay.comments[0].priority).toBeNull();
+    });
+
+    it("rejects unknown values and unknown ids without side effects", () => {
+      const overlay = makeOverlay();
+      seed(overlay);
+      overlay.setCommentType(20, "bug");
+
+      expect(overlay.setCommentType(20, "nope")).toBe(false);
+      expect(overlay.setCommentPriority(20, "urgent")).toBe(false);
+      expect(overlay.setCommentType(999, "bug")).toBe(false);
+      expect(overlay.setCommentTags(999, ["x"])).toBe(false);
+
+      expect(overlay.comments[0].type).toBe("bug");
+    });
+
+    it("normalises tags: trims, lowercases, drops blanks and duplicates", () => {
+      const overlay = makeOverlay();
+      seed(overlay);
+      overlay.setCommentTags(20, ["  Checkout ", "iOS", "checkout", "", "   "]);
+      expect(overlay.comments[0].tags).toEqual(["checkout", "ios"]);
+    });
+
+    it("rejects a non-array tags value", () => {
+      const overlay = makeOverlay();
+      seed(overlay);
+      expect(overlay.setCommentTags(20, "checkout")).toBe(false);
+    });
+
+    it("fires onCommentUpdated for all three setters", () => {
+      const onCommentUpdated = vi.fn();
+      const overlay = makeOverlay({ onCommentUpdated });
+      seed(overlay);
+
+      overlay.setCommentType(20, "bug");
+      overlay.setCommentPriority(20, "low");
+      overlay.setCommentTags(20, ["a"]);
+
+      expect(onCommentUpdated).toHaveBeenCalledTimes(3);
+      expect(onCommentUpdated.mock.calls[2][0]).toMatchObject({
+        id: 20,
+        type: "bug",
+        priority: "low",
+        tags: ["a"],
+      });
+    });
+
+    it("does not fire onCommentStatusChanged", () => {
+      // The existing callback keeps its exact meaning.
+      const onCommentStatusChanged = vi.fn();
+      const overlay = makeOverlay({ onCommentStatusChanged });
+      seed(overlay);
+      overlay.setCommentType(20, "bug");
+      expect(onCommentStatusChanged).not.toHaveBeenCalled();
+    });
+  });
 });

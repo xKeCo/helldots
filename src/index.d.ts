@@ -63,7 +63,11 @@ export interface SerializedComment {
   type: CommentType | null;
   /** RF4 — `null` when deliberately unprioritised. */
   priority: CommentPriority | null;
-  /** RF3 — free-form labels, normalised lowercase. */
+  /**
+   * RF3 — free-form labels. `setCommentTags` normalises them (trimmed,
+   * lowercased, de-duplicated); values loaded via `loadComments` are
+   * trusted as-is and are not renormalised on read.
+   */
   tags: string[];
   /** RF5 — set on entering "resolved", cleared on leaving it. */
   resolvedAt: string | null;
@@ -98,6 +102,8 @@ export interface CommentOverlayOptions {
   onCommentDeleted?: (id: number) => void;
   /** Fired after setCommentStatus changes a comment's lifecycle state. */
   onCommentStatusChanged?: (comment: SerializedComment) => void;
+  /** Fired after type, priority or tags change on any comment. */
+  onCommentUpdated?: (comment: SerializedComment) => void;
 }
 
 export interface CommentReply {
@@ -132,7 +138,11 @@ export interface Comment {
   type: CommentType | null;
   /** RF4 — `null` when deliberately unprioritised. */
   priority: CommentPriority | null;
-  /** RF3 — free-form labels, normalised lowercase. */
+  /**
+   * RF3 — free-form labels. `setCommentTags` normalises them (trimmed,
+   * lowercased, de-duplicated); values loaded via `loadComments` are
+   * trusted as-is and are not renormalised on read.
+   */
   tags: string[];
   /** RF5 — set on entering "resolved", cleared on leaving it. */
   resolvedAt: string | null;
@@ -163,6 +173,9 @@ export declare class CommentOverlay {
   };
   deleteComment(id: number): boolean;
   setCommentStatus(id: number, status: CommentStatus): boolean;
+  setCommentType(id: number, type: CommentType | null): boolean;
+  setCommentPriority(id: number, priority: CommentPriority | null): boolean;
+  setCommentTags(id: number, tags: string[]): boolean;
   cleanup(): void;
 }
 

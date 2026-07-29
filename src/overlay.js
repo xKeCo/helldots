@@ -33,6 +33,18 @@ import { InboxView } from "./inbox.js";
 import { createCommentActions, copyToClipboard } from "./comment-actions.js";
 import { buildAgentContext } from "./agent-context.js";
 
+// Tags are user-typed, so they arrive with stray case and whitespace.
+// Normalising here (rather than at each entry point) is what makes
+// "Checkout" and "checkout " the same tag for filtering.
+const normalizeTags = (tags) => {
+  const seen = new Set();
+  for (const tag of tags) {
+    const clean = String(tag).trim().toLowerCase();
+    if (clean) seen.add(clean);
+  }
+  return [...seen];
+};
+
 class CommentOverlay {
   /**
    * @param {import('./index.d.ts').CommentOverlayOptions} [options]
@@ -986,6 +998,62 @@ class CommentOverlay {
     if (this.inboxView?.isOpen()) this.inboxView.refresh();
     this.options.onCommentStatusChanged?.(this._serializeComment(comment));
     return true;
+  }
+
+  /**
+   * Shared tail of the classification setters: persist, re-render the
+   * inbox if it's showing, and notify the host app.
+   * @param {any} comment
+   * @returns {true}
+   */
+  _commitUpdate(comment) {
+    this._syncStorage();
+    if (this.inboxView?.isOpen()) this.inboxView.refresh();
+    this.options.onCommentUpdated?.(this._serializeComment(comment));
+    return true;
+  }
+
+  /**
+   * RF3 — categorises a comment. `null` returns it to the neutral state.
+   * @param {number} id
+   * @param {import('./index.d.ts').CommentType | null} type
+   * @returns {boolean} false when the id or type is unknown
+   */
+  setCommentType(id, type) {
+    if (type !== null && !COMMENT_TYPES.includes(type)) return false;
+    const comment = this.comments.find((c) => c.id === id);
+    if (!comment) return false;
+    comment.type = type;
+    return this._commitUpdate(comment);
+  }
+
+  /**
+   * RF4 — prioritises a comment. `null` returns it to the neutral state.
+   * @param {number} id
+   * @param {import('./index.d.ts').CommentPriority | null} priority
+   * @returns {boolean} false when the id or priority is unknown
+   */
+  setCommentPriority(id, priority) {
+    if (priority !== null && !PRIORITIES.includes(priority)) return false;
+    const comment = this.comments.find((c) => c.id === id);
+    if (!comment) return false;
+    comment.priority = priority;
+    return this._commitUpdate(comment);
+  }
+
+  /**
+   * RF3 — replaces a comment's free-form labels. Values are trimmed,
+   * lowercased and de-duplicated.
+   * @param {number} id
+   * @param {string[]} tags
+   * @returns {boolean} false when the id is unknown or tags isn't an array
+   */
+  setCommentTags(id, tags) {
+    if (!Array.isArray(tags)) return false;
+    const comment = this.comments.find((c) => c.id === id);
+    if (!comment) return false;
+    comment.tags = normalizeTags(tags);
+    return this._commitUpdate(comment);
   }
 
   /**
