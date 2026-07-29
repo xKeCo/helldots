@@ -1180,9 +1180,7 @@ describe("CommentOverlay", () => {
     it("hides the marker when a modal layer inside its broad container covers it", () => {
       overlay = makeOverlay();
       const comment = anchorComment(overlay, 10);
-      const circle = overlay.shadowRoot.querySelector(
-        '[data-comment-id="10"]'
-      );
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="10"]');
 
       // Broad containers (body-like wrappers) also contain the page's
       // modals: a fixed, viewport-covering backdrop inside the container.
@@ -1207,9 +1205,7 @@ describe("CommentOverlay", () => {
     it("treats explicit dialog semantics as an occluding layer", () => {
       overlay = makeOverlay();
       const comment = anchorComment(overlay, 11);
-      const circle = overlay.shadowRoot.querySelector(
-        '[data-comment-id="11"]'
-      );
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="11"]');
 
       const dialog = document.createElement("div");
       dialog.setAttribute("role", "dialog");
@@ -1223,9 +1219,7 @@ describe("CommentOverlay", () => {
     it("keeps the marker of a comment whose target lives inside the open modal", () => {
       overlay = makeOverlay();
       const comment = anchorComment(overlay, 12);
-      const circle = overlay.shadowRoot.querySelector(
-        '[data-comment-id="12"]'
-      );
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="12"]');
 
       const backdrop = document.createElement("div");
       backdrop.setAttribute("role", "dialog");
@@ -1248,9 +1242,7 @@ describe("CommentOverlay", () => {
     it("closes the comment's open thread popover when its marker gets covered", () => {
       overlay = makeOverlay();
       const comment = anchorComment(overlay, 13);
-      const circle = overlay.shadowRoot.querySelector(
-        '[data-comment-id="13"]'
-      );
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="13"]');
 
       circle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       expect(
