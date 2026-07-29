@@ -186,4 +186,43 @@ describe("createPicker", () => {
 
     expect(onSelect).toHaveBeenCalledWith(null);
   });
+
+  it("handles null as initial value correctly", () => {
+    const wrapper = build({ value: null });
+    const items = wrapper.querySelectorAll(`.${CLASSES.INBOX_MENU_ITEM}`);
+    const btn = wrapper.querySelector("button");
+
+    // Unset (null) entry should be checked
+    expect(items[0].getAttribute("aria-checked")).toBe("true");
+    // Other entries should not be checked
+    expect(items[1].getAttribute("aria-checked")).toBe("false");
+    expect(items[2].getAttribute("aria-checked")).toBe("false");
+    // Tooltip should reflect the Unset label
+    expect(btn.dataset.hdTooltip).toBe("Thing: Unset");
+    expect(btn.getAttribute("aria-label")).toBe("Thing: Unset");
+  });
+
+  it("re-syncs ui when selecting the unset entry", () => {
+    const onSelect = vi.fn();
+    const wrapper = build({ value: "b", onSelect });
+    const items = wrapper.querySelectorAll(`.${CLASSES.INBOX_MENU_ITEM}`);
+    const btn = wrapper.querySelector("button");
+
+    // Initially, "b" is selected
+    expect(items[2].getAttribute("aria-checked")).toBe("true");
+    expect(items[0].getAttribute("aria-checked")).toBe("false");
+    expect(btn.dataset.hdTooltip).toBe("Thing: Label b");
+
+    // Click the unset entry
+    items[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    // Verify callback was invoked
+    expect(onSelect).toHaveBeenCalledWith(null);
+    // Verify aria-checked was moved to unset entry
+    expect(items[0].getAttribute("aria-checked")).toBe("true");
+    expect(items[2].getAttribute("aria-checked")).toBe("false");
+    // Verify tooltip and aria-label updated to unset label
+    expect(btn.dataset.hdTooltip).toBe("Thing: Unset");
+    expect(btn.getAttribute("aria-label")).toBe("Thing: Unset");
+  });
 });
