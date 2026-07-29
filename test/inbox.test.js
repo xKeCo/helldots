@@ -294,7 +294,7 @@ describe("inbox sidebar", () => {
       );
       click(
         panel.querySelector(
-          `.${CLASSES.INBOX_MENU_ITEM}:not([data-status-option])`
+          `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
         )
       );
 
@@ -432,7 +432,7 @@ describe("inbox sidebar", () => {
       );
       click(
         panel.querySelector(
-          `.${CLASSES.INBOX_MENU_ITEM}:not([data-status-option])`
+          `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
         )
       );
 
@@ -563,7 +563,7 @@ describe("inbox sidebar", () => {
           `.${CLASSES.INBOX_ACTION_BTN}[data-action="status"]`
         )
       );
-      click(panel.querySelector(`[data-status-option="in_progress"]`));
+      click(panel.querySelector(`[data-picker-option="in_progress"]`));
 
       expect(comment.status).toBe("in_progress");
       const stored = JSON.parse(localStorage.getItem("helldots-comments"));
@@ -581,7 +581,7 @@ describe("inbox sidebar", () => {
         `.${CLASSES.INBOX_CARD}[data-comment-id="${first.id}"]`
       );
       click(card.querySelector(`[data-action="status"]`));
-      click(card.querySelector(`[data-status-option="resolved"]`));
+      click(card.querySelector(`[data-picker-option="resolved"]`));
 
       // The list is re-rendered on the spot: resolved card sinks to the
       // bottom and gets the resolved styling.
@@ -630,7 +630,7 @@ describe("inbox sidebar", () => {
 
       const popover = openPopover(overlay, comment);
       click(popover.querySelector(`[data-action="status"]`));
-      click(popover.querySelector(`[data-status-option="resolved"]`));
+      click(popover.querySelector(`[data-picker-option="resolved"]`));
 
       expect(comment.status).toBe("resolved");
       expect(onCommentStatusChanged).toHaveBeenCalledTimes(1);
@@ -648,7 +648,7 @@ describe("inbox sidebar", () => {
       click(popover.querySelector(`[data-action="menu"]`));
       click(
         popover.querySelector(
-          `.${CLASSES.INBOX_MENU_ITEM}:not([data-status-option])`
+          `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
         )
       );
 

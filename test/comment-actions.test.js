@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { createCommentActions } from "../src/comment-actions.js";
+import { createCommentActions, createPicker } from "../src/comment-actions.js";
 import { CLASSES, STATUS_COLORS } from "../src/constants.js";
 import en from "../src/locales/en.js";
 import es from "../src/locales/es.js";
@@ -61,7 +61,7 @@ describe("createCommentActions", () => {
     document.body.appendChild(el);
 
     click(el.querySelector('[data-action="status"]'));
-    const options = [...el.querySelectorAll("[data-status-option]")];
+    const options = [...el.querySelectorAll("[data-picker-option]")];
     expect(options.map((o) => o.textContent)).toEqual([
       "Abierto",
       "En progreso",
@@ -70,7 +70,7 @@ describe("createCommentActions", () => {
     const checked = options.find(
       (o) => o.getAttribute("aria-checked") === "true"
     );
-    expect(checked.dataset.statusOption).toBe("in_progress");
+    expect(checked.dataset.pickerOption).toBe("in_progress");
   });
 
   it("selecting a state calls onSetStatus, recolors the dot and updates the tooltip", () => {
@@ -79,7 +79,7 @@ describe("createCommentActions", () => {
     const el = mount(comment, { onSetStatus });
 
     click(el.querySelector('[data-action="status"]'));
-    click(el.querySelector('[data-status-option="resolved"]'));
+    click(el.querySelector('[data-picker-option="resolved"]'));
 
     expect(onSetStatus).toHaveBeenCalledWith(comment, "resolved");
     const statusBtn = el.querySelector('[data-action="status"]');
@@ -113,9 +113,77 @@ describe("createCommentActions", () => {
 
     click(el.querySelector('[data-action="menu"]'));
     click(
-      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-status-option])`)
+      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
     );
 
     expect(onDelete).toHaveBeenCalledWith(comment);
+  });
+});
+
+describe("createPicker", () => {
+  const build = (overrides = {}) =>
+    createPicker({
+      action: "test",
+      options: [null, "a", "b"],
+      value: "a",
+      colorOf: (o) => (o === "a" ? "#111111" : "#222222"),
+      labelOf: (o) => (o === null ? "Unset" : `Label ${o}`),
+      tooltipLabel: "Thing",
+      onSelect: vi.fn(),
+      ...overrides,
+    });
+
+  it("renders one menu item per option", () => {
+    const wrapper = build();
+    expect(
+      wrapper.querySelectorAll(`.${CLASSES.INBOX_MENU_ITEM}`)
+    ).toHaveLength(3);
+  });
+
+  it("marks the current value as checked", () => {
+    const wrapper = build();
+    const checked = wrapper.querySelector('[aria-checked="true"]');
+    expect(checked.textContent).toContain("Label a");
+  });
+
+  it("reflects the current value in the tooltip and aria-label", () => {
+    const btn = build().querySelector("button");
+    expect(btn.dataset.hdTooltip).toBe("Thing: Label a");
+    expect(btn.getAttribute("aria-label")).toBe("Thing: Label a");
+  });
+
+  it("toggles the menu open and closed", () => {
+    const wrapper = build();
+    const btn = wrapper.querySelector("button");
+    const menu = wrapper.querySelector(`.${CLASSES.INBOX_MENU}`);
+
+    expect(menu.style.display).toBe("none");
+    btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(menu.style.display).toBe("block");
+    btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(menu.style.display).toBe("none");
+  });
+
+  it("reports the selection and re-syncs its own UI", () => {
+    const onSelect = vi.fn();
+    const wrapper = build({ onSelect });
+    const items = wrapper.querySelectorAll(`.${CLASSES.INBOX_MENU_ITEM}`);
+
+    items[2].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(onSelect).toHaveBeenCalledWith("b");
+    expect(wrapper.querySelector("button").dataset.hdTooltip).toBe(
+      "Thing: Label b"
+    );
+  });
+
+  it("passes null for the unset entry", () => {
+    const onSelect = vi.fn();
+    const wrapper = build({ onSelect });
+    const items = wrapper.querySelectorAll(`.${CLASSES.INBOX_MENU_ITEM}`);
+
+    items[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(onSelect).toHaveBeenCalledWith(null);
   });
 });

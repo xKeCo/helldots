@@ -34,6 +34,99 @@ export const statusLabelOf = (status, strings) =>
   })[status] || strings.statusOpen;
 
 /**
+ * Dot-and-menu picker shared by the status, type and priority controls.
+ * Keeps its own copy of the selection so the UI stays correct even when the
+ * consumer's onSelect is async or doesn't mutate the comment in place.
+ * @param {{
+ *   action: string,
+ *   options: Array<string|null>,
+ *   value: string|null,
+ *   colorOf: (option: string|null) => string,
+ *   labelOf: (option: string|null) => string,
+ *   tooltipLabel: string,
+ *   onSelect: (option: string|null) => void,
+ * }} config
+ * @returns {HTMLElement}
+ */
+export const createPicker = ({
+  action,
+  options,
+  value,
+  colorOf,
+  labelOf,
+  tooltipLabel,
+  onSelect,
+}) => {
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "relative";
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = CLASSES.INBOX_ACTION_BTN;
+  btn.dataset.action = action;
+  btn.setAttribute("aria-haspopup", "true");
+
+  const dot = document.createElement("span");
+  dot.className = CLASSES.INBOX_STATUS_DOT;
+  btn.appendChild(dot);
+
+  const menu = document.createElement("div");
+  menu.className = CLASSES.INBOX_MENU;
+  menu.style.display = "none";
+  menu.setAttribute("role", "menu");
+
+  let current = value;
+
+  const syncUi = () => {
+    const label = `${tooltipLabel}: ${labelOf(current)}`;
+    dot.style.backgroundColor = colorOf(current);
+    btn.dataset.hdTooltip = label;
+    btn.setAttribute("aria-label", label);
+    menu
+      .querySelectorAll("[data-picker-option]")
+      .forEach((/** @type {HTMLElement} */ item) => {
+        const raw = item.dataset.pickerOption;
+        const option = raw === "" ? null : raw;
+        item.setAttribute("aria-checked", String(option === current));
+      });
+  };
+
+  for (const option of options) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = CLASSES.INBOX_MENU_ITEM;
+    // "" is how a null option round-trips through a dataset string.
+    item.dataset.pickerOption = option === null ? "" : option;
+    item.setAttribute("role", "menuitemradio");
+
+    const itemDot = document.createElement("span");
+    itemDot.className = CLASSES.INBOX_STATUS_DOT;
+    itemDot.style.backgroundColor = colorOf(option);
+    item.appendChild(itemDot);
+    item.appendChild(document.createTextNode(labelOf(option)));
+
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menu.style.display = "none";
+      current = option;
+      onSelect(option);
+      syncUi();
+    });
+    menu.appendChild(item);
+  }
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    menu.style.display = menu.style.display === "none" ? "block" : "none";
+  });
+
+  wrapper.appendChild(btn);
+  wrapper.appendChild(menu);
+  syncUi();
+  return wrapper;
+};
+
+/**
  * @param {Object} comment
  * @param {{ strings: Object, onCopy: Function, onSetStatus: Function, onDelete: Function }} deps
  * @returns {HTMLElement}
@@ -66,76 +159,17 @@ export const createCommentActions = (
   actions.appendChild(copyBtn);
 
   // --- lifecycle status picker (RF09) ---
-  const statusWrapper = document.createElement("div");
-  statusWrapper.style.position = "relative";
-
-  const statusBtn = document.createElement("button");
-  statusBtn.type = "button";
-  statusBtn.className = CLASSES.INBOX_ACTION_BTN;
-  statusBtn.dataset.action = "status";
-  statusBtn.setAttribute("aria-haspopup", "true");
-
-  const dot = document.createElement("span");
-  dot.className = CLASSES.INBOX_STATUS_DOT;
-  statusBtn.appendChild(dot);
-
-  const statusMenu = document.createElement("div");
-  statusMenu.className = CLASSES.INBOX_MENU;
-  statusMenu.style.display = "none";
-  statusMenu.setAttribute("role", "menu");
-
-  // Tracked locally so the UI stays correct even if the consumer's
-  // onSetStatus is asynchronous or doesn't mutate the comment in place.
-  let currentStatus = comment.status || "open";
-
-  const syncStatusUi = () => {
-    const label = statusLabelOf(currentStatus, strings);
-    dot.style.backgroundColor = STATUS_COLORS[currentStatus] || "";
-    statusBtn.dataset.hdTooltip = `${strings.statusLabel}: ${label}`;
-    statusBtn.setAttribute("aria-label", `${strings.statusLabel}: ${label}`);
-    statusMenu
-      .querySelectorAll("[data-status-option]")
-      .forEach((/** @type {HTMLElement} */ option) => {
-        option.setAttribute(
-          "aria-checked",
-          String(option.dataset.statusOption === currentStatus)
-        );
-      });
-  };
-
-  for (const status of STATUSES) {
-    const option = document.createElement("button");
-    option.type = "button";
-    option.className = CLASSES.INBOX_MENU_ITEM;
-    option.dataset.statusOption = status;
-    option.setAttribute("role", "menuitemradio");
-
-    const optionDot = document.createElement("span");
-    optionDot.className = CLASSES.INBOX_STATUS_DOT;
-    optionDot.style.backgroundColor = STATUS_COLORS[status];
-    option.appendChild(optionDot);
-    option.appendChild(document.createTextNode(statusLabelOf(status, strings)));
-
-    option.addEventListener("click", (e) => {
-      e.stopPropagation();
-      statusMenu.style.display = "none";
-      currentStatus = status;
-      onSetStatus(comment, status);
-      syncStatusUi();
-    });
-    statusMenu.appendChild(option);
-  }
-
-  statusBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    statusMenu.style.display =
-      statusMenu.style.display === "none" ? "block" : "none";
-  });
-
-  statusWrapper.appendChild(statusBtn);
-  statusWrapper.appendChild(statusMenu);
-  actions.appendChild(statusWrapper);
-  syncStatusUi();
+  actions.appendChild(
+    createPicker({
+      action: "status",
+      options: STATUSES,
+      value: comment.status || "open",
+      colorOf: (status) => STATUS_COLORS[status] || "",
+      labelOf: (status) => statusLabelOf(status, strings),
+      tooltipLabel: strings.statusLabel,
+      onSelect: (status) => onSetStatus(comment, status),
+    })
+  );
 
   // --- more (⋯) menu ---
   const menuWrapper = document.createElement("div");
