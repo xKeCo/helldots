@@ -1016,6 +1016,9 @@ describe("context block in the detail view", () => {
 
     expect(img.src).toBe("data:image/jpeg;base64,auto");
     expect(img.alt).toBe("Automatic context");
+    expect(
+      block.querySelector(`.${CLASSES.CONTEXT_SCREENSHOT_CAPTION}`)?.textContent
+    ).toBe("Automatic context");
   });
 
   it("opens the lightbox when the automatic screenshot is clicked", () => {
@@ -1049,5 +1052,21 @@ describe("context block in the detail view", () => {
     const block = panel.querySelector(`.${CLASSES.CONTEXT_BLOCK}`);
     expect(block.querySelector("img")).not.toBeNull();
     expect(block.querySelectorAll(`.${CLASSES.CONTEXT_ROW}`)).toHaveLength(0);
+  });
+
+  it("renders metadata rows with no image and no caption when the automatic screenshot is absent", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([{ ...withContext, contextScreenshot: null }]);
+    const panel = openInbox(overlay);
+    overlay.inboxView.openDetail(1);
+    const block = panel.querySelector(`.${CLASSES.CONTEXT_BLOCK}`);
+
+    expect(block.querySelector("img")).toBeNull();
+    expect(
+      block.querySelector(`.${CLASSES.CONTEXT_SCREENSHOT_CAPTION}`)
+    ).toBeNull();
+    expect(
+      block.querySelectorAll(`.${CLASSES.CONTEXT_ROW}`).length
+    ).toBeGreaterThan(0);
   });
 });

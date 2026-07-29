@@ -73,6 +73,7 @@ export const CLASSES = {
   BADGE_DURATION: "helldots-badge--duration",
   CONTEXT_BLOCK: "inbox-context",
   CONTEXT_ROW: "inbox-context-row",
+  CONTEXT_SCREENSHOT_CAPTION: "inbox-context-screenshot-caption",
   HIGHLIGHT: "helldots-highlight",
 };
 

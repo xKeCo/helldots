@@ -510,6 +510,11 @@ export class InboxView {
     block.appendChild(title);
 
     if (contextScreenshot) {
+      const caption = document.createElement("div");
+      caption.className = CLASSES.CONTEXT_SCREENSHOT_CAPTION;
+      caption.textContent = this.strings.autoScreenshotLabel;
+      block.appendChild(caption);
+
       const img = document.createElement("img");
       img.className = CLASSES.SCREENSHOT_IMG;
       img.src = contextScreenshot;

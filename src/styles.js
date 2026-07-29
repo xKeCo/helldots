@@ -655,6 +655,9 @@ export const getStyles = () => `
         margin-bottom: 6px;
         cursor: zoom-in;
     }
+    .${CLASSES.CONTEXT_SCREENSHOT_CAPTION} {
+        opacity: 0.75;
+    }
     .${CLASSES.CONTEXT_ROW} {
         display: flex;
         justify-content: space-between;
