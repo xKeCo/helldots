@@ -166,6 +166,43 @@ describe("inbox sidebar", () => {
       expect(label()).toBe("Página actual · Sin resolver");
     });
 
+    it("includes the type filter in the collapsed label", () => {
+      overlay = makeOverlay();
+      const panel = openInbox(overlay);
+      const label = () =>
+        panel.querySelector(`.${CLASSES.INBOX_FILTER} span`).textContent;
+
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-type="bug"]`));
+      expect(label()).toBe("Current page · Bug");
+    });
+
+    it("includes the priority filter in the collapsed label", () => {
+      overlay = makeOverlay();
+      const panel = openInbox(overlay);
+      const label = () =>
+        panel.querySelector(`.${CLASSES.INBOX_FILTER} span`).textContent;
+
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-priority="high"]`));
+      expect(label()).toBe("Current page · High");
+    });
+
+    it("composes all four active filters in order in the collapsed label", () => {
+      overlay = makeOverlay();
+      const panel = openInbox(overlay);
+      const label = () =>
+        panel.querySelector(`.${CLASSES.INBOX_FILTER} span`).textContent;
+
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-status="unresolved"]`));
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-type="bug"]`));
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-priority="high"]`));
+      expect(label()).toBe("Current page · Unresolved · Bug · High");
+    });
+
     it("sorts resolved comments to the bottom and styles their card", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");

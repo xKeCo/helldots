@@ -219,14 +219,31 @@ export class InboxView {
     return this.strings.filterStatusAll;
   }
 
+  /**
+   * Summary label for the collapsed filter button. The page filter always
+   * contributes (it's either "All" or "Current page"); status, type, and
+   * priority only join in when active, so an active filter is never hidden
+   * from a user who hasn't opened the menu.
+   */
+  _filterSummaryLabel() {
+    const parts = [this._pageFilterLabel(this.pageFilter)];
+    if (this.statusFilter !== "all") {
+      parts.push(this._statusFilterLabel(this.statusFilter));
+    }
+    if (this.typeFilter !== "all") {
+      parts.push(typeLabelOf(this.typeFilter, this.strings));
+    }
+    if (this.priorityFilter !== "all") {
+      parts.push(priorityLabelOf(this.priorityFilter, this.strings));
+    }
+    return parts.join(" · ");
+  }
+
   _buildFilter() {
     const wrapper = document.createElement("div");
     wrapper.className = CLASSES.INBOX_FILTER + "-wrapper";
 
-    const label =
-      this.statusFilter === "all"
-        ? this._pageFilterLabel(this.pageFilter)
-        : `${this._pageFilterLabel(this.pageFilter)} · ${this._statusFilterLabel(this.statusFilter)}`;
+    const label = this._filterSummaryLabel();
 
     const btn = document.createElement("button");
     btn.type = "button";
