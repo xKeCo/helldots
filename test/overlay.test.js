@@ -822,6 +822,22 @@ describe("CommentOverlay", () => {
         overlay.shadowRoot.querySelector(`.${CLASSES.TOOLTIP}[data-for="7"]`)
       ).toBeNull();
     });
+
+    it("changing priority from the popover updates the comment", () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      overlay.showThreadPopover(circle, comment);
+      const popover = overlay.activeThreadPopover;
+
+      popover
+        .querySelector(`[data-action="priority"]`)
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      popover
+        .querySelector(`[data-picker-option="high"]`)
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      expect(comment.priority).toBe("high");
+      expect(overlay.comments[0].priority).toBe("high");
+    });
   });
 
   describe("lightbox", () => {

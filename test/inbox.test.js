@@ -593,6 +593,73 @@ describe("inbox sidebar", () => {
     });
   });
 
+  describe("type and priority pickers from an inbox card", () => {
+    const findCard = (panel, comment) =>
+      panel.querySelector(
+        `.${CLASSES.INBOX_CARD}[data-comment-id="${comment.id}"]`
+      );
+
+    it("changing type from an inbox card persists it on the comment", async () => {
+      overlay = makeOverlay({ persistence: "localStorage" });
+      const comment = await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "needs a type"
+      );
+
+      const panel = openInbox(overlay);
+      const card = findCard(panel, comment);
+      click(card.querySelector(`[data-action="type"]`));
+      click(card.querySelector(`[data-picker-option="bug"]`));
+
+      expect(comment.type).toBe("bug");
+      const stored = JSON.parse(localStorage.getItem("helldots-comments"));
+      expect(stored[0].type).toBe("bug");
+    });
+
+    it("changing priority from an inbox card persists it on the comment", async () => {
+      overlay = makeOverlay({ persistence: "localStorage" });
+      const comment = await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "needs a priority"
+      );
+
+      const panel = openInbox(overlay);
+      const card = findCard(panel, comment);
+      click(card.querySelector(`[data-action="priority"]`));
+      click(card.querySelector(`[data-picker-option="high"]`));
+
+      expect(comment.priority).toBe("high");
+      const stored = JSON.parse(localStorage.getItem("helldots-comments"));
+      expect(stored[0].priority).toBe("high");
+    });
+
+    it("selecting Unset on the type picker clears it back to null", async () => {
+      overlay = makeOverlay();
+      const comment = await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "round-trips through unset"
+      );
+
+      const panel = openInbox(overlay);
+      let card = findCard(panel, comment);
+      click(card.querySelector(`[data-action="type"]`));
+      click(card.querySelector(`[data-picker-option="bug"]`));
+      expect(comment.type).toBe("bug");
+
+      // The inbox list is re-rendered in place after each classification
+      // change, so the card element must be re-queried before acting on it
+      // again.
+      card = findCard(panel, comment);
+      click(card.querySelector(`[data-action="type"]`));
+      click(card.querySelector(`[data-picker-option=""]`));
+
+      expect(comment.type).toBeNull();
+    });
+  });
+
   describe("thread popover actions", () => {
     const openPopover = (ov, comment) => {
       const circle = ov.shadowRoot.querySelector(
