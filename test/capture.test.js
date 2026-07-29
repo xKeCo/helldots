@@ -1,5 +1,12 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { captureRegion } from "../src/capture.js";
+import {
+  captureRegion,
+  renderPage,
+  cropViewport,
+  withHiddenOverlay,
+  AUTO_SCALE,
+} from "../src/capture.js";
+import { TAG_NAME } from "../src/root-element.js";
 import { domToCanvas } from "modern-screenshot";
 
 vi.mock("modern-screenshot", () => ({
@@ -122,5 +129,128 @@ describe("captureRegion", () => {
     await expect(
       captureRegion({ left: 0, top: 0, width: 50, height: 50 })
     ).rejects.toThrow("render failed");
+  });
+});
+
+describe("renderPage", () => {
+  it("renders at the requested scale", async () => {
+    vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
+    await renderPage({ scale: 0.5 });
+    expect(domToCanvas).toHaveBeenCalledWith(
+      document.body,
+      expect.objectContaining({ scale: 0.5 })
+    );
+  });
+
+  it("defaults to scale 1", async () => {
+    vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
+    await renderPage();
+    expect(domToCanvas).toHaveBeenCalledWith(
+      document.body,
+      expect.objectContaining({ scale: 1 })
+    );
+  });
+});
+
+describe("cropViewport", () => {
+  it("crops the viewport rect and encodes it as downscaled JPEG", () => {
+    const { canvas, drawImage } = makeFakeCanvas();
+    canvas.toDataURL = vi.fn(() => "data:image/jpeg;base64,auto");
+    vi.spyOn(document, "createElement").mockReturnValue(
+      /** @type {any} */ (canvas)
+    );
+    vi.spyOn(window, "scrollX", "get").mockReturnValue(0);
+    vi.spyOn(window, "scrollY", "get").mockReturnValue(400);
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(1000);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(800);
+
+    const source = { width: 1000, height: 5000 };
+    const dataUrl = cropViewport(source, { sourceScale: 1 });
+
+    // Output is half-size; the source rect is the viewport at scroll offset.
+    expect(canvas.width).toBe(500);
+    expect(canvas.height).toBe(400);
+    expect(drawImage).toHaveBeenCalledWith(
+      source,
+      0,
+      400,
+      1000,
+      800,
+      0,
+      0,
+      500,
+      400
+    );
+    expect(canvas.toDataURL).toHaveBeenCalledWith("image/jpeg", 0.7);
+    expect(dataUrl).toBe("data:image/jpeg;base64,auto");
+  });
+
+  it("maps the source rect through sourceScale when the canvas is half-size", () => {
+    const { canvas, drawImage } = makeFakeCanvas();
+    vi.spyOn(document, "createElement").mockReturnValue(
+      /** @type {any} */ (canvas)
+    );
+    vi.spyOn(window, "scrollX", "get").mockReturnValue(0);
+    vi.spyOn(window, "scrollY", "get").mockReturnValue(400);
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(1000);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(800);
+
+    const source = { width: 500, height: 2500 };
+    cropViewport(source, { sourceScale: AUTO_SCALE });
+
+    expect(drawImage).toHaveBeenCalledWith(
+      source,
+      0,
+      200,
+      500,
+      400,
+      0,
+      0,
+      500,
+      400
+    );
+  });
+
+  it("returns null when the 2d context is unavailable", () => {
+    vi.spyOn(document, "createElement").mockReturnValue(
+      /** @type {any} */ ({ getContext: () => null, toDataURL: vi.fn() })
+    );
+    expect(cropViewport({ width: 10, height: 10 }, {})).toBeNull();
+  });
+});
+
+describe("withHiddenOverlay", () => {
+  it("hides the whole host during the callback and restores it after", async () => {
+    const host = document.createElement(TAG_NAME);
+    host.style.display = "block";
+    document.body.appendChild(host);
+
+    let displayDuringCall = null;
+    await withHiddenOverlay(() => {
+      displayDuringCall = host.style.display;
+      return Promise.resolve("ok");
+    });
+
+    expect(displayDuringCall).toBe("none");
+    expect(host.style.display).toBe("block");
+    host.remove();
+  });
+
+  it("restores the host even when the callback throws", async () => {
+    // Regression guard: a render failure must never leave the widget hidden.
+    const host = document.createElement(TAG_NAME);
+    host.style.display = "block";
+    document.body.appendChild(host);
+
+    await expect(
+      withHiddenOverlay(() => Promise.reject(new Error("render failed")))
+    ).rejects.toThrow("render failed");
+
+    expect(host.style.display).toBe("block");
+    host.remove();
+  });
+
+  it("is a no-op when no host is mounted", async () => {
+    await expect(withHiddenOverlay(() => Promise.resolve(1))).resolves.toBe(1);
   });
 });
