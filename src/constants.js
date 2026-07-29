@@ -61,18 +61,6 @@ export const CLASSES = {
   INBOX_NAV_BTN: "inbox-nav-btn",
   INBOX_REPLIES: "inbox-replies",
   INBOX_EMPTY: "inbox-empty",
-  INBOX_BADGES: "inbox-badges",
-  BADGE: "helldots-badge",
-  BADGE_TYPE: "helldots-badge--type",
-  BADGE_PRIORITY: "helldots-badge--priority",
-  BADGE_TAG: "helldots-badge--tag",
-  BADGE_DURATION: "helldots-badge--duration",
-  CLASSIFY_ROW: "classify-row",
-  TAGS_INPUT: "tags-input",
-  TAG_CHIP: "tag-chip",
-  TAG_CHIP_REMOVE: "tag-chip-remove",
-  CONTEXT_BLOCK: "inbox-context",
-  CONTEXT_ROW: "inbox-context-row",
   HIGHLIGHT: "helldots-highlight",
 };
 
