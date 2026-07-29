@@ -59,6 +59,23 @@ export interface SerializedComment {
   createdAt: string;
   screenshots: string[];
   status: CommentStatus;
+  /** RF3 — `null` when deliberately unclassified. */
+  type: CommentType | null;
+  /** RF4 — `null` when deliberately unprioritised. */
+  priority: CommentPriority | null;
+  /** RF3 — free-form labels, normalised lowercase. */
+  tags: string[];
+  /** RF5 — set on entering "resolved", cleared on leaving it. */
+  resolvedAt: string | null;
+  /** RF2 — environment snapshot taken at creation. */
+  context: CommentContext | null;
+  /** RF1 — automatic viewport capture (JPEG data-URL). */
+  contextScreenshot: string | null;
+  /**
+   * RF6 — emoji → authors who reacted. Reserved, not implemented yet.
+   * Optional and absent by default, so shipping it later needs no migration.
+   */
+  reactions?: Record<string, string[]>;
 }
 
 export interface CommentOverlayOptions {
@@ -111,6 +128,23 @@ export interface Comment {
   createdAt: string;
   screenshots: string[];
   status: CommentStatus;
+  /** RF3 — `null` when deliberately unclassified. */
+  type: CommentType | null;
+  /** RF4 — `null` when deliberately unprioritised. */
+  priority: CommentPriority | null;
+  /** RF3 — free-form labels, normalised lowercase. */
+  tags: string[];
+  /** RF5 — set on entering "resolved", cleared on leaving it. */
+  resolvedAt: string | null;
+  /** RF2 — environment snapshot taken at creation. */
+  context: CommentContext | null;
+  /** RF1 — automatic viewport capture (JPEG data-URL). */
+  contextScreenshot: string | null;
+  /**
+   * RF6 — emoji → authors who reacted. Reserved, not implemented yet.
+   * Optional and absent by default, so shipping it later needs no migration.
+   */
+  reactions?: Record<string, string[]>;
 }
 
 export declare class CommentOverlay {

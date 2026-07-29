@@ -631,3 +631,87 @@ describe("persistence", () => {
     });
   });
 });
+
+describe("schema migration", () => {
+  it("fills neutral defaults for comments stored before RF1-RF5", () => {
+    // A record exactly as it was persisted by the previous version.
+    const legacy = {
+      id: 1,
+      text: "old comment",
+      anchor: null,
+      page: location.pathname,
+      replies: [],
+      author: "Ana",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      screenshots: [],
+      status: "open",
+    };
+
+    const overlay = makeOverlay();
+    overlay.loadComments([legacy]);
+    const [comment] = overlay.comments;
+
+    expect(comment.type).toBeNull();
+    expect(comment.priority).toBeNull();
+    expect(comment.tags).toEqual([]);
+    expect(comment.context).toBeNull();
+    expect(comment.contextScreenshot).toBeNull();
+    expect(comment.resolvedAt).toBeNull();
+  });
+
+  it("round-trips the new fields through serialize/load", () => {
+    const overlay = makeOverlay();
+    overlay.loadComments([
+      {
+        id: 2,
+        text: "classified",
+        anchor: null,
+        page: location.pathname,
+        replies: [],
+        author: "Ana",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        screenshots: [],
+        status: "resolved",
+        type: "bug",
+        priority: "high",
+        tags: ["checkout", "ios"],
+        resolvedAt: "2026-01-02T00:00:00.000Z",
+        contextScreenshot: "data:image/jpeg;base64,x",
+        context: { version: 1, url: "https://a.test/" },
+      },
+    ]);
+
+    const [serialized] = overlay.serializeComments();
+    expect(serialized.type).toBe("bug");
+    expect(serialized.priority).toBe("high");
+    expect(serialized.tags).toEqual(["checkout", "ios"]);
+    expect(serialized.resolvedAt).toBe("2026-01-02T00:00:00.000Z");
+    expect(serialized.contextScreenshot).toBe("data:image/jpeg;base64,x");
+    expect(serialized.context.url).toBe("https://a.test/");
+  });
+
+  it("rejects a type or priority that is not in the enum", () => {
+    const overlay = makeOverlay();
+    overlay.loadComments([
+      {
+        id: 3,
+        text: "bogus",
+        anchor: null,
+        page: location.pathname,
+        replies: [],
+        author: "Ana",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        screenshots: [],
+        status: "open",
+        type: "not-a-type",
+        priority: "urgent",
+        tags: "not-an-array",
+      },
+    ]);
+
+    const [comment] = overlay.comments;
+    expect(comment.type).toBeNull();
+    expect(comment.priority).toBeNull();
+    expect(comment.tags).toEqual([]);
+  });
+});

@@ -1,5 +1,12 @@
 import { captureRegion } from "./capture.js";
-import { CLASSES, IDS, SELECTORS, STATUSES } from "./constants.js";
+import {
+  CLASSES,
+  IDS,
+  SELECTORS,
+  STATUSES,
+  COMMENT_TYPES,
+  PRIORITIES,
+} from "./constants.js";
 import { getStyles, getGlobalStyles } from "./styles.js";
 import { getShadowRoot, TAG_NAME } from "./root-element.js";
 import { getStrings, detectLocale } from "./i18n.js";
@@ -504,6 +511,15 @@ class CommentOverlay {
       screenshots: this._pendingScreenshots
         ? [...this._pendingScreenshots]
         : [],
+      // Tasks 8 and 11 replace these literals with real captured values
+      // (classification UI and automatic context/screenshot capture are
+      // not wired up yet at this point in the plan).
+      type: null,
+      priority: null,
+      tags: [],
+      resolvedAt: null,
+      context: null,
+      contextScreenshot: null,
     };
 
     this.comments.push(comment);
@@ -933,6 +949,12 @@ class CommentOverlay {
       createdAt: comment.createdAt,
       screenshots: comment.screenshots || [],
       status: comment.status || "open",
+      type: comment.type || null,
+      priority: comment.priority || null,
+      tags: comment.tags || [],
+      resolvedAt: comment.resolvedAt || null,
+      context: comment.context || null,
+      contextScreenshot: comment.contextScreenshot || null,
     };
   }
 
@@ -1050,6 +1072,14 @@ class CommentOverlay {
             : STATUSES.includes(item.status)
               ? item.status
               : "open",
+        // Records persisted before RF1-RF5 have none of these — every
+        // reader downstream may assume they exist after this point.
+        type: COMMENT_TYPES.includes(item.type) ? item.type : null,
+        priority: PRIORITIES.includes(item.priority) ? item.priority : null,
+        tags: Array.isArray(item.tags) ? [...item.tags] : [],
+        resolvedAt: item.resolvedAt || null,
+        context: item.context || null,
+        contextScreenshot: item.contextScreenshot || null,
       };
 
       // Comments from other pages aren't broken — their elements just
