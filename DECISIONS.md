@@ -397,3 +397,86 @@ técnica de HellDots, cuando el plan no especificaba una opción concreta.
   no mostrar ningún indicador de foco al navegar por teclado, igual que en
   `dev-v2`. Si en el futuro se requiere volver a cumplir ese criterio,
   revisar el historial de la Tarea 8 y este commit de reversión.
+
+## Contexto automático, clasificación y tiempo de resolución (RF1–RF5)
+
+- **`contextScreenshot` en un campo aparte de `screenshots[]`**: las dos
+  cosas tienen semánticas distintas. `screenshots[]` es evidencia que el
+  usuario adjuntó a propósito; `contextScreenshot` lo recoge la librería
+  sola. Separarlos permite mostrarlos distinto, purgar solo el automático si
+  se llega a tocar la cuota de localStorage, y que el usuario no borre por
+  accidente algo que no puso él.
+- **JPEG q0.7 a escala 0.5 para la captura automática**: un PNG de viewport a
+  escala 1 pesa 300 KB–1.5 MB como data URL y con 3–4 comentarios revienta la
+  cuota de ~5 MB de localStorage (toda la persistencia vive en una sola key).
+  A media escala son ~40–120 KB. El drag manual se queda en PNG a escala 1:
+  cuando el usuario selecciona una región a propósito, la fidelidad importa.
+- **`renderPage` / `cropRegion` / `cropViewport` en vez de un solo
+  `captureRegion`**: el render de la página es prácticamente todo el coste de
+  una captura. Con el flujo de drag ya rindiendo una vez, una auto-captura
+  independiente habría hecho que cada comentario con drag pagara ese coste
+  dos veces. El canvas compartido lo evita. `captureRegion` se mantiene como
+  export por compatibilidad.
+- **La captura se espera antes de mostrar el comment box**: el host tiene que
+  estar oculto durante el render, así que mostrar el box en paralelo sería
+  una condición de carrera que lo metería a medias dentro de la propia
+  captura. La ruta sin drag renderiza a `scale: 0.5` (~4× más barato) para
+  acotar la latencia, y `autoScreenshot: false` la elimina del todo.
+- **`withHiddenOverlay` oculta el host `<helldots-root>` entero, no solo
+  `this.overlay`**: el flujo de drag anterior solo ocultaba el overlay, así
+  que el toolbar de HellDots salía dentro de los screenshots manuales. Bug
+  preexistente, arreglado de paso al compartir el helper.
+- **`captureContext()` con `navigator.userAgentData` y fallback a regex**:
+  Chromium expone marcas y plataforma ya estructuradas; Safari y Firefox
+  requieren parsear el UA. El orden de la tabla es load-bearing (el UA de
+  Edge contiene "Chrome", el de Chrome contiene "Safari"). El UA crudo se
+  guarda siempre, así que un parseo fallido degrada a `unknown` sin perder
+  información.
+- **Tipos como enum fijo + `tags: string[]` libres, en vez de tipos
+  configurables por el host**: los tags cubren la personalización sin que la
+  librería tenga que traducir ni colorear etiquetas que no conoce.
+- **La prioridad reusa el rojo de `bug` y el naranja de `in_progress`**:
+  deliberado. La rampa rojo/naranja/gris se lee como escala de urgencia de
+  inmediato, y son dimensiones distintas en slots distintos de la UI. Ningún
+  badge comunica su significado solo con color — todos llevan texto
+  (WCAG 1.4.1, y el gate de Lighthouse a11y está en 0.9).
+- **`createPicker` genérico en vez de tres pickers duplicados**: estado, tipo
+  y prioridad son el mismo widget con distinto diccionario. El picker de
+  estado que ya existía pasó a ser su primer consumidor, sin cambio de
+  comportamiento observable.
+- **Un solo `onCommentUpdated` para tipo/prioridad/tags**: tres callbacks
+  separados habrían sido ruido en la API. `onCommentStatusChanged` se
+  mantiene intacto para no romper consumidores existentes.
+- **`resolvedAt` único en vez de historial de estados**: se sella al entrar
+  en `resolved` y se limpia al salir, así que el dato mostrado siempre
+  corresponde a la resolución vigente. Un `statusHistory` completo daba más
+  valor analítico del que el requisito pedía, a cambio de más payload por
+  comentario. Los comentarios resueltos antes de este cambio no tienen
+  timestamp: se muestran con `—`, nunca con una duración inventada.
+- **RF6 (reacciones con emoji) queda fuera**: se reserva
+  `reactions?: Record<string, string[]>` (emoji → autores). Al ser opcional
+  y ausente por defecto, implementarlo después no requiere migración.
+- **`createPicker` recibió un parámetro `action`.** Los tests preexistentes
+  consultaban el picker de estado por `[data-action="status"]`, atributo que
+  el picker genérico no emitía. En vez de reescribir esas consultas, el
+  genérico acepta `action` y lo pone en el botón — lo que además hace que
+  los tres pickers (estado, tipo, prioridad) sean direccionables por
+  separado en el DOM. El único renombrado inevitable fue
+  `data-status-option` → `data-picker-option`, mecánico y sin tocar ninguna
+  aserción.
+- **Dos guards del repo tenían el alcance mal puesto y se corrigieron.** El
+  de i18n (`components.js has no hardcoded, user-visible English UI
+strings`) marcaba `"Enter"` —un nombre de tecla del DOM, no texto de
+  UI— como infracción, y empujó a escribir `e.key.toLowerCase() !==
+"enter"`, menos idiomático y capaz de lanzar si `e.key` viene `undefined`.
+  Se restauró la comparación idiomática y se enseñó al guard a excluir
+  nombres de tecla mediante una allowlist nombrada y estrecha. El de
+  constantes decía "referenced from `src/`" pero solo leía tres archivos,
+  dejando `inbox.js` fuera; ahora escanea todos los `.js` de `src/`. En
+  ambos casos se verificó después que el guard sigue cazando la infracción
+  real, para no cambiar un falso positivo por un falso negativo.
+- **El botón colapsado del filtro del inbox refleja los cuatro filtros.** Al
+  añadir tipo y prioridad, la etiqueta seguía componiéndose solo de página y
+  estado, así que un filtro activo podía ocultar comentarios sin ninguna
+  señal visible. Se extrajo `_filterSummaryLabel()` y ahora todo filtro
+  activo aparece en la etiqueta.
