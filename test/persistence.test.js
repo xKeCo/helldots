@@ -715,3 +715,71 @@ describe("schema migration", () => {
     expect(comment.tags).toEqual([]);
   });
 });
+
+describe("resolvedAt lifecycle", () => {
+  let overlay;
+
+  const seed = (overlay) =>
+    overlay.loadComments([
+      {
+        id: 10,
+        text: "t",
+        anchor: null,
+        page: location.pathname,
+        replies: [],
+        author: "Ana",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        screenshots: [],
+        status: "open",
+      },
+    ]);
+
+  beforeEach(() => {
+    document.elementFromPoint = () => null;
+    document.body.innerHTML = `<section id="target">Compare our plans and pick one today</section>`;
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    vi.restoreAllMocks();
+  });
+
+  it("stamps resolvedAt when entering resolved", () => {
+    overlay = makeOverlay();
+    seed(overlay);
+    overlay.setCommentStatus(10, "resolved");
+    expect(overlay.comments[0].resolvedAt).toMatch(
+      /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/
+    );
+  });
+
+  it("clears resolvedAt when the comment is reopened", () => {
+    overlay = makeOverlay();
+    seed(overlay);
+    overlay.setCommentStatus(10, "resolved");
+    overlay.setCommentStatus(10, "open");
+    expect(overlay.comments[0].resolvedAt).toBeNull();
+  });
+
+  it("leaves resolvedAt null for non-resolved transitions", () => {
+    overlay = makeOverlay();
+    seed(overlay);
+    overlay.setCommentStatus(10, "in_progress");
+    expect(overlay.comments[0].resolvedAt).toBeNull();
+  });
+
+  it("overwrites resolvedAt when resolved a second time", async () => {
+    overlay = makeOverlay();
+    seed(overlay);
+    overlay.setCommentStatus(10, "resolved");
+    const first = overlay.comments[0].resolvedAt;
+
+    await new Promise((r) => setTimeout(r, 2));
+    overlay.setCommentStatus(10, "open");
+    overlay.setCommentStatus(10, "resolved");
+
+    // The displayed duration must describe the CURRENT resolution.
+    expect(overlay.comments[0].resolvedAt).not.toBe(first);
+  });
+});

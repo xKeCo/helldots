@@ -970,6 +970,10 @@ class CommentOverlay {
     const comment = this.comments.find((c) => c.id === id);
     if (!comment) return false;
     comment.status = status;
+    // RF5 — the timestamp always describes the CURRENT resolution: a
+    // reopened comment loses it, and resolving again re-stamps it.
+    comment.resolvedAt =
+      status === "resolved" ? new Date().toISOString() : null;
     // Resolving removes the on-page marker; reopening restores it.
     const circle = /** @type {HTMLElement} */ (
       this.shadowRoot?.querySelector(`[data-comment-id="${id}"]`)
