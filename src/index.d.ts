@@ -90,6 +90,8 @@ export interface CommentOverlayOptions {
   locale?: "en" | "es";
   /** Auto save/restore comments. Default: "none" (host app persists via callbacks). */
   persistence?: "localStorage" | "none";
+  /** Capture a viewport screenshot and environment snapshot on every new comment. Default: true. */
+  autoScreenshot?: boolean;
   /** Identity used as the author of new comments and replies. */
   user?: { name: string };
   /** Fired after a new comment is saved. */

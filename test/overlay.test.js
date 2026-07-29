@@ -2,10 +2,24 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import CommentOverlay from "../src/overlay.js";
 import { CLASSES, IDS } from "../src/constants.js";
 import { TAG_NAME } from "../src/root-element.js";
+import { domToCanvas } from "modern-screenshot";
 
-vi.mock("../src/capture.js", () => ({
-  captureRegion: vi.fn().mockResolvedValue("data:image/png;base64,mocked"),
-}));
+vi.mock("modern-screenshot", () => ({ domToCanvas: vi.fn() }));
+
+// renderPage/withHiddenOverlay/cropViewport/AUTO_SCALE are kept REAL (via
+// importOriginal) — the "automatic context capture" suite below drives them
+// through the real domToCanvas mock above and asserts on real host-hiding
+// and cropping behaviour. Only cropRegion and captureRegion are faked: the
+// drag-path tests predate that plumbing and assert on a fixed data URL
+// rather than on real canvas output (jsdom has no canvas backing).
+vi.mock("../src/capture.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    captureRegion: vi.fn().mockResolvedValue("data:image/png;base64,mocked"),
+    cropRegion: vi.fn().mockReturnValue("data:image/png;base64,mocked"),
+  };
+});
 
 const cleanupDom = () => {
   document.querySelectorAll(TAG_NAME).forEach((el) => el.remove());
@@ -314,10 +328,10 @@ describe("CommentOverlay", () => {
     });
 
     it("logs a warning and still places the comment when capture rejects", async () => {
-      const { captureRegion } = await import("../src/capture.js");
-      vi.mocked(captureRegion).mockRejectedValueOnce(
-        new Error("capture failed")
-      );
+      // The drag path now renders via renderPage (domToCanvas) instead of
+      // the old captureRegion wrapper — reject one level lower to simulate
+      // the same render failure.
+      vi.mocked(domToCanvas).mockRejectedValueOnce(new Error("capture failed"));
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
       overlay = makeOverlay();
@@ -489,9 +503,9 @@ describe("CommentOverlay", () => {
       expect(overlay.comments.length).toBe(0);
     });
 
-    it("saves a comment, renders its circle, and opens the thread popover", () => {
+    it("saves a comment, renders its circle, and opens the thread popover", async () => {
       overlay = makeOverlay();
-      overlay._placeCommentAtPoint(100, 100);
+      await overlay._placeCommentAtPoint(100, 100);
       overlay.commentInput.value = "a new comment";
       overlay.saveComment();
 
@@ -504,9 +518,9 @@ describe("CommentOverlay", () => {
       expect(overlay.activeThreadPopover).toBeTruthy();
     });
 
-    it("Enter key in the comment input saves the comment", () => {
+    it("Enter key in the comment input saves the comment", async () => {
       overlay = makeOverlay();
-      overlay._placeCommentAtPoint(50, 50);
+      await overlay._placeCommentAtPoint(50, 50);
       overlay.commentInput.value = "via enter";
       overlay.commentInput.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
@@ -1489,5 +1503,127 @@ describe("CommentOverlay", () => {
       overlay.setCommentType(20, "bug");
       expect(onCommentStatusChanged).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("automatic context capture", () => {
+  let overlay;
+
+  beforeEach(() => {
+    // jsdom doesn't implement elementFromPoint; default to "nothing under
+    // the cursor" so _placeCommentAtPoint falls back to document.body.
+    document.elementFromPoint = () => null;
+    // domToCanvas is real capture.js's dependency (renderPage calls it for
+    // real in this suite) — its call history otherwise carries over from
+    // the drag-path tests above, which also exercise the real renderPage.
+    vi.mocked(domToCanvas).mockClear();
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    vi.restoreAllMocks();
+  });
+
+  const fakeOutCanvas = () => ({
+    width: 0,
+    height: 0,
+    getContext: () => ({ drawImage: vi.fn() }),
+    toDataURL: vi.fn(() => "data:image/jpeg;base64,auto"),
+  });
+
+  const clickAt = async (overlay, x, y) => {
+    overlay.toggleCommentMode();
+    overlay.handleDocumentClick(
+      new MouseEvent("mousedown", { clientX: x, clientY: y, button: 0 })
+    );
+    await overlay._onDragEnd(
+      new MouseEvent("mouseup", { clientX: x, clientY: y })
+    );
+  };
+
+  it("renders at AUTO_SCALE on the no-drag path", async () => {
+    vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
+    vi.spyOn(document, "createElement").mockImplementation((tag) =>
+      tag === "canvas"
+        ? /** @type {any} */ (fakeOutCanvas())
+        : Object.getPrototypeOf(document).createElement.call(document, tag)
+    );
+
+    overlay = makeOverlay();
+    await clickAt(overlay, 50, 50);
+
+    expect(domToCanvas).toHaveBeenCalledTimes(1);
+    expect(domToCanvas).toHaveBeenCalledWith(
+      document.body,
+      expect.objectContaining({ scale: 0.5 })
+    );
+  });
+
+  it("does not render at all when autoScreenshot is false", async () => {
+    vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
+    overlay = makeOverlay({ autoScreenshot: false });
+    await clickAt(overlay, 50, 50);
+    expect(domToCanvas).not.toHaveBeenCalled();
+  });
+
+  it("hides the host during the render", async () => {
+    let displayDuringRender = null;
+    vi.mocked(domToCanvas).mockImplementation(async () => {
+      const host = document.querySelector(TAG_NAME);
+      displayDuringRender = /** @type {HTMLElement} */ (host)?.style.display;
+      return { width: 10, height: 10 };
+    });
+
+    overlay = makeOverlay();
+    await clickAt(overlay, 50, 50);
+
+    expect(displayDuringRender).toBe("none");
+    const host = /** @type {HTMLElement} */ (document.querySelector(TAG_NAME));
+    expect(host.style.display).not.toBe("none");
+  });
+
+  it("saves the capture and the context onto the comment", async () => {
+    vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
+    vi.spyOn(document, "createElement").mockImplementation((tag) =>
+      tag === "canvas"
+        ? /** @type {any} */ (fakeOutCanvas())
+        : Object.getPrototypeOf(document).createElement.call(document, tag)
+    );
+
+    overlay = makeOverlay();
+    await clickAt(overlay, 50, 50);
+    overlay.commentInput.value = "a bug";
+    overlay.saveComment();
+
+    const [comment] = overlay.comments;
+    expect(comment.contextScreenshot).toBe("data:image/jpeg;base64,auto");
+    expect(comment.context.version).toBe(1);
+    expect(comment.context.url).toBe(location.href);
+    expect(comment.context.viewport.width).toBe(window.innerWidth);
+  });
+
+  it("still saves the comment when the render fails", async () => {
+    // A capture failure must never cost the user their comment.
+    vi.mocked(domToCanvas).mockRejectedValue(new Error("render failed"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    overlay = makeOverlay();
+    await clickAt(overlay, 50, 50);
+    overlay.commentInput.value = "still saved";
+    overlay.saveComment();
+
+    expect(overlay.comments).toHaveLength(1);
+    expect(overlay.comments[0].contextScreenshot).toBeNull();
+    expect(overlay.comments[0].context).not.toBeNull();
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it("does not leak a pending capture into the next comment", async () => {
+    vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
+    overlay = makeOverlay();
+    await clickAt(overlay, 50, 50);
+    overlay.hideCommentBox();
+    expect(overlay._pendingContextScreenshot).toBeNull();
   });
 });

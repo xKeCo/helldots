@@ -5,6 +5,11 @@ import { TAG_NAME } from "../src/root-element.js";
 
 vi.mock("../src/capture.js", () => ({
   captureRegion: vi.fn().mockResolvedValue("data:image/png;base64,mocked"),
+  renderPage: vi.fn().mockResolvedValue({ width: 0, height: 0 }),
+  cropRegion: vi.fn().mockReturnValue("data:image/png;base64,mocked"),
+  cropViewport: vi.fn().mockReturnValue("data:image/jpeg;base64,mocked"),
+  withHiddenOverlay: vi.fn((fn) => fn()),
+  AUTO_SCALE: 0.5,
 }));
 
 const cleanupDom = () => {
@@ -26,10 +31,10 @@ const giveSize = (el) => {
   });
 };
 
-const createCommentOn = (overlay, container, text = "A test comment") => {
+const createCommentOn = async (overlay, container, text = "A test comment") => {
   document.elementFromPoint = () => container;
   overlay.commentMode = true;
-  overlay._placeCommentAtPoint(10, 10);
+  await overlay._placeCommentAtPoint(10, 10);
   overlay.commentInput.value = text;
   overlay.saveComment();
   return overlay.comments[overlay.comments.length - 1];
@@ -71,11 +76,11 @@ describe("inbox sidebar", () => {
   });
 
   describe("list view", () => {
-    it("lists only current-page comments by default", () => {
+    it("lists only current-page comments by default", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      createCommentOn(overlay, target, "first comment");
-      createCommentOn(overlay, target, "second comment");
+      await createCommentOn(overlay, target, "first comment");
+      await createCommentOn(overlay, target, "second comment");
       overlay.loadComments([otherPageComment()]);
 
       const panel = openInbox(overlay);
@@ -84,9 +89,9 @@ describe("inbox sidebar", () => {
       expect(panel.textContent).not.toContain("comment from another page");
     });
 
-    it("the page filter shows all comments with a page tag on foreign ones", () => {
+    it("the page filter shows all comments with a page tag on foreign ones", async () => {
       overlay = makeOverlay();
-      createCommentOn(overlay, document.getElementById("target"), "mine");
+      await createCommentOn(overlay, document.getElementById("target"), "mine");
       overlay.loadComments([otherPageComment()]);
 
       const panel = openInbox(overlay);
@@ -118,11 +123,15 @@ describe("inbox sidebar", () => {
       expect(checkedStatus.dataset.filterStatus).toBe("all");
     });
 
-    it("combines the status filter with the page filter", () => {
+    it("combines the status filter with the page filter", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      const open1 = createCommentOn(overlay, target, "still open");
-      const resolved1 = createCommentOn(overlay, target, "already resolved");
+      const open1 = await createCommentOn(overlay, target, "still open");
+      const resolved1 = await createCommentOn(
+        overlay,
+        target,
+        "already resolved"
+      );
       overlay.setCommentStatus(resolved1.id, "resolved");
       overlay.loadComments([otherPageComment()]);
 
@@ -157,11 +166,15 @@ describe("inbox sidebar", () => {
       expect(label()).toBe("Página actual · Sin resolver");
     });
 
-    it("sorts resolved comments to the bottom and styles their card", () => {
+    it("sorts resolved comments to the bottom and styles their card", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      const resolvedFirst = createCommentOn(overlay, target, "resolved early");
-      const openLater = createCommentOn(overlay, target, "open later");
+      const resolvedFirst = await createCommentOn(
+        overlay,
+        target,
+        "resolved early"
+      );
+      const openLater = await createCommentOn(overlay, target, "open later");
       overlay.setCommentStatus(resolvedFirst.id, "resolved");
 
       const panel = openInbox(overlay);
@@ -218,11 +231,15 @@ describe("inbox sidebar", () => {
       expect(tags.some((t) => t.textContent === "Desanclado")).toBe(true);
     });
 
-    it("tags hidden comments and does not tag visible anchored ones", () => {
+    it("tags hidden comments and does not tag visible anchored ones", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      const visible = createCommentOn(overlay, target, "visible one");
-      const hiddenComment = createCommentOn(overlay, target, "hidden one");
+      const visible = await createCommentOn(overlay, target, "visible one");
+      const hiddenComment = await createCommentOn(
+        overlay,
+        target,
+        "hidden one"
+      );
       hiddenComment.hidden = true;
 
       const panel = openInbox(overlay);
@@ -245,7 +262,11 @@ describe("inbox sidebar", () => {
         configurable: true,
       });
       overlay = makeOverlay();
-      createCommentOn(overlay, document.getElementById("target"), "copy me");
+      await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "copy me"
+      );
 
       const panel = openInbox(overlay);
       click(
@@ -259,9 +280,9 @@ describe("inbox sidebar", () => {
       expect(copied).toContain('"copy me"');
     });
 
-    it("deletes a comment from the ⋯ menu", () => {
+    it("deletes a comment from the ⋯ menu", async () => {
       overlay = makeOverlay();
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "doomed"
@@ -309,9 +330,9 @@ describe("inbox sidebar", () => {
   });
 
   describe("detail view", () => {
-    it("clicking a card opens its detail with text, replies and input", () => {
+    it("clicking a card opens its detail with text, replies and input", async () => {
       overlay = makeOverlay();
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "detailed"
@@ -328,11 +349,11 @@ describe("inbox sidebar", () => {
       expect(detail.querySelector(`.${CLASSES.THREAD_INPUT}`)).toBeTruthy();
     });
 
-    it("scrolls the anchored element into view when opening the detail", () => {
+    it("scrolls the anchored element into view when opening the detail", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
       target.scrollIntoView = vi.fn();
-      createCommentOn(overlay, target, "scroll to me");
+      await createCommentOn(overlay, target, "scroll to me");
 
       const panel = openInbox(overlay);
       click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
@@ -340,9 +361,9 @@ describe("inbox sidebar", () => {
       expect(target.scrollIntoView).toHaveBeenCalled();
     });
 
-    it("submitting a reply appends it to the thread and the comment", () => {
+    it("submitting a reply appends it to the thread and the comment", async () => {
       overlay = makeOverlay();
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "reply here"
@@ -362,9 +383,13 @@ describe("inbox sidebar", () => {
       ).toContain("a fresh reply");
     });
 
-    it("Back returns to the list", () => {
+    it("Back returns to the list", async () => {
       overlay = makeOverlay();
-      createCommentOn(overlay, document.getElementById("target"), "go back");
+      await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "go back"
+      );
 
       const panel = openInbox(overlay);
       click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
@@ -374,11 +399,11 @@ describe("inbox sidebar", () => {
       expect(panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`)).toHaveLength(1);
     });
 
-    it("navigates between comments with the arrows, disabled at the edges", () => {
+    it("navigates between comments with the arrows, disabled at the edges", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      createCommentOn(overlay, target, "first entry");
-      createCommentOn(overlay, target, "second entry");
+      await createCommentOn(overlay, target, "first entry");
+      await createCommentOn(overlay, target, "second entry");
 
       const panel = openInbox(overlay);
       click(panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`)[0]);
@@ -396,9 +421,9 @@ describe("inbox sidebar", () => {
       expect(down2.disabled).toBe(true);
     });
 
-    it("deleting the open comment returns to the list", () => {
+    it("deleting the open comment returns to the list", async () => {
       overlay = makeOverlay();
-      createCommentOn(overlay, document.getElementById("target"), "bye");
+      await createCommentOn(overlay, document.getElementById("target"), "bye");
 
       const panel = openInbox(overlay);
       click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
@@ -437,10 +462,10 @@ describe("inbox sidebar", () => {
       expect(panel.querySelector(`.${CLASSES.INBOX_DETAIL}`)).toBeNull();
     });
 
-    it("on init with a pending id, opens the inbox directly on that detail and clears the key", () => {
+    it("on init with a pending id, opens the inbox directly on that detail and clears the key", async () => {
       // Seed storage with a comment belonging to the *current* page
       overlay = makeOverlay({ persistence: "localStorage" });
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "arrived via redirect"
@@ -475,10 +500,10 @@ describe("inbox sidebar", () => {
     const circleOf = (ov, comment) =>
       ov.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`);
 
-    it("highlights the comment's marker on card hover and clears it on leave", () => {
+    it("highlights the comment's marker on card hover and clears it on leave", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      const comment = createCommentOn(overlay, target, "highlight me");
+      const comment = await createCommentOn(overlay, target, "highlight me");
       const circle = circleOf(overlay, comment);
 
       const panel = openInbox(overlay);
@@ -492,10 +517,10 @@ describe("inbox sidebar", () => {
       expect(circle.classList.contains(CLASSES.HIGHLIGHT)).toBe(false);
     });
 
-    it("does not highlight resolved comments (no on-page marker)", () => {
+    it("does not highlight resolved comments (no on-page marker)", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      const comment = createCommentOn(overlay, target, "resolved one");
+      const comment = await createCommentOn(overlay, target, "resolved one");
       overlay.setCommentStatus(comment.id, "resolved");
       const circle = circleOf(overlay, comment);
 
@@ -504,10 +529,14 @@ describe("inbox sidebar", () => {
       expect(circle.classList.contains(CLASSES.HIGHLIGHT)).toBe(false);
     });
 
-    it("closing the panel clears any active highlight", () => {
+    it("closing the panel clears any active highlight", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      const comment = createCommentOn(overlay, target, "sticky highlight");
+      const comment = await createCommentOn(
+        overlay,
+        target,
+        "sticky highlight"
+      );
       const circle = circleOf(overlay, comment);
 
       const panel = openInbox(overlay);
@@ -520,9 +549,9 @@ describe("inbox sidebar", () => {
   });
 
   describe("status lifecycle from the UI", () => {
-    it("changing status from an inbox card persists it", () => {
+    it("changing status from an inbox card persists it", async () => {
       overlay = makeOverlay({ persistence: "localStorage" });
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "to progress"
@@ -541,11 +570,11 @@ describe("inbox sidebar", () => {
       expect(stored[0].status).toBe("in_progress");
     });
 
-    it("resolving from an inbox card re-renders the list immediately", () => {
+    it("resolving from an inbox card re-renders the list immediately", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      const first = createCommentOn(overlay, target, "resolve me");
-      createCommentOn(overlay, target, "still open");
+      const first = await createCommentOn(overlay, target, "resolve me");
+      await createCommentOn(overlay, target, "still open");
 
       const panel = openInbox(overlay);
       const card = panel.querySelector(
@@ -573,9 +602,9 @@ describe("inbox sidebar", () => {
       return ov.shadowRoot.querySelector(`.${CLASSES.THREAD_POPOVER}`);
     };
 
-    it("shows copy, status and more actions in the popover header", () => {
+    it("shows copy, status and more actions in the popover header", async () => {
       overlay = makeOverlay();
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "popover actions"
@@ -590,10 +619,10 @@ describe("inbox sidebar", () => {
       ).toBe("Copy agent context");
     });
 
-    it("changing status from the popover updates the comment", () => {
+    it("changing status from the popover updates the comment", async () => {
       const onCommentStatusChanged = vi.fn();
       overlay = makeOverlay({ onCommentStatusChanged });
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "status via popover"
@@ -607,9 +636,9 @@ describe("inbox sidebar", () => {
       expect(onCommentStatusChanged).toHaveBeenCalledTimes(1);
     });
 
-    it("deleting from the popover closes it and removes the comment", () => {
+    it("deleting from the popover closes it and removes the comment", async () => {
       overlay = makeOverlay();
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "delete via popover"
@@ -629,14 +658,14 @@ describe("inbox sidebar", () => {
       expect(overlay.comments).toHaveLength(0);
     });
 
-    it("copies the agent context including the status line", () => {
+    it("copies the agent context including the status line", async () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, "clipboard", {
         value: { writeText },
         configurable: true,
       });
       overlay = makeOverlay();
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "copy from popover"

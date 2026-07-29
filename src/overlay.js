@@ -1,4 +1,11 @@
-import { captureRegion } from "./capture.js";
+import {
+  renderPage,
+  cropRegion,
+  cropViewport,
+  withHiddenOverlay,
+  AUTO_SCALE,
+} from "./capture.js";
+import { captureContext } from "./metadata.js";
 import {
   CLASSES,
   IDS,
@@ -56,6 +63,7 @@ class CommentOverlay {
     this.options = {
       shortcutKey: options.shortcutKey || (this.isMac ? "c" : "C"),
       shortcutModifier: options.shortcutModifier || "alt",
+      autoScreenshot: options.autoScreenshot !== false,
       ...options,
     };
     this.locale = this.options.locale || detectLocale();
@@ -69,6 +77,7 @@ class CommentOverlay {
 
     // rAF scheduling flag for bulk updates
     this._pendingRaf = null;
+    this._pendingContextScreenshot = null;
 
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => this.initOverlay());
@@ -248,11 +257,11 @@ class CommentOverlay {
 
     if (
       this.toolbar.contains(target) ||
-      target.closest?.(`.${CLASSES.CIRCLE}`) ||
-      target.closest?.(`.${CLASSES.TOOLTIP}`) ||
-      target.closest?.(`.${CLASSES.THREAD_POPOVER}`) ||
-      target.closest?.(`.${CLASSES.INBOX_PANEL}`) ||
-      target.closest?.(`.${CLASSES.LIGHTBOX}`)
+      target?.closest?.(`.${CLASSES.CIRCLE}`) ||
+      target?.closest?.(`.${CLASSES.TOOLTIP}`) ||
+      target?.closest?.(`.${CLASSES.THREAD_POPOVER}`) ||
+      target?.closest?.(`.${CLASSES.INBOX_PANEL}`) ||
+      target?.closest?.(`.${CLASSES.LIGHTBOX}`)
     ) {
       return;
     }
@@ -318,29 +327,52 @@ class CommentOverlay {
       this._selectionRect = null;
 
       if (width > 10 && height > 10) {
-        this.overlay.style.display = "none";
         try {
           if (!this._pendingScreenshots) this._pendingScreenshots = [];
-          const dataUrl = await captureRegion({ left, top, width, height });
+          // One render feeds both images: the PNG region the user selected
+          // and the automatic JPEG context shot.
+          const full = await withHiddenOverlay(() => renderPage({ scale: 1 }));
+          const dataUrl = cropRegion(full, { left, top, width, height });
           if (dataUrl && this._pendingScreenshots.length < 5) {
             this._pendingScreenshots.push(dataUrl);
+          }
+          if (this.options.autoScreenshot) {
+            this._pendingContextScreenshot = cropViewport(full, {
+              sourceScale: 1,
+            });
           }
         } catch (err) {
           console.warn("Screenshot capture failed:", err);
         }
-        this.overlay.style.display = "";
       }
 
-      this._placeCommentAtPoint(e.clientX, e.clientY);
+      await this._placeCommentAtPoint(e.clientX, e.clientY);
     } else {
-      this._placeCommentAtPoint(this._dragStart.x, this._dragStart.y);
+      await this._placeCommentAtPoint(this._dragStart.x, this._dragStart.y);
     }
 
     this._isDragging = false;
     this._dragStart = null;
   }
 
-  _placeCommentAtPoint(clientX, clientY) {
+  async _placeCommentAtPoint(clientX, clientY) {
+    // The no-drag path has no render yet. Half scale because the output is
+    // half scale anyway — the render is the expensive part, and it costs
+    // ~4x less here than at scale 1.
+    if (this.options.autoScreenshot && !this._pendingContextScreenshot) {
+      try {
+        const full = await withHiddenOverlay(() =>
+          renderPage({ scale: AUTO_SCALE })
+        );
+        this._pendingContextScreenshot = cropViewport(full, {
+          sourceScale: AUTO_SCALE,
+        });
+      } catch (err) {
+        console.warn("HellDots: automatic screenshot failed", err);
+        this._pendingContextScreenshot = null;
+      }
+    }
+
     const prevPointerEvents = this.overlay.style.pointerEvents;
     this.overlay.style.pointerEvents = "none";
     const underlying = document.elementFromPoint(clientX, clientY);
@@ -484,6 +516,7 @@ class CommentOverlay {
     this.currentPosition = null;
     this.removePreviewCircle();
     this._clearScreenshotPreview();
+    this._pendingContextScreenshot = null;
 
     if (this.commentMode) {
       document.body.classList.add(CLASSES.COMMENT_CURSOR);
@@ -523,15 +556,14 @@ class CommentOverlay {
       screenshots: this._pendingScreenshots
         ? [...this._pendingScreenshots]
         : [],
-      // Tasks 8 and 11 replace these literals with real captured values
-      // (classification UI and automatic context/screenshot capture are
-      // not wired up yet at this point in the plan).
+      // Task 11 replaces these literals with real captured values
+      // (classification UI is not wired up yet at this point in the plan).
       type: null,
       priority: null,
       tags: [],
       resolvedAt: null,
-      context: null,
-      contextScreenshot: null,
+      context: captureContext(),
+      contextScreenshot: this._pendingContextScreenshot,
     };
 
     this.comments.push(comment);

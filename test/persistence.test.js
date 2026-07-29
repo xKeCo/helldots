@@ -5,6 +5,11 @@ import { TAG_NAME } from "../src/root-element.js";
 
 vi.mock("../src/capture.js", () => ({
   captureRegion: vi.fn().mockResolvedValue("data:image/png;base64,mocked"),
+  renderPage: vi.fn().mockResolvedValue({ width: 0, height: 0 }),
+  cropRegion: vi.fn().mockReturnValue("data:image/png;base64,mocked"),
+  cropViewport: vi.fn().mockReturnValue("data:image/jpeg;base64,mocked"),
+  withHiddenOverlay: vi.fn((fn) => fn()),
+  AUTO_SCALE: 0.5,
 }));
 
 const cleanupDom = () => {
@@ -17,10 +22,10 @@ const makeOverlay = (options = {}) => new CommentOverlay(options);
 
 // Creates a comment anchored to `container` by driving the real pipeline:
 // point placement (anchor capture) followed by saveComment().
-const createCommentOn = (overlay, container, text = "A test comment") => {
+const createCommentOn = async (overlay, container, text = "A test comment") => {
   document.elementFromPoint = () => container;
   overlay.commentMode = true;
-  overlay._placeCommentAtPoint(10, 10);
+  await overlay._placeCommentAtPoint(10, 10);
   overlay.commentInput.value = text;
   overlay.saveComment();
   return overlay.comments[overlay.comments.length - 1];
@@ -41,10 +46,10 @@ describe("persistence", () => {
   });
 
   describe("anchor capture on save", () => {
-    it("attaches a serializable anchor and anchorState to new comments", () => {
+    it("attaches a serializable anchor and anchorState to new comments", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      const comment = createCommentOn(overlay, target);
+      const comment = await createCommentOn(overlay, target);
 
       expect(comment.anchorState).toBe("anchored");
       expect(comment.anchor.version).toBe(1);
@@ -54,11 +59,11 @@ describe("persistence", () => {
       expect(comment.anchor.relativeY).toBe(comment.relativeY);
     });
 
-    it("fires onCommentCreated with a JSON-safe serialized comment", () => {
+    it("fires onCommentCreated with a JSON-safe serialized comment", async () => {
       const onCommentCreated = vi.fn();
       overlay = makeOverlay({ onCommentCreated });
       const target = document.getElementById("target");
-      createCommentOn(overlay, target, "Callback test");
+      await createCommentOn(overlay, target, "Callback test");
 
       expect(onCommentCreated).toHaveBeenCalledTimes(1);
       const serialized = onCommentCreated.mock.calls[0][0];
@@ -68,10 +73,10 @@ describe("persistence", () => {
       expect(JSON.parse(JSON.stringify(serialized))).toEqual(serialized);
     });
 
-    it("captures the page (pathname) and screenshots in serialized form", () => {
+    it("captures the page (pathname) and screenshots in serialized form", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      const comment = createCommentOn(overlay, target, "with page");
+      const comment = await createCommentOn(overlay, target, "with page");
       comment.screenshots = ["data:image/png;base64,shot"];
 
       const [serialized] = overlay.serializeComments();
@@ -79,9 +84,9 @@ describe("persistence", () => {
       expect(serialized.screenshots).toEqual(["data:image/png;base64,shot"]);
     });
 
-    it("uses options.user.name as the author of comments and replies", () => {
+    it("uses options.user.name as the author of comments and replies", async () => {
       overlay = makeOverlay({ user: { name: "Kevin Collazos" } });
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "authored"
@@ -94,10 +99,10 @@ describe("persistence", () => {
   });
 
   describe("replies", () => {
-    it("fires onReplyAdded with the serialized comment and the reply", () => {
+    it("fires onReplyAdded with the serialized comment and the reply", async () => {
       const onReplyAdded = vi.fn();
       overlay = makeOverlay({ onReplyAdded });
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target")
       );
@@ -113,12 +118,12 @@ describe("persistence", () => {
   });
 
   describe("serializeComments", () => {
-    it("returns every comment in serializable form", () => {
+    it("returns every comment in serializable form", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      createCommentOn(overlay, target, "first");
+      await createCommentOn(overlay, target, "first");
       // saveComment toggles comment mode off; re-arm before the second one
-      createCommentOn(overlay, target, "second");
+      await createCommentOn(overlay, target, "second");
 
       const data = overlay.serializeComments();
       expect(data).toHaveLength(2);
@@ -130,9 +135,9 @@ describe("persistence", () => {
       }
     });
 
-    it("serializes reply screenshots", () => {
+    it("serializes reply screenshots", async () => {
       overlay = makeOverlay();
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target")
       );
@@ -148,10 +153,10 @@ describe("persistence", () => {
   });
 
   describe("loadComments", () => {
-    it("round-trips: restored comments re-render circles at the same position", () => {
+    it("round-trips: restored comments re-render circles at the same position", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      const original = createCommentOn(overlay, target, "round trip");
+      const original = await createCommentOn(overlay, target, "round trip");
       const data = overlay.serializeComments();
       overlay.cleanup();
 
@@ -171,10 +176,10 @@ describe("persistence", () => {
       expect(circle).toBeTruthy();
     });
 
-    it("re-anchors via fingerprint rescue when the selector broke", () => {
+    it("re-anchors via fingerprint rescue when the selector broke", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
-      const comment = createCommentOn(overlay, target, "rescued");
+      const comment = await createCommentOn(overlay, target, "rescued");
       const data = overlay.serializeComments();
       // The id selector will break, but content stays identifiable
       expect(comment.anchor.selector).toBe("#target");
@@ -229,9 +234,13 @@ describe("persistence", () => {
       expect(onAnchorLost).not.toHaveBeenCalled();
     });
 
-    it("legacy entries without page still resolve on the current page", () => {
+    it("legacy entries without page still resolve on the current page", async () => {
       overlay = makeOverlay();
-      createCommentOn(overlay, document.getElementById("target"), "legacy");
+      await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "legacy"
+      );
       const [serialized] = overlay.serializeComments();
       delete serialized.page;
       overlay.cleanup();
@@ -241,9 +250,13 @@ describe("persistence", () => {
       expect(result).toEqual({ anchored: 1, orphaned: 0, inactive: 0 });
     });
 
-    it("orphans comments whose element is gone and fires onAnchorLost", () => {
+    it("orphans comments whose element is gone and fires onAnchorLost", async () => {
       overlay = makeOverlay();
-      createCommentOn(overlay, document.getElementById("target"), "orphan me");
+      await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "orphan me"
+      );
       const data = overlay.serializeComments();
       overlay.cleanup();
 
@@ -263,9 +276,9 @@ describe("persistence", () => {
       expect(onAnchorLost.mock.calls[0][0].text).toBe("orphan me");
     });
 
-    it("is idempotent by id: reloading replaces instead of duplicating", () => {
+    it("is idempotent by id: reloading replaces instead of duplicating", async () => {
       overlay = makeOverlay();
-      createCommentOn(overlay, document.getElementById("target"), "once");
+      await createCommentOn(overlay, document.getElementById("target"), "once");
       const data = overlay.serializeComments();
       overlay.cleanup();
 
@@ -315,11 +328,11 @@ describe("persistence", () => {
       height: h,
     });
 
-    it("hides the circle while the anchor element has zero size and restores it after", () => {
+    it("hides the circle while the anchor element has zero size and restores it after", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
       target.getBoundingClientRect = rect(200, 100);
-      const comment = createCommentOn(overlay, target, "hideable");
+      const comment = await createCommentOn(overlay, target, "hideable");
       const circle = overlay.shadowRoot.querySelector(
         `[data-comment-id="${comment.id}"]`
       );
@@ -337,9 +350,9 @@ describe("persistence", () => {
       expect(circle.style.display).not.toBe("none");
     });
 
-    it("does not serialize the hidden flag", () => {
+    it("does not serialize the hidden flag", async () => {
       overlay = makeOverlay();
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "x"
@@ -349,7 +362,7 @@ describe("persistence", () => {
       expect(serialized.hidden).toBeUndefined();
     });
 
-    it("hides the circle when the clicked element vanishes even if the container stays visible", () => {
+    it("hides the circle when the clicked element vanishes even if the container stays visible", async () => {
       // Real case: an <img class="slogan-img"> inside a large .container —
       // responsive media queries hide the image but never the container.
       document.body.innerHTML = `<div class="container slogan">Some surrounding content that stays<img id="pic" src="x.png" alt=""></div>`;
@@ -359,7 +372,7 @@ describe("persistence", () => {
       img.getBoundingClientRect = rect(120, 80);
 
       overlay = makeOverlay();
-      const comment = createCommentOn(overlay, img, "on the image");
+      const comment = await createCommentOn(overlay, img, "on the image");
       expect(comment.container).toBe(container);
       expect(comment.anchor.targetSelector).toBe("#pic");
       const circle = overlay.shadowRoot.querySelector(
@@ -377,7 +390,7 @@ describe("persistence", () => {
       expect(comment.hidden).toBe(false);
     });
 
-    it("re-derives the target from targetSelector after a restore", () => {
+    it("re-derives the target from targetSelector after a restore", async () => {
       document.body.innerHTML = `<div class="container slogan">Persistent content around<img id="pic" src="x.png" alt=""></div>`;
       const container = document.querySelector(".container");
       const img = document.getElementById("pic");
@@ -385,7 +398,7 @@ describe("persistence", () => {
       img.getBoundingClientRect = rect(120, 80);
 
       overlay = makeOverlay();
-      createCommentOn(overlay, img, "restored target");
+      await createCommentOn(overlay, img, "restored target");
       const data = overlay.serializeComments();
       overlay.cleanup();
 
@@ -407,9 +420,13 @@ describe("persistence", () => {
       localStorage.clear();
     });
 
-    it("auto-saves and auto-restores comments across overlay instances", () => {
+    it("auto-saves and auto-restores comments across overlay instances", async () => {
       overlay = makeOverlay({ persistence: "localStorage" });
-      createCommentOn(overlay, document.getElementById("target"), "persisted");
+      await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "persisted"
+      );
       overlay.cleanup();
 
       overlay = makeOverlay({ persistence: "localStorage" });
@@ -418,9 +435,9 @@ describe("persistence", () => {
       expect(overlay.comments[0].anchorState).toBe("anchored");
     });
 
-    it("persists replies", () => {
+    it("persists replies", async () => {
       overlay = makeOverlay({ persistence: "localStorage" });
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "with reply"
@@ -433,13 +450,17 @@ describe("persistence", () => {
       expect(overlay.comments[0].replies[0].text).toBe("the reply");
     });
 
-    it("does not touch localStorage without the option", () => {
+    it("does not touch localStorage without the option", async () => {
       overlay = makeOverlay();
-      createCommentOn(overlay, document.getElementById("target"), "volatile");
+      await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "volatile"
+      );
       expect(localStorage.getItem("helldots-comments")).toBeNull();
     });
 
-    it("preserves other pages' stored comments when syncing", () => {
+    it("preserves other pages' stored comments when syncing", async () => {
       localStorage.setItem(
         "helldots-comments",
         JSON.stringify([
@@ -456,19 +477,19 @@ describe("persistence", () => {
         ])
       );
       overlay = makeOverlay({ persistence: "localStorage" });
-      createCommentOn(overlay, document.getElementById("target"), "mine");
+      await createCommentOn(overlay, document.getElementById("target"), "mine");
 
       const stored = JSON.parse(localStorage.getItem("helldots-comments"));
       expect(stored.map((c) => c.text).sort()).toEqual(["mine", "other page"]);
     });
 
-    it("deleteComment removes circle, memory, storage and notifies", () => {
+    it("deleteComment removes circle, memory, storage and notifies", async () => {
       const onCommentDeleted = vi.fn();
       overlay = makeOverlay({
         persistence: "localStorage",
         onCommentDeleted,
       });
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "doomed"
@@ -518,9 +539,9 @@ describe("persistence", () => {
       localStorage.clear();
     });
 
-    it("new comments start as open and serialize their status", () => {
+    it("new comments start as open and serialize their status", async () => {
       overlay = makeOverlay();
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "fresh"
@@ -529,13 +550,13 @@ describe("persistence", () => {
       expect(overlay.serializeComments()[0].status).toBe("open");
     });
 
-    it("setCommentStatus updates, persists and notifies", () => {
+    it("setCommentStatus updates, persists and notifies", async () => {
       const onCommentStatusChanged = vi.fn();
       overlay = makeOverlay({
         persistence: "localStorage",
         onCommentStatusChanged,
       });
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "lifecycle"
@@ -552,9 +573,9 @@ describe("persistence", () => {
       expect(stored[0].status).toBe("in_progress");
     });
 
-    it("status survives a reload round-trip", () => {
+    it("status survives a reload round-trip", async () => {
       overlay = makeOverlay({ persistence: "localStorage" });
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "kept"
@@ -566,9 +587,13 @@ describe("persistence", () => {
       expect(overlay.comments[0].status).toBe("resolved");
     });
 
-    it("restores legacy entries without status as open", () => {
+    it("restores legacy entries without status as open", async () => {
       overlay = makeOverlay();
-      createCommentOn(overlay, document.getElementById("target"), "legacy");
+      await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "legacy"
+      );
       const data = overlay.serializeComments();
       delete data[0].status;
       overlay.cleanup();
@@ -578,9 +603,9 @@ describe("persistence", () => {
       expect(overlay.comments[0].status).toBe("open");
     });
 
-    it("rejects unknown ids and invalid statuses, including the removed closed", () => {
+    it("rejects unknown ids and invalid statuses, including the removed closed", async () => {
       overlay = makeOverlay();
-      const comment = createCommentOn(
+      const comment = await createCommentOn(
         overlay,
         document.getElementById("target"),
         "guarded"
@@ -591,9 +616,13 @@ describe("persistence", () => {
       expect(comment.status).toBe("open");
     });
 
-    it("migrates legacy closed entries to resolved on load", () => {
+    it("migrates legacy closed entries to resolved on load", async () => {
       overlay = makeOverlay();
-      createCommentOn(overlay, document.getElementById("target"), "legacy");
+      await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "legacy"
+      );
       const data = overlay.serializeComments();
       data[0].status = "closed";
       overlay.cleanup();
@@ -603,7 +632,7 @@ describe("persistence", () => {
       expect(overlay.comments[0].status).toBe("resolved");
     });
 
-    it("resolving a comment removes its marker; reopening restores it", () => {
+    it("resolving a comment removes its marker; reopening restores it", async () => {
       const rect = (w, h) => () => ({
         left: 0,
         top: 0,
@@ -615,7 +644,7 @@ describe("persistence", () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
       target.getBoundingClientRect = rect(300, 200);
-      const comment = createCommentOn(overlay, target, "resolve me");
+      const comment = await createCommentOn(overlay, target, "resolve me");
       const circle = overlay.shadowRoot.querySelector(
         `[data-comment-id="${comment.id}"]`
       );
