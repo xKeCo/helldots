@@ -641,6 +641,33 @@ export const getStyles = () => `
         border-style: dashed;
     }
 
+    .${CLASSES.CONTEXT_BLOCK} {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 11px;
+    }
+    .${CLASSES.CONTEXT_BLOCK} img {
+        width: 100%;
+        border-radius: 6px;
+        margin-bottom: 6px;
+        cursor: zoom-in;
+    }
+    .${CLASSES.CONTEXT_ROW} {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        opacity: 0.75;
+    }
+    /* URLs and user agents have no spaces to break on, so the value column
+       would otherwise push the row wider than the panel. */
+    .${CLASSES.CONTEXT_ROW} span:last-child {
+        text-align: right;
+        word-break: break-all;
+    }
+
     .${CLASSES.INBOX_CARD_REPLY_LINK} {
         align-self: flex-start;
         background: transparent;

@@ -71,6 +71,8 @@ export const CLASSES = {
   BADGE_PRIORITY: "helldots-badge--priority",
   BADGE_TAG: "helldots-badge--tag",
   BADGE_DURATION: "helldots-badge--duration",
+  CONTEXT_BLOCK: "inbox-context",
+  CONTEXT_ROW: "inbox-context-row",
   HIGHLIGHT: "helldots-highlight",
 };
 

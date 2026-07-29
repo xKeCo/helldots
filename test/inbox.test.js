@@ -949,3 +949,105 @@ describe("inbox sidebar", () => {
     });
   });
 });
+
+describe("context block in the detail view", () => {
+  let overlay;
+
+  beforeEach(() => {
+    document.elementFromPoint = () => null;
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  const withContext = {
+    id: 1,
+    text: "t",
+    author: "Ana",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    page: location.pathname,
+    replies: [],
+    screenshots: [],
+    status: "open",
+    type: null,
+    priority: null,
+    tags: [],
+    resolvedAt: null,
+    anchorState: "anchored",
+    contextScreenshot: "data:image/jpeg;base64,auto",
+    context: {
+      version: 1,
+      url: "https://example.test/pricing",
+      viewport: { width: 1440, height: 900 },
+      screen: { width: 2560, height: 1440 },
+      devicePixelRatio: 2,
+      userAgent: "ua",
+      browser: { name: "Chrome", version: "120" },
+      os: { name: "macOS", version: "14.2" },
+      language: "es-CO",
+    },
+  };
+
+  it("lists url, viewport, screen, browser and OS", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([withContext]);
+    const panel = openInbox(overlay);
+    overlay.inboxView.openDetail(1);
+    const text = panel.querySelector(`.${CLASSES.CONTEXT_BLOCK}`).textContent;
+
+    expect(text).toContain("https://example.test/pricing");
+    expect(text).toContain("1440×900");
+    expect(text).toContain("2560×1440");
+    expect(text).toContain("Chrome 120");
+    expect(text).toContain("macOS 14.2");
+  });
+
+  it("renders the automatic screenshot with its own label", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([withContext]);
+    const panel = openInbox(overlay);
+    overlay.inboxView.openDetail(1);
+    const block = panel.querySelector(`.${CLASSES.CONTEXT_BLOCK}`);
+    const img = block.querySelector("img");
+
+    expect(img.src).toBe("data:image/jpeg;base64,auto");
+    expect(img.alt).toBe("Automatic context");
+  });
+
+  it("opens the lightbox when the automatic screenshot is clicked", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([withContext]);
+    const panel = openInbox(overlay);
+    overlay.inboxView.openDetail(1);
+    const showLightboxSpy = vi.spyOn(overlay, "showLightbox");
+    panel
+      .querySelector(`.${CLASSES.CONTEXT_BLOCK} img`)
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(showLightboxSpy).toHaveBeenCalledWith("data:image/jpeg;base64,auto");
+  });
+
+  it("renders nothing for legacy comments with no context", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([
+      { ...withContext, context: null, contextScreenshot: null },
+    ]);
+    const panel = openInbox(overlay);
+    overlay.inboxView.openDetail(1);
+    expect(panel.querySelector(`.${CLASSES.CONTEXT_BLOCK}`)).toBeNull();
+  });
+
+  it("renders the block with only a screenshot and no metadata", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([{ ...withContext, context: null }]);
+    const panel = openInbox(overlay);
+    overlay.inboxView.openDetail(1);
+    const block = panel.querySelector(`.${CLASSES.CONTEXT_BLOCK}`);
+    expect(block.querySelector("img")).not.toBeNull();
+    expect(block.querySelectorAll(`.${CLASSES.CONTEXT_ROW}`)).toHaveLength(0);
+  });
+});

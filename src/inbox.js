@@ -491,6 +491,65 @@ export class InboxView {
     return row.children.length ? row : null;
   }
 
+  /**
+   * RF2 — the environment the comment was reported from, plus the
+   * automatic capture. Returns null for comments created before RF1/RF2.
+   * @param {any} comment
+   * @returns {HTMLElement | null}
+   */
+  _buildContextBlock(comment) {
+    const { context, contextScreenshot } = comment;
+    if (!context && !contextScreenshot) return null;
+
+    const block = document.createElement("div");
+    block.className = CLASSES.CONTEXT_BLOCK;
+
+    const title = document.createElement("div");
+    title.className = CLASSES.INBOX_FILTER_SECTION;
+    title.textContent = this.strings.contextSection;
+    block.appendChild(title);
+
+    if (contextScreenshot) {
+      const img = document.createElement("img");
+      img.className = CLASSES.SCREENSHOT_IMG;
+      img.src = contextScreenshot;
+      img.alt = this.strings.autoScreenshotLabel;
+      img.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.callbacks.onShowLightbox(contextScreenshot);
+      });
+      block.appendChild(img);
+    }
+
+    if (context) {
+      const addRow = (label, value) => {
+        if (!value) return;
+        const row = document.createElement("div");
+        row.className = CLASSES.CONTEXT_ROW;
+        const key = document.createElement("span");
+        key.textContent = label;
+        const val = document.createElement("span");
+        val.textContent = value;
+        row.appendChild(key);
+        row.appendChild(val);
+        block.appendChild(row);
+      };
+
+      const size = (dimensions) =>
+        dimensions ? `${dimensions.width}×${dimensions.height}` : "";
+      const named = (entry) =>
+        entry?.name ? `${entry.name} ${entry.version || ""}`.trim() : "";
+
+      addRow(this.strings.contextUrl, context.url);
+      addRow(this.strings.contextViewport, size(context.viewport));
+      addRow(this.strings.contextScreen, size(context.screen));
+      addRow(this.strings.contextBrowser, named(context.browser));
+      addRow(this.strings.contextOs, named(context.os));
+    }
+
+    return block;
+  }
+
   _buildCardActions(comment) {
     return createCommentActions(comment, {
       strings: this.strings,
@@ -560,6 +619,9 @@ export class InboxView {
     detail.className = CLASSES.INBOX_DETAIL;
 
     detail.appendChild(this._buildCard(comment, { interactive: false }));
+
+    const context = this._buildContextBlock(comment);
+    if (context) detail.appendChild(context);
 
     const replies = document.createElement("div");
     replies.className = CLASSES.INBOX_REPLIES;
