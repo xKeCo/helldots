@@ -821,4 +821,94 @@ describe("inbox sidebar", () => {
       expect(panel.querySelector(`.${CLASSES.BADGE_DURATION}`)).toBeNull();
     });
   });
+
+  describe("type and priority filters", () => {
+    const make = (id, type, priority) => ({
+      id,
+      text: `c${id}`,
+      author: "Ana",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      page: location.pathname,
+      replies: [],
+      screenshots: [],
+      status: "open",
+      tags: [],
+      resolvedAt: null,
+      anchorState: "anchored",
+      type,
+      priority,
+    });
+
+    const comments = [
+      make(1, "bug", "high"),
+      make(2, "suggestion", "low"),
+      make(3, null, null),
+    ];
+
+    it("defaults to showing everything", () => {
+      overlay = makeOverlay();
+      overlay.loadComments(comments);
+      openInbox(overlay);
+      expect(overlay.inboxView.filteredComments()).toHaveLength(3);
+    });
+
+    it("filters by type", () => {
+      overlay = makeOverlay();
+      overlay.loadComments(comments);
+      openInbox(overlay);
+      overlay.inboxView.typeFilter = "bug";
+      expect(overlay.inboxView.filteredComments().map((c) => c.id)).toEqual([
+        1,
+      ]);
+    });
+
+    it("filters by priority", () => {
+      overlay = makeOverlay();
+      overlay.loadComments(comments);
+      openInbox(overlay);
+      overlay.inboxView.priorityFilter = "low";
+      expect(overlay.inboxView.filteredComments().map((c) => c.id)).toEqual([
+        2,
+      ]);
+    });
+
+    it("combines type and priority with AND", () => {
+      overlay = makeOverlay();
+      overlay.loadComments(comments);
+      openInbox(overlay);
+      overlay.inboxView.typeFilter = "bug";
+      overlay.inboxView.priorityFilter = "low";
+      expect(overlay.inboxView.filteredComments()).toHaveLength(0);
+    });
+
+    it("combines with the existing status filter", () => {
+      overlay = makeOverlay();
+      const resolved = { ...make(4, "bug", "high"), status: "resolved" };
+      overlay.loadComments([...comments, resolved]);
+      openInbox(overlay);
+      overlay.inboxView.typeFilter = "bug";
+      overlay.inboxView.statusFilter = "unresolved";
+      expect(overlay.inboxView.filteredComments().map((c) => c.id)).toEqual([
+        1,
+      ]);
+    });
+
+    it("renders a menu option per type and per priority", () => {
+      overlay = makeOverlay();
+      overlay.loadComments(comments);
+      const panel = openInbox(overlay);
+      overlay.inboxView.render();
+      expect(panel.querySelectorAll("[data-filter-type]")).toHaveLength(5);
+      expect(panel.querySelectorAll("[data-filter-priority]")).toHaveLength(4);
+    });
+
+    it("selecting a type option applies the filter", () => {
+      overlay = makeOverlay();
+      overlay.loadComments(comments);
+      const panel = openInbox(overlay);
+      overlay.inboxView.render();
+      click(panel.querySelector('[data-filter-type="bug"]'));
+      expect(overlay.inboxView.typeFilter).toBe("bug");
+    });
+  });
 });

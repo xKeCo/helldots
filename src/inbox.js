@@ -3,7 +3,13 @@
 // to CommentOverlay through the callbacks contract passed to the
 // constructor, so this module never touches storage or the page markers.
 
-import { CLASSES, TYPE_COLORS, PRIORITY_COLORS } from "./constants.js";
+import {
+  CLASSES,
+  TYPE_COLORS,
+  PRIORITY_COLORS,
+  COMMENT_TYPES,
+  PRIORITIES,
+} from "./constants.js";
 import { buildAgentContext } from "./agent-context.js";
 import { formatDuration, formatTemplate } from "./i18n.js";
 import {
@@ -50,6 +56,8 @@ export class InboxView {
     this.callbacks = callbacks;
     this.pageFilter = "page"; // "all" | "page"
     this.statusFilter = "all"; // "all" | "unresolved" | "resolved"
+    this.typeFilter = "all"; // "all" | COMMENT_TYPES
+    this.priorityFilter = "all"; // "all" | PRIORITIES
     this.detailId = null;
     /** @type {HTMLElement | null} */
     this.el = null;
@@ -113,6 +121,14 @@ export class InboxView {
       comments = comments.filter((comment) => comment.status === "resolved");
     } else if (this.statusFilter === "unresolved") {
       comments = comments.filter((comment) => comment.status !== "resolved");
+    }
+    if (this.typeFilter !== "all") {
+      comments = comments.filter((comment) => comment.type === this.typeFilter);
+    }
+    if (this.priorityFilter !== "all") {
+      comments = comments.filter(
+        (comment) => comment.priority === this.priorityFilter
+      );
     }
     // Resolved sink to the bottom; both partitions keep their original order.
     return [
@@ -265,6 +281,32 @@ export class InboxView {
         "filterStatus",
         value,
         () => (this.statusFilter = value)
+      );
+    }
+
+    addSection(this.strings.filterByType);
+    for (const value of ["all", ...COMMENT_TYPES]) {
+      addOption(
+        value === "all"
+          ? this.strings.filterStatusAll
+          : typeLabelOf(value, this.strings),
+        this.typeFilter === value,
+        "filterType",
+        value,
+        () => (this.typeFilter = value)
+      );
+    }
+
+    addSection(this.strings.filterByPriority);
+    for (const value of ["all", ...PRIORITIES]) {
+      addOption(
+        value === "all"
+          ? this.strings.filterStatusAll
+          : priorityLabelOf(value, this.strings),
+        this.priorityFilter === value,
+        "filterPriority",
+        value,
+        () => (this.priorityFilter = value)
       );
     }
 
