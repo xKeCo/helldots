@@ -26,6 +26,28 @@ export type AnchorState = "anchored" | "orphaned" | "inactive";
 /** RF09 — comment lifecycle state. */
 export type CommentStatus = "open" | "in_progress" | "resolved";
 
+/** RF3 — comment category. `null` means deliberately unclassified. */
+export type CommentType = "bug" | "suggestion" | "question" | "improvement";
+
+/** RF4 — comment priority. `null` means deliberately unprioritised. */
+export type CommentPriority = "high" | "medium" | "low";
+
+/** RF2 — environment snapshot taken when the comment was created. */
+export interface CommentContext {
+  version: 1;
+  /** Full location.href at creation time. */
+  url: string;
+  viewport: { width: number; height: number };
+  /** Screen resolution (screen.width/height). */
+  screen: { width: number; height: number };
+  devicePixelRatio: number;
+  /** Raw UA — always stored, even when browser/os parsing fails. */
+  userAgent: string;
+  browser: { name: string; version: string };
+  os: { name: string; version: string };
+  language: string;
+}
+
 export interface SerializedComment {
   id: number;
   text: string;

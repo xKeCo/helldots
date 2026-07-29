@@ -61,6 +61,18 @@ export const CLASSES = {
   INBOX_NAV_BTN: "inbox-nav-btn",
   INBOX_REPLIES: "inbox-replies",
   INBOX_EMPTY: "inbox-empty",
+  INBOX_BADGES: "inbox-badges",
+  BADGE: "helldots-badge",
+  BADGE_TYPE: "helldots-badge--type",
+  BADGE_PRIORITY: "helldots-badge--priority",
+  BADGE_TAG: "helldots-badge--tag",
+  BADGE_DURATION: "helldots-badge--duration",
+  CLASSIFY_ROW: "classify-row",
+  TAGS_INPUT: "tags-input",
+  TAG_CHIP: "tag-chip",
+  TAG_CHIP_REMOVE: "tag-chip-remove",
+  CONTEXT_BLOCK: "inbox-context",
+  CONTEXT_ROW: "inbox-context-row",
   HIGHLIGHT: "helldots-highlight",
 };
 
@@ -82,6 +94,29 @@ export const STATUS_COLORS = {
   open: "#2E90FA",
   in_progress: "#FF9F0A",
   resolved: "#30D158",
+};
+
+// RF3 — comment category. Order matters: it's the order shown in the picker.
+export const COMMENT_TYPES = ["bug", "suggestion", "question", "improvement"];
+
+export const TYPE_COLORS = {
+  bug: "#FF453A",
+  suggestion: "#BF5AF2",
+  question: "#64D2FF",
+  improvement: "#5E5CE6",
+};
+
+// RF4 — priority, ordered high→low so the picker reads as a scale.
+export const PRIORITIES = ["high", "medium", "low"];
+
+// Deliberate red/orange/grey ramp: it reads as urgency at a glance. `high`
+// sharing red with `bug` (and `medium` sharing orange with `in_progress`) is
+// fine — they're different dimensions in different UI slots, and no badge
+// ever conveys meaning by colour alone (WCAG 1.4.1).
+export const PRIORITY_COLORS = {
+  high: "#FF453A",
+  medium: "#FF9F0A",
+  low: "#8E8E93",
 };
 
 export const SELECTORS = {

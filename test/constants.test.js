@@ -7,6 +7,10 @@ import {
   SELECTORS,
   Z_INDEX,
   CURSOR_SVG,
+  COMMENT_TYPES,
+  TYPE_COLORS,
+  PRIORITIES,
+  PRIORITY_COLORS,
 } from "../src/constants.js";
 
 const srcDir = resolve(process.cwd(), "src");
@@ -60,5 +64,29 @@ describe("constants", () => {
     Object.keys(IDS).forEach((key) => {
       expect(sourceText.includes(`IDS.${key}`)).toBe(true);
     });
+  });
+});
+
+describe("classification constants", () => {
+  it("exposes the four RF3 types in picker order", () => {
+    expect(COMMENT_TYPES).toEqual([
+      "bug",
+      "suggestion",
+      "question",
+      "improvement",
+    ]);
+  });
+
+  it("exposes priorities ordered high to low", () => {
+    expect(PRIORITIES).toEqual(["high", "medium", "low"]);
+  });
+
+  it("has a colour for every type and priority", () => {
+    for (const type of COMMENT_TYPES) {
+      expect(TYPE_COLORS[type]).toMatch(/^#[0-9A-F]{6}$/i);
+    }
+    for (const priority of PRIORITIES) {
+      expect(PRIORITY_COLORS[priority]).toMatch(/^#[0-9A-F]{6}$/i);
+    }
   });
 });

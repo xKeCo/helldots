@@ -66,3 +66,9 @@ describe("i18n", () => {
     expect(suspicious).toBeNull();
   });
 });
+
+describe("locale parity", () => {
+  it("ships the same keys in both locales", () => {
+    expect(Object.keys(en).sort()).toEqual(Object.keys(es).sort());
+  });
+});
