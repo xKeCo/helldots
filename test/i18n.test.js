@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { getStrings, detectLocale, formatTemplate, formatDuration } from "../src/i18n.js";
+import {
+  getStrings,
+  detectLocale,
+  formatTemplate,
+  formatDuration,
+} from "../src/i18n.js";
 import en from "../src/locales/en.js";
 import es from "../src/locales/es.js";
 
@@ -82,14 +87,51 @@ describe("i18n", () => {
       expect(formatDuration(2 * DAY + 4 * HOUR, strings)).toBe("2d 4h");
     });
 
+    it("enforces exact branch boundaries", () => {
+      // Just below 1 minute threshold
+      expect(formatDuration(59_999, strings)).toBe("<1m");
+      // Exactly at 1 minute threshold
+      expect(formatDuration(60_000, strings)).toBe("1m");
+      // Exactly at 1 hour threshold (must be bare "1h", not "1h 0m")
+      expect(formatDuration(3_600_000, strings)).toBe("1h");
+      // Exactly at 1 day threshold (must be bare "1d", not "1d 0h")
+      expect(formatDuration(86_400_000, strings)).toBe("1d");
+    });
+
     it("returns empty string for invalid input instead of NaN", () => {
       expect(formatDuration(NaN, strings)).toBe("");
       expect(formatDuration(-1000, strings)).toBe("");
       expect(formatDuration(Infinity, strings)).toBe("");
     });
 
-    it("localises through the strings dictionary", () => {
-      expect(formatDuration(90 * MIN, getStrings("es"))).toBe("1h 30m");
+    it("reads every duration string from the injected dictionary", () => {
+      // Use a fake dictionary with distinguishable templates to verify
+      // the function actually reads from strings, not hardcoded values
+      const fakeStrings = {
+        durationLessThanMinute: "<1 minute",
+        minutesAgoTemplate: "{n} minutes",
+        hoursAgoTemplate: "{n} hours",
+        daysAgoTemplate: "{n} days",
+      };
+
+      // Sub-minute must use durationLessThanMinute
+      expect(formatDuration(30_000, fakeStrings)).toBe("<1 minute");
+
+      // Minutes only
+      expect(formatDuration(45 * MIN, fakeStrings)).toBe("45 minutes");
+
+      // Hours and minutes
+      expect(formatDuration(3 * HOUR + 12 * MIN, fakeStrings)).toBe(
+        "3 hours 12 minutes"
+      );
+
+      // Hours only (no trailing component)
+      expect(formatDuration(3 * HOUR, fakeStrings)).toBe("3 hours");
+
+      // Days and hours
+      expect(formatDuration(2 * DAY + 4 * HOUR, fakeStrings)).toBe(
+        "2 days 4 hours"
+      );
     });
   });
 
