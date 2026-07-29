@@ -6,7 +6,9 @@ import {
   createTooltip,
   createThreadPopover,
   createReplyElement,
+  createClassifyRow,
 } from "../src/components.js";
+import { getStrings } from "../src/i18n.js";
 import { CLASSES, IDS } from "../src/constants.js";
 
 describe("components", () => {
@@ -225,5 +227,91 @@ describe("components", () => {
       );
       expect(gallery).toBeTruthy();
     });
+  });
+});
+
+describe("createClassifyRow", () => {
+  const strings = getStrings("en");
+
+  it("starts neutral", () => {
+    const row = createClassifyRow(strings);
+    expect(row.getType()).toBeNull();
+    expect(row.getPriority()).toBeNull();
+    expect(row.getTags()).toEqual([]);
+  });
+
+  it("records a type and a priority selection", () => {
+    const row = createClassifyRow(strings);
+    const pick = (value) =>
+      [...row.container.querySelectorAll("[data-picker-option]")]
+        .find((i) => i.dataset.pickerOption === value)
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    pick("bug");
+    pick("high");
+
+    expect(row.getType()).toBe("bug");
+    expect(row.getPriority()).toBe("high");
+  });
+
+  it("adds a tag on Enter and renders it as a chip", () => {
+    const row = createClassifyRow(strings);
+    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
+
+    input.value = "Checkout";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+
+    expect(row.getTags()).toEqual(["checkout"]);
+    expect(row.container.querySelectorAll(`.${CLASSES.TAG_CHIP}`)).toHaveLength(
+      1
+    );
+    expect(input.value).toBe("");
+  });
+
+  it("adds a tag on comma", () => {
+    const row = createClassifyRow(strings);
+    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
+    input.value = "ios";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "," }));
+    expect(row.getTags()).toEqual(["ios"]);
+  });
+
+  it("ignores blanks and duplicates", () => {
+    const row = createClassifyRow(strings);
+    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
+    const add = (value) => {
+      input.value = value;
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    };
+
+    add("checkout");
+    add("  CHECKOUT  ");
+    add("   ");
+
+    expect(row.getTags()).toEqual(["checkout"]);
+  });
+
+  it("removes a tag through its chip button", () => {
+    const row = createClassifyRow(strings);
+    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
+    input.value = "checkout";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+
+    row.container
+      .querySelector(`.${CLASSES.TAG_CHIP_REMOVE}`)
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(row.getTags()).toEqual([]);
+    expect(row.container.querySelectorAll(`.${CLASSES.TAG_CHIP}`)).toHaveLength(
+      0
+    );
+  });
+});
+
+describe("createCommentBox", () => {
+  it("exposes the classification row", () => {
+    const box = createCommentBox(getStrings("en"));
+    expect(box.querySelector(`.${CLASSES.CLASSIFY_ROW}`)).not.toBeNull();
+    expect(box.classify.getType()).toBeNull();
   });
 });

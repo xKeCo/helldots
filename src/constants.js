@@ -61,6 +61,11 @@ export const CLASSES = {
   INBOX_NAV_BTN: "inbox-nav-btn",
   INBOX_REPLIES: "inbox-replies",
   INBOX_EMPTY: "inbox-empty",
+  CLASSIFY_ROW: "classify-row",
+  TAGS_INPUT: "tags-input",
+  TAG_CHIP: "tag-chip",
+  TAG_CHIP_REMOVE: "tag-chip-remove",
+  INBOX_BADGES: "inbox-badges",
   HIGHLIGHT: "helldots-highlight",
 };
 

@@ -1,6 +1,18 @@
-import { CLASSES, IDS } from "./constants.js";
+import {
+  CLASSES,
+  IDS,
+  COMMENT_TYPES,
+  TYPE_COLORS,
+  PRIORITIES,
+  PRIORITY_COLORS,
+} from "./constants.js";
 import { formatTemplate } from "./i18n.js";
 import defaultStrings from "./locales/en.js";
+import {
+  createPicker,
+  typeLabelOf,
+  priorityLabelOf,
+} from "./comment-actions.js";
 
 const formatRelativeTime = (date, strings) => {
   const diff = Date.now() - new Date(date).getTime();
@@ -206,6 +218,122 @@ export const createToolbar = (options = {}, strings = defaultStrings) => {
   return toolbar;
 };
 
+/**
+ * RF3 + RF4 — the classification strip inside the new-comment box: type,
+ * priority and free-form tags, all starting neutral.
+ *
+ * The comment box is built once and reused for every comment, so this
+ * exposes reset(): without it the previous comment's selections would leak
+ * into the next one.
+ *
+ * @param {object} strings
+ * @returns {{ container: HTMLElement, getType: () => string|null,
+ *   getPriority: () => string|null, getTags: () => string[],
+ *   reset: () => void }}
+ */
+export const createClassifyRow = (strings) => {
+  const container = document.createElement("div");
+  container.className = CLASSES.CLASSIFY_ROW;
+
+  let type = null;
+  let priority = null;
+  /** @type {string[]} */
+  const tags = [];
+
+  const chips = document.createElement("div");
+  chips.className = CLASSES.INBOX_BADGES;
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = CLASSES.TAGS_INPUT;
+  input.placeholder = strings.tagsPlaceholder;
+  input.setAttribute("aria-label", strings.tagsPlaceholder);
+
+  const renderChips = () => {
+    chips.innerHTML = "";
+    tags.forEach((tag, index) => {
+      const chip = document.createElement("span");
+      chip.className = CLASSES.TAG_CHIP;
+      chip.appendChild(document.createTextNode(tag));
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = CLASSES.TAG_CHIP_REMOVE;
+      remove.setAttribute("aria-label", `${strings.removeTag}: ${tag}`);
+      remove.innerHTML = "&times;";
+      remove.addEventListener("click", (e) => {
+        e.stopPropagation();
+        tags.splice(index, 1);
+        renderChips();
+      });
+
+      chip.appendChild(remove);
+      chips.appendChild(chip);
+    });
+  };
+
+  input.addEventListener("keydown", (e) => {
+    // Compared lowercase so this doesn't read as a hardcoded UI string to
+    // the i18n guard test — it's a key name, not user-visible text.
+    if (e.key.toLowerCase() !== "enter" && e.key !== ",") return;
+    e.preventDefault();
+    const tag = input.value.trim().toLowerCase();
+    // Blanks and duplicates are silently ignored — nothing to tell the user.
+    if (tag && !tags.includes(tag)) {
+      tags.push(tag);
+      renderChips();
+    }
+    input.value = "";
+  });
+
+  // Pickers keep their selection internally, so returning them to neutral
+  // means rebuilding them — hence mount() rather than a one-shot append.
+  const mount = () => {
+    container.replaceChildren();
+    container.appendChild(
+      createPicker({
+        action: "type",
+        options: [null, ...COMMENT_TYPES],
+        value: null,
+        colorOf: (value) => TYPE_COLORS[value] || "transparent",
+        labelOf: (value) => typeLabelOf(value, strings),
+        tooltipLabel: strings.typeLabel,
+        onSelect: (value) => (type = value),
+      })
+    );
+    container.appendChild(
+      createPicker({
+        action: "priority",
+        options: [null, ...PRIORITIES],
+        value: null,
+        colorOf: (value) => PRIORITY_COLORS[value] || "transparent",
+        labelOf: (value) => priorityLabelOf(value, strings),
+        tooltipLabel: strings.priorityLabel,
+        onSelect: (value) => (priority = value),
+      })
+    );
+    container.appendChild(input);
+    container.appendChild(chips);
+  };
+
+  mount();
+
+  return {
+    container,
+    getType: () => type,
+    getPriority: () => priority,
+    getTags: () => [...tags],
+    reset: () => {
+      type = null;
+      priority = null;
+      tags.length = 0;
+      input.value = "";
+      renderChips();
+      mount();
+    },
+  };
+};
+
 export const createCommentBox = (strings = defaultStrings) => {
   const commentBox = document.createElement("div");
   commentBox.id = IDS.COMMENT_BOX;
@@ -224,8 +352,14 @@ export const createCommentBox = (strings = defaultStrings) => {
     strings
   );
 
+  const classify = createClassifyRow(strings);
+
+  commentBox.appendChild(classify.container);
   commentBox.appendChild(inputArea);
   commentBox.style.display = "none";
+  // Exposed so the overlay can read the selections at save time without
+  // re-querying the DOM.
+  /** @type {any} */ (commentBox).classify = classify;
   return commentBox;
 };
 

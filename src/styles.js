@@ -149,6 +149,47 @@ export const getStyles = () => `
         gap: 0;
     }
 
+    .${CLASSES.CLASSIFY_ROW} {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px 10px 0;
+    }
+    .${CLASSES.TAGS_INPUT} {
+        flex: 1 1 90px;
+        min-width: 90px;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: inherit;
+        font-size: 12px;
+        padding: 2px 0;
+    }
+    .${CLASSES.TAG_CHIP} {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 6px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.1);
+        font-size: 11px;
+        line-height: 1.4;
+    }
+    .${CLASSES.TAG_CHIP_REMOVE} {
+        background: none;
+        border: none;
+        color: inherit;
+        cursor: pointer;
+        padding: 0;
+        font-size: 13px;
+        line-height: 1;
+        opacity: 0.6;
+    }
+    .${CLASSES.TAG_CHIP_REMOVE}:hover {
+        opacity: 1;
+    }
+
     #${IDS.COMMENT_INPUT} {
         flex: 1;
         min-height: 20px;

@@ -517,6 +517,7 @@ class CommentOverlay {
     this.removePreviewCircle();
     this._clearScreenshotPreview();
     this._pendingContextScreenshot = null;
+    /** @type {any} */ (this.commentBox).classify?.reset();
 
     if (this.commentMode) {
       document.body.classList.add(CLASSES.COMMENT_CURSOR);
@@ -556,11 +557,10 @@ class CommentOverlay {
       screenshots: this._pendingScreenshots
         ? [...this._pendingScreenshots]
         : [],
-      // Task 11 replaces these literals with real captured values
-      // (classification UI is not wired up yet at this point in the plan).
-      type: null,
-      priority: null,
-      tags: [],
+      type: /** @type {any} */ (this.commentBox).classify?.getType() ?? null,
+      priority:
+        /** @type {any} */ (this.commentBox).classify?.getPriority() ?? null,
+      tags: /** @type {any} */ (this.commentBox).classify?.getTags() ?? [],
       resolvedAt: null,
       context: captureContext(),
       contextScreenshot: this._pendingContextScreenshot,

@@ -527,6 +527,22 @@ describe("CommentOverlay", () => {
       );
       expect(overlay.comments.length).toBe(1);
     });
+
+    it("resets the classification row between comments", async () => {
+      const overlay = makeOverlay({ autoScreenshot: false });
+      overlay.commentBox.classify.getTags(); // row is mounted
+
+      const pick = (value) =>
+        [...overlay.commentBox.querySelectorAll("[data-picker-option]")]
+          .find((i) => i.dataset.pickerOption === value)
+          .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      pick("bug");
+      expect(overlay.commentBox.classify.getType()).toBe("bug");
+
+      overlay.hideCommentBox();
+      expect(overlay.commentBox.classify.getType()).toBeNull();
+    });
   });
 
   describe("tooltip and thread popover lifecycle", () => {
