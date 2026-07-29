@@ -604,6 +604,35 @@ export const getStyles = () => `
         font-weight: 600;
     }
 
+    .${CLASSES.INBOX_BADGES} {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 6px;
+    }
+    .${CLASSES.BADGE} {
+        display: inline-flex;
+        align-items: center;
+        padding: 1px 6px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 10px;
+        font-size: 10px;
+        line-height: 1.6;
+        letter-spacing: 0.01em;
+        white-space: nowrap;
+    }
+    .${CLASSES.BADGE_TYPE},
+    .${CLASSES.BADGE_PRIORITY} {
+        font-weight: 600;
+    }
+    .${CLASSES.BADGE_TAG} {
+        opacity: 0.75;
+    }
+    .${CLASSES.BADGE_DURATION} {
+        opacity: 0.75;
+        border-style: dashed;
+    }
+
     .${CLASSES.INBOX_CARD_REPLY_LINK} {
         align-self: flex-start;
         background: transparent;

@@ -3,9 +3,15 @@
 // to CommentOverlay through the callbacks contract passed to the
 // constructor, so this module never touches storage or the page markers.
 
-import { CLASSES } from "./constants.js";
+import { CLASSES, TYPE_COLORS, PRIORITY_COLORS } from "./constants.js";
 import { buildAgentContext } from "./agent-context.js";
-import { createCommentActions, copyToClipboard } from "./comment-actions.js";
+import { formatDuration, formatTemplate } from "./i18n.js";
+import {
+  createCommentActions,
+  copyToClipboard,
+  typeLabelOf,
+  priorityLabelOf,
+} from "./comment-actions.js";
 import {
   createMetaElement,
   createScreenshotsDisplay,
@@ -313,6 +319,9 @@ export class InboxView {
       card.appendChild(shots);
     }
 
+    const badges = this._buildBadges(comment);
+    if (badges) card.appendChild(badges);
+
     const tag = this._buildTag(comment);
     if (tag) card.appendChild(tag);
 
@@ -365,6 +374,62 @@ export class InboxView {
     tag.className = CLASSES.INBOX_CARD_TAG;
     tag.textContent = label;
     return tag;
+  }
+
+  /**
+   * RF3/RF4/RF5 — classification and resolution-time badges. Every badge
+   * carries text: colour alone must never be the only signal (WCAG 1.4.1).
+   * @param {any} comment
+   * @returns {HTMLElement | null} null when there's nothing to show
+   */
+  _buildBadges(comment) {
+    const row = document.createElement("div");
+    row.className = CLASSES.INBOX_BADGES;
+
+    const addBadge = (text, modifier, color) => {
+      const badge = document.createElement("span");
+      badge.className = `${CLASSES.BADGE} ${modifier}`;
+      badge.textContent = text;
+      if (color) badge.style.borderColor = color;
+      row.appendChild(badge);
+    };
+
+    if (comment.type) {
+      addBadge(
+        typeLabelOf(comment.type, this.strings),
+        CLASSES.BADGE_TYPE,
+        TYPE_COLORS[comment.type]
+      );
+    }
+    if (comment.priority) {
+      addBadge(
+        priorityLabelOf(comment.priority, this.strings),
+        CLASSES.BADGE_PRIORITY,
+        PRIORITY_COLORS[comment.priority]
+      );
+    }
+    for (const tag of comment.tags || []) {
+      addBadge(tag, CLASSES.BADGE_TAG, null);
+    }
+
+    if (comment.status === "resolved") {
+      // Comments resolved before RF5 shipped have no timestamp — show a
+      // dash rather than a duration computed from data we don't have.
+      const elapsed = comment.resolvedAt
+        ? formatDuration(
+            new Date(comment.resolvedAt).getTime() -
+              new Date(comment.createdAt).getTime(),
+            this.strings
+          )
+        : "";
+      addBadge(
+        formatTemplate(this.strings.resolvedInTemplate, elapsed || "—"),
+        CLASSES.BADGE_DURATION,
+        null
+      );
+    }
+
+    return row.children.length ? row : null;
   }
 
   _buildCardActions(comment) {

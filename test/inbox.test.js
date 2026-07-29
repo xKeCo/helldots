@@ -746,4 +746,79 @@ describe("inbox sidebar", () => {
       expect(writeText.mock.calls[0][0]).toContain("Status: in_progress");
     });
   });
+
+  describe("card badges", () => {
+    const base = {
+      id: 1,
+      text: "t",
+      author: "Ana",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      page: location.pathname,
+      replies: [],
+      screenshots: [],
+      status: "open",
+      type: null,
+      priority: null,
+      tags: [],
+      resolvedAt: null,
+      anchorState: "anchored",
+    };
+
+    it("renders no badge row when the comment is fully neutral", () => {
+      overlay = makeOverlay();
+      overlay.loadComments([{ ...base }]);
+      const panel = openInbox(overlay);
+      expect(panel.querySelector(`.${CLASSES.INBOX_BADGES}`)).toBeNull();
+    });
+
+    it("renders type and priority badges with their labels, not just colour", () => {
+      overlay = makeOverlay();
+      overlay.loadComments([{ ...base, type: "bug", priority: "high" }]);
+      const panel = openInbox(overlay);
+      const badges = panel.querySelectorAll(`.${CLASSES.BADGE}`);
+      const labels = [...badges].map((b) => b.textContent);
+      expect(labels).toContain("Bug");
+      expect(labels).toContain("High");
+    });
+
+    it("renders one badge per tag", () => {
+      overlay = makeOverlay();
+      overlay.loadComments([{ ...base, tags: ["checkout", "ios"] }]);
+      const panel = openInbox(overlay);
+      const tags = panel.querySelectorAll(`.${CLASSES.BADGE_TAG}`);
+      expect([...tags].map((t) => t.textContent)).toEqual(["checkout", "ios"]);
+    });
+
+    it("shows the resolution time on resolved comments", () => {
+      overlay = makeOverlay();
+      overlay.loadComments([
+        {
+          ...base,
+          status: "resolved",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          resolvedAt: "2026-01-03T04:00:00.000Z",
+        },
+      ]);
+      const panel = openInbox(overlay);
+      const badge = panel.querySelector(`.${CLASSES.BADGE_DURATION}`);
+      expect(badge.textContent).toBe("Resolved in 2d 4h");
+    });
+
+    it("shows an em dash for legacy resolved comments with no resolvedAt", () => {
+      // Never invent a duration from data that doesn't exist.
+      overlay = makeOverlay();
+      overlay.loadComments([{ ...base, status: "resolved", resolvedAt: null }]);
+      const panel = openInbox(overlay);
+      expect(
+        panel.querySelector(`.${CLASSES.BADGE_DURATION}`).textContent
+      ).toBe("Resolved in —");
+    });
+
+    it("shows no duration badge on unresolved comments", () => {
+      overlay = makeOverlay();
+      overlay.loadComments([{ ...base, status: "in_progress" }]);
+      const panel = openInbox(overlay);
+      expect(panel.querySelector(`.${CLASSES.BADGE_DURATION}`)).toBeNull();
+    });
+  });
 });

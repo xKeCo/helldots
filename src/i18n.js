@@ -25,9 +25,11 @@ export function getStrings(localeCode) {
 }
 
 /**
- * Substitutes `{n}` in a template string, used for relative time labels.
+ * Substitutes `{n}` in a template string, used for relative time labels and
+ * resolution-duration badges (where the substitution is already a string,
+ * e.g. "2d 4h" or the "—" fallback).
  * @param {string} template
- * @param {number} n
+ * @param {number | string} n
  */
 export function formatTemplate(template, n) {
   return template.replace("{n}", String(n));

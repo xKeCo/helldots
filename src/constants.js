@@ -66,6 +66,11 @@ export const CLASSES = {
   TAG_CHIP: "tag-chip",
   TAG_CHIP_REMOVE: "tag-chip-remove",
   INBOX_BADGES: "inbox-badges",
+  BADGE: "helldots-badge",
+  BADGE_TYPE: "helldots-badge--type",
+  BADGE_PRIORITY: "helldots-badge--priority",
+  BADGE_TAG: "helldots-badge--tag",
+  BADGE_DURATION: "helldots-badge--duration",
   HIGHLIGHT: "helldots-highlight",
 };
 
