@@ -563,6 +563,7 @@ export class InboxView {
           buildAgentContext(c, {
             viewportWidth: window.innerWidth,
             viewportHeight: window.innerHeight,
+            strings: this.strings,
           })
         ),
       onSetStatus: (c, status) => this.callbacks.onSetStatus(c.id, status),

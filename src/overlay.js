@@ -746,6 +746,7 @@ class CommentOverlay {
           buildAgentContext(c, {
             viewportWidth: window.innerWidth,
             viewportHeight: window.innerHeight,
+            strings: this.strings,
           })
         ),
       onSetStatus: (c, status) => this.setCommentStatus(c.id, status),

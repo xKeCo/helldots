@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { buildAgentContext } from "../src/agent-context.js";
+import { getStrings } from "../src/i18n.js";
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -114,5 +115,100 @@ describe("buildAgentContext", () => {
     });
     expect(out).toContain("Selector: (none)");
     expect(out).toContain("Element: (unknown)");
+  });
+});
+
+describe("classification and context in the agent block", () => {
+  const base = {
+    id: 1,
+    text: "broken",
+    author: "Ana",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    page: "/pricing",
+    anchor: null,
+    anchorState: "orphaned",
+    container: null,
+    replies: [],
+    status: "open",
+    type: null,
+    priority: null,
+    tags: [],
+    resolvedAt: null,
+    context: null,
+  };
+  const env = {
+    viewportWidth: 1440,
+    viewportHeight: 900,
+    strings: getStrings("en"),
+  };
+
+  it("includes type, priority and tags when set", () => {
+    const block = buildAgentContext(
+      { ...base, type: "bug", priority: "high", tags: ["checkout", "ios"] },
+      env
+    );
+    expect(block).toContain("Type: bug");
+    expect(block).toContain("Priority: high");
+    expect(block).toContain("Tags: checkout, ios");
+  });
+
+  it("omits neutral fields instead of printing (none)", () => {
+    // The agent shouldn't have to read noise for data nobody filled in.
+    const block = buildAgentContext({ ...base }, env);
+    expect(block).not.toContain("Type:");
+    expect(block).not.toContain("Priority:");
+    expect(block).not.toContain("Tags:");
+  });
+
+  it("includes browser, OS and screen when context was captured", () => {
+    const block = buildAgentContext(
+      {
+        ...base,
+        context: {
+          version: 1,
+          url: "https://example.test/pricing",
+          viewport: { width: 1440, height: 900 },
+          screen: { width: 2560, height: 1440 },
+          devicePixelRatio: 2,
+          userAgent: "ua",
+          browser: { name: "Chrome", version: "120" },
+          os: { name: "macOS", version: "14.2" },
+          language: "es-CO",
+        },
+      },
+      env
+    );
+    expect(block).toContain("URL: https://example.test/pricing");
+    expect(block).toContain("Browser: Chrome 120");
+    expect(block).toContain("OS: macOS 14.2");
+    expect(block).toContain("Screen: 2560x1440");
+  });
+
+  it("includes the resolution time on resolved comments", () => {
+    const block = buildAgentContext(
+      {
+        ...base,
+        status: "resolved",
+        resolvedAt: "2026-01-03T04:00:00.000Z",
+      },
+      env
+    );
+    expect(block).toContain("Resolution time: 2d 4h");
+  });
+
+  it("omits the resolution time when the comment is unresolved", () => {
+    expect(buildAgentContext({ ...base }, env)).not.toContain(
+      "Resolution time:"
+    );
+  });
+
+  it("still works without a strings dictionary", () => {
+    // Back-compat: existing callers pass only viewport dimensions.
+    const block = buildAgentContext(
+      { ...base, type: "bug" },
+      { viewportWidth: 1440, viewportHeight: 900 }
+    );
+    expect(block).toContain("Type: bug");
+    expect(block).not.toContain("Resolution time:");
   });
 });

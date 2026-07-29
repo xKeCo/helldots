@@ -2,6 +2,8 @@
 // clipboard — enough for a coding agent to locate the element and understand
 // the reported issue (page, viewport, selector, DOM path, thread).
 
+import { formatDuration } from "./i18n.js";
+
 const openingTagOf = (element) => {
   const attrs = [...element.attributes]
     .map(({ name, value }) => `${name}="${value}"`)
@@ -38,10 +40,13 @@ const domPathOf = (element) => {
 
 /**
  * @param {import('./index.d.ts').Comment} comment
- * @param {{ viewportWidth: number, viewportHeight: number }} env
+ * @param {{ viewportWidth: number, viewportHeight: number, strings?: object }} env
  * @returns {string}
  */
-export function buildAgentContext(comment, { viewportWidth, viewportHeight }) {
+export function buildAgentContext(
+  comment,
+  { viewportWidth, viewportHeight, strings }
+) {
   const anchor = comment.anchor;
   const fingerprint = anchor?.fingerprint;
   const live = comment.container?.isConnected ? comment.container : null;
@@ -64,6 +69,39 @@ export function buildAgentContext(comment, { viewportWidth, viewportHeight }) {
     `Comment by ${comment.author} (${comment.createdAt}):`,
     `"${comment.text}"`,
   ];
+
+  // Neutral classification fields are omitted rather than printed as
+  // "(none)" — the agent shouldn't read noise for data nobody filled in.
+  if (comment.type) lines.push(`Type: ${comment.type}`);
+  if (comment.priority) lines.push(`Priority: ${comment.priority}`);
+  if (comment.tags?.length) lines.push(`Tags: ${comment.tags.join(", ")}`);
+
+  const context = comment.context;
+  if (context) {
+    if (context.url) lines.push(`URL: ${context.url}`);
+    if (context.screen) {
+      lines.push(`Screen: ${context.screen.width}x${context.screen.height}`);
+    }
+    if (context.browser?.name) {
+      lines.push(
+        `Browser: ${`${context.browser.name} ${context.browser.version || ""}`.trim()}`
+      );
+    }
+    if (context.os?.name) {
+      lines.push(
+        `OS: ${`${context.os.name} ${context.os.version || ""}`.trim()}`
+      );
+    }
+  }
+
+  if (strings && comment.status === "resolved" && comment.resolvedAt) {
+    const elapsed = formatDuration(
+      new Date(comment.resolvedAt).getTime() -
+        new Date(comment.createdAt).getTime(),
+      strings
+    );
+    if (elapsed) lines.push(`Resolution time: ${elapsed}`);
+  }
 
   const replies = comment.replies || [];
   if (replies.length > 0) {
