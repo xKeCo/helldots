@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   CLASSES,
@@ -14,7 +14,11 @@ import {
 } from "../src/constants.js";
 
 const srcDir = resolve(process.cwd(), "src");
-const sourceText = ["overlay.js", "components.js", "styles.js"]
+// Every .js file in src/ except constants.js itself — a hardcoded subset
+// would silently stop covering new modules (see git history: inbox.js was
+// missing from this list for a full task before anyone noticed).
+const sourceText = readdirSync(srcDir)
+  .filter((file) => file.endsWith(".js") && file !== "constants.js")
   .map((file) => readFileSync(resolve(srcDir, file), "utf-8"))
   .join("\n");
 

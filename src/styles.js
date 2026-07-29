@@ -608,6 +608,14 @@ export const getStyles = () => `
         display: flex;
         flex-wrap: wrap;
         gap: 4px;
+    }
+    /* Vertical separation from the card text above only applies to the
+       badge row on inbox cards -- inside the comment-box classify row,
+       .inbox-badges is one flex item among the type/priority pickers and
+       the tags input, and the classify row's own gap already spaces it
+       from its siblings, so an extra margin here would nudge it out of
+       alignment with them. */
+    .${CLASSES.INBOX_CARD} .${CLASSES.INBOX_BADGES} {
         margin-top: 6px;
     }
     .${CLASSES.BADGE} {
