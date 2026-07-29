@@ -21,6 +21,27 @@
 - **Los fallos de captura nunca abortan el guardado de un comentario.**
 - **Comandos:** test `npx vitest run <archivo>`; suite completa `npm test`; lint `npm run lint`; tipos `npm run typecheck`; formato `npm run format`.
 - **Estado neutro:** `type` y `priority` son `null` por defecto y deben poder volver a `null` desde la UI.
+- **Helper de tests:** `test/overlay.test.js`, `test/inbox.test.js` y `test/persistence.test.js` construyen instancias con `makeOverlay(options)`, no `createOverlay`.
+
+### Trampa conocida: los mocks de `capture.js` (afecta a la Task 8)
+
+`test/overlay.test.js`, `test/inbox.test.js` y `test/persistence.test.js`
+mockean `../src/capture.js` con una factory que expone **solo** `captureRegion`:
+
+```js
+vi.mock("../src/capture.js", () => ({
+  captureRegion: vi.fn().mockResolvedValue("data:image/png;base64,mocked"),
+}));
+```
+
+En cuanto la Task 8 haga que `overlay.js` importe `renderPage`, `cropRegion`,
+`cropViewport`, `withHiddenOverlay` y `AUTO_SCALE`, esos tres mocks dejarán los
+imports en `undefined` y las suites reventarán. La Task 8 debe **ampliar las tres
+factories** para exponer también los exports nuevos.
+
+Además, esos archivos llaman `overlay._placeCommentAtPoint(x, y)` de forma
+síncrona en sus helpers. La Task 8 convierte ese método en `async`, así que
+todas esas llamadas necesitan `await` y sus helpers pasan a ser `async`.
 
 ---
 
@@ -918,7 +939,7 @@ describe("schema migration", () => {
       status: "open",
     };
 
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     overlay.loadComments([legacy]);
     const [comment] = overlay.comments;
 
@@ -931,7 +952,7 @@ describe("schema migration", () => {
   });
 
   it("round-trips the new fields through serialize/load", () => {
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     overlay.loadComments([
       {
         id: 2,
@@ -962,7 +983,7 @@ describe("schema migration", () => {
   });
 
   it("rejects a type or priority that is not in the enum", () => {
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     overlay.loadComments([
       {
         id: 3,
@@ -1121,7 +1142,7 @@ describe("resolvedAt lifecycle", () => {
     ]);
 
   it("stamps resolvedAt when entering resolved", () => {
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     seed(overlay);
     overlay.setCommentStatus(10, "resolved");
     expect(overlay.comments[0].resolvedAt).toMatch(
@@ -1130,7 +1151,7 @@ describe("resolvedAt lifecycle", () => {
   });
 
   it("clears resolvedAt when the comment is reopened", () => {
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     seed(overlay);
     overlay.setCommentStatus(10, "resolved");
     overlay.setCommentStatus(10, "open");
@@ -1138,14 +1159,14 @@ describe("resolvedAt lifecycle", () => {
   });
 
   it("leaves resolvedAt null for non-resolved transitions", () => {
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     seed(overlay);
     overlay.setCommentStatus(10, "in_progress");
     expect(overlay.comments[0].resolvedAt).toBeNull();
   });
 
   it("overwrites resolvedAt when resolved a second time", async () => {
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     seed(overlay);
     overlay.setCommentStatus(10, "resolved");
     const first = overlay.comments[0].resolvedAt;
@@ -1229,7 +1250,7 @@ describe("classification setters", () => {
     ]);
 
   it("sets and clears the type", () => {
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     seed(overlay);
     expect(overlay.setCommentType(20, "bug")).toBe(true);
     expect(overlay.comments[0].type).toBe("bug");
@@ -1238,7 +1259,7 @@ describe("classification setters", () => {
   });
 
   it("sets and clears the priority", () => {
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     seed(overlay);
     expect(overlay.setCommentPriority(20, "high")).toBe(true);
     expect(overlay.comments[0].priority).toBe("high");
@@ -1247,7 +1268,7 @@ describe("classification setters", () => {
   });
 
   it("rejects unknown values and unknown ids without side effects", () => {
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     seed(overlay);
     overlay.setCommentType(20, "bug");
 
@@ -1260,21 +1281,21 @@ describe("classification setters", () => {
   });
 
   it("normalises tags: trims, lowercases, drops blanks and duplicates", () => {
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     seed(overlay);
     overlay.setCommentTags(20, ["  Checkout ", "iOS", "checkout", "", "   "]);
     expect(overlay.comments[0].tags).toEqual(["checkout", "ios"]);
   });
 
   it("rejects a non-array tags value", () => {
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     seed(overlay);
     expect(overlay.setCommentTags(20, "checkout")).toBe(false);
   });
 
   it("fires onCommentUpdated for all three setters", () => {
     const onCommentUpdated = vi.fn();
-    const overlay = createOverlay({ onCommentUpdated });
+    const overlay = makeOverlay({ onCommentUpdated });
     seed(overlay);
 
     overlay.setCommentType(20, "bug");
@@ -1293,7 +1314,7 @@ describe("classification setters", () => {
   it("does not fire onCommentStatusChanged", () => {
     // The existing callback keeps its exact meaning.
     const onCommentStatusChanged = vi.fn();
-    const overlay = createOverlay({ onCommentStatusChanged });
+    const overlay = makeOverlay({ onCommentStatusChanged });
     seed(overlay);
     overlay.setCommentType(20, "bug");
     expect(onCommentStatusChanged).not.toHaveBeenCalled();
@@ -1465,7 +1486,7 @@ describe("automatic context capture", () => {
         : Object.getPrototypeOf(document).createElement.call(document, tag)
     );
 
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     await clickAt(overlay, 50, 50);
 
     expect(domToCanvas).toHaveBeenCalledTimes(1);
@@ -1477,7 +1498,7 @@ describe("automatic context capture", () => {
 
   it("does not render at all when autoScreenshot is false", async () => {
     vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
-    const overlay = createOverlay({ autoScreenshot: false });
+    const overlay = makeOverlay({ autoScreenshot: false });
     await clickAt(overlay, 50, 50);
     expect(domToCanvas).not.toHaveBeenCalled();
   });
@@ -1490,7 +1511,7 @@ describe("automatic context capture", () => {
       return { width: 10, height: 10 };
     });
 
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     await clickAt(overlay, 50, 50);
 
     expect(displayDuringRender).toBe("none");
@@ -1506,7 +1527,7 @@ describe("automatic context capture", () => {
         : Object.getPrototypeOf(document).createElement.call(document, tag)
     );
 
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     await clickAt(overlay, 50, 50);
     overlay.commentInput.value = "a bug";
     overlay.saveComment();
@@ -1523,7 +1544,7 @@ describe("automatic context capture", () => {
     vi.mocked(domToCanvas).mockRejectedValue(new Error("render failed"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     await clickAt(overlay, 50, 50);
     overlay.commentInput.value = "still saved";
     overlay.saveComment();
@@ -1536,7 +1557,7 @@ describe("automatic context capture", () => {
 
   it("does not leak a pending capture into the next comment", async () => {
     vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
-    const overlay = createOverlay();
+    const overlay = makeOverlay();
     await clickAt(overlay, 50, 50);
     overlay.hideCommentBox();
     expect(overlay._pendingContextScreenshot).toBeNull();
@@ -2458,7 +2479,7 @@ Añadir a `test/overlay.test.js`:
 
 ```js
 it("resets the classification row between comments", async () => {
-  const overlay = createOverlay({ autoScreenshot: false });
+  const overlay = makeOverlay({ autoScreenshot: false });
   overlay.commentBox.classify.getTags(); // row is mounted
 
   const pick = (value) =>
