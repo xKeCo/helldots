@@ -273,9 +273,7 @@ export const createClassifyRow = (strings) => {
   };
 
   input.addEventListener("keydown", (e) => {
-    // Compared lowercase so this doesn't read as a hardcoded UI string to
-    // the i18n guard test — it's a key name, not user-visible text.
-    if (e.key.toLowerCase() !== "enter" && e.key !== ",") return;
+    if (e.key !== "Enter" && e.key !== ",") return;
     e.preventDefault();
     const tag = input.value.trim().toLowerCase();
     // Blanks and duplicates are silently ignored — nothing to tell the user.

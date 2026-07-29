@@ -142,8 +142,14 @@ describe("i18n", () => {
     );
     // Any capitalized, multi-letter double-quoted string literal that isn't
     // an SVG attribute, an import, or a class/const name is a UI string
-    // that should be coming from `strings.*`, not hardcoded here.
-    const suspicious = source.match(/"[A-Z][a-zA-Zé][a-zA-Z ]*[.:]?"/g);
-    expect(suspicious).toBeNull();
+    // that should be coming from `strings.*`, not hardcoded here — except
+    // DOM KeyboardEvent.key names, which are protocol constants compared
+    // against e.key (e.g. `e.key !== "Enter"`), not user-visible text.
+    const DOM_KEY_NAMES = ["Enter"];
+    const matches = source.match(/"[A-Z][a-zA-Zé][a-zA-Z ]*[.:]?"/g) || [];
+    const suspicious = matches.filter(
+      (match) => !DOM_KEY_NAMES.includes(match.slice(1, -1))
+    );
+    expect(suspicious).toEqual([]);
   });
 });

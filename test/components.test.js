@@ -306,6 +306,42 @@ describe("createClassifyRow", () => {
       0
     );
   });
+
+  it("reset() rebuilds the type picker's DOM back to neutral, not just its accessor", () => {
+    const row = createClassifyRow(strings);
+    const pick = (value) =>
+      [...row.container.querySelectorAll("[data-picker-option]")]
+        .find((i) => i.dataset.pickerOption === value)
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    pick("bug");
+
+    const typeWrapper = row.container.querySelector(
+      '[data-action="type"]'
+    ).parentElement;
+    expect(
+      typeWrapper
+        .querySelector('[data-action="type"]')
+        .getAttribute("aria-label")
+    ).toBe(`${strings.typeLabel}: ${strings.typeBug}`);
+
+    row.reset();
+
+    // The button/tooltip must reflect "Unset" again — a reset() that only
+    // cleared the `type` closure variable while leaving createPicker's own
+    // `current` selection in place would still show "Bug" here even though
+    // getType() returns null.
+    const typeBtnAfter = row.container.querySelector('[data-action="type"]');
+    expect(typeBtnAfter.getAttribute("aria-label")).toBe(
+      `${strings.typeLabel}: ${strings.unset}`
+    );
+
+    const unsetOption = typeBtnAfter.parentElement.querySelector(
+      '[data-picker-option=""]'
+    );
+    expect(unsetOption.getAttribute("aria-checked")).toBe("true");
+    expect(row.getType()).toBeNull();
+  });
 });
 
 describe("createCommentBox", () => {
