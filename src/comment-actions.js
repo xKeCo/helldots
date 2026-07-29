@@ -3,7 +3,15 @@
 // Pure view: every mutation goes through the callbacks; the component only
 // keeps its own dot color and tooltips in sync after a selection.
 
-import { CLASSES, STATUSES, STATUS_COLORS } from "./constants.js";
+import {
+  CLASSES,
+  STATUSES,
+  STATUS_COLORS,
+  COMMENT_TYPES,
+  TYPE_COLORS,
+  PRIORITIES,
+  PRIORITY_COLORS,
+} from "./constants.js";
 
 const COPY_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const CHECK_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -32,6 +40,21 @@ export const statusLabelOf = (status, strings) =>
     in_progress: strings.statusInProgress,
     resolved: strings.statusResolved,
   })[status] || strings.statusOpen;
+
+export const typeLabelOf = (type, strings) =>
+  ({
+    bug: strings.typeBug,
+    suggestion: strings.typeSuggestion,
+    question: strings.typeQuestion,
+    improvement: strings.typeImprovement,
+  })[type] || strings.unset;
+
+export const priorityLabelOf = (priority, strings) =>
+  ({
+    high: strings.priorityHigh,
+    medium: strings.priorityMedium,
+    low: strings.priorityLow,
+  })[priority] || strings.unset;
 
 /**
  * Dot-and-menu picker shared by the status, type and priority controls.
@@ -128,12 +151,12 @@ export const createPicker = ({
 
 /**
  * @param {Object} comment
- * @param {{ strings: Object, onCopy: Function, onSetStatus: Function, onDelete: Function }} deps
+ * @param {{ strings: Object, onCopy: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onDelete: Function }} deps
  * @returns {HTMLElement}
  */
 export const createCommentActions = (
   comment,
-  { strings, onCopy, onSetStatus, onDelete }
+  { strings, onCopy, onSetStatus, onSetType, onSetPriority, onDelete }
 ) => {
   const actions = document.createElement("div");
   actions.className = CLASSES.INBOX_CARD_ACTIONS;
@@ -168,6 +191,33 @@ export const createCommentActions = (
       labelOf: (status) => statusLabelOf(status, strings),
       tooltipLabel: strings.statusLabel,
       onSelect: (status) => onSetStatus(comment, status),
+    })
+  );
+
+  // --- category picker (RF3) ---
+  actions.appendChild(
+    createPicker({
+      action: "type",
+      // `null` first: returning to the neutral state must be reachable.
+      options: [null, ...COMMENT_TYPES],
+      value: comment.type || null,
+      colorOf: (type) => TYPE_COLORS[type] || "transparent",
+      labelOf: (type) => typeLabelOf(type, strings),
+      tooltipLabel: strings.typeLabel,
+      onSelect: (type) => onSetType?.(comment, type),
+    })
+  );
+
+  // --- priority picker (RF4) ---
+  actions.appendChild(
+    createPicker({
+      action: "priority",
+      options: [null, ...PRIORITIES],
+      value: comment.priority || null,
+      colorOf: (priority) => PRIORITY_COLORS[priority] || "transparent",
+      labelOf: (priority) => priorityLabelOf(priority, strings),
+      tooltipLabel: strings.priorityLabel,
+      onSelect: (priority) => onSetPriority?.(comment, priority),
     })
   );
 

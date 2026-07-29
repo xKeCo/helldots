@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { createCommentActions, createPicker } from "../src/comment-actions.js";
 import { CLASSES, STATUS_COLORS } from "../src/constants.js";
+import { getStrings } from "../src/i18n.js";
 import en from "../src/locales/en.js";
 import es from "../src/locales/es.js";
 
@@ -60,8 +61,13 @@ describe("createCommentActions", () => {
     });
     document.body.appendChild(el);
 
-    click(el.querySelector('[data-action="status"]'));
-    const options = [...el.querySelectorAll("[data-picker-option]")];
+    const statusBtn = el.querySelector('[data-action="status"]');
+    click(statusBtn);
+    // Scope to the status picker's own wrapper: the actions bar now also
+    // contains the type and priority pickers' menu items.
+    const options = [
+      ...statusBtn.parentElement.querySelectorAll("[data-picker-option]"),
+    ];
     expect(options.map((o) => o.textContent)).toEqual([
       "Abierto",
       "En progreso",
@@ -224,5 +230,71 @@ describe("createPicker", () => {
     // Verify tooltip and aria-label updated to unset label
     expect(btn.dataset.hdTooltip).toBe("Thing: Unset");
     expect(btn.getAttribute("aria-label")).toBe("Thing: Unset");
+  });
+});
+
+describe("type and priority pickers in the actions bar", () => {
+  const strings = getStrings("en");
+  const build = (comment, handlers = {}) =>
+    createCommentActions(
+      { id: 1, status: "open", type: null, priority: null, ...comment },
+      {
+        strings,
+        onCopy: vi.fn(),
+        onSetStatus: vi.fn(),
+        onSetType: vi.fn(),
+        onSetPriority: vi.fn(),
+        onDelete: vi.fn(),
+        ...handlers,
+      }
+    );
+
+  it("renders five controls: copy, status, type, priority, more", () => {
+    expect(build({}).querySelectorAll("button[aria-haspopup]")).toHaveLength(3);
+  });
+
+  it("labels the type picker with the current type", () => {
+    const actions = build({ type: "bug" });
+    const btn = actions.querySelector('[data-action="type"]');
+    expect(btn.dataset.hdTooltip).toBe("Type: Bug");
+  });
+
+  it("shows Unset when the type is neutral", () => {
+    const actions = build({ type: null });
+    const btn = actions.querySelector('[data-action="type"]');
+    expect(btn.dataset.hdTooltip).toBe("Type: Unset");
+  });
+
+  it("gives each picker its own data-action hook", () => {
+    const actions = build({});
+    expect(actions.querySelector('[data-action="status"]')).not.toBeNull();
+    expect(actions.querySelector('[data-action="type"]')).not.toBeNull();
+    expect(actions.querySelector('[data-action="priority"]')).not.toBeNull();
+  });
+
+  it("reports a type selection", () => {
+    const onSetType = vi.fn();
+    const actions = build({}, { onSetType });
+    const item = [...actions.querySelectorAll("[data-picker-option]")].find(
+      (i) => i.dataset.pickerOption === "suggestion"
+    );
+    item.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onSetType).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1 }),
+      "suggestion"
+    );
+  });
+
+  it("reports a priority selection", () => {
+    const onSetPriority = vi.fn();
+    const actions = build({}, { onSetPriority });
+    const item = [...actions.querySelectorAll("[data-picker-option]")].find(
+      (i) => i.dataset.pickerOption === "high"
+    );
+    item.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onSetPriority).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1 }),
+      "high"
+    );
   });
 });

@@ -685,6 +685,9 @@ class CommentOverlay {
             this.addReply(comment, text, screenshots),
           onDelete: (id) => this.deleteComment(id),
           onSetStatus: (id, status) => this.setCommentStatus(id, status),
+          onSetType: (id, type) => this.setCommentType(id, type),
+          onSetPriority: (id, priority) =>
+            this.setCommentPriority(id, priority),
           onNavigateToPage: (comment) => {
             try {
               sessionStorage.setItem(PENDING_DETAIL_KEY, String(comment.id));
@@ -746,6 +749,8 @@ class CommentOverlay {
           })
         ),
       onSetStatus: (c, status) => this.setCommentStatus(c.id, status),
+      onSetType: (c, type) => this.setCommentType(c.id, type),
+      onSetPriority: (c, priority) => this.setCommentPriority(c.id, priority),
       onDelete: (c) => {
         this.closeThreadPopover();
         this.deleteComment(c.id);

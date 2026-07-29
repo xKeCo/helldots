@@ -26,7 +26,7 @@ export class InboxView {
    * @param {string} deps.locale
    * @param {string} deps.currentPage
    * @param {() => Array<Object>} deps.getComments
-   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onSetStatus: Function, onNavigateToPage: Function, onShowLightbox: Function, onClose: Function }} deps.callbacks
+   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onClose: Function }} deps.callbacks
    */
   constructor({
     shadowRoot,
@@ -378,6 +378,9 @@ export class InboxView {
           })
         ),
       onSetStatus: (c, status) => this.callbacks.onSetStatus(c.id, status),
+      onSetType: (c, type) => this.callbacks.onSetType(c.id, type),
+      onSetPriority: (c, priority) =>
+        this.callbacks.onSetPriority(c.id, priority),
       onDelete: (c) => {
         if (this.detailId === c.id) this.detailId = null;
         this.callbacks.onDelete(c.id);
