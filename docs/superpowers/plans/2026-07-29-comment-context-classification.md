@@ -44,29 +44,19 @@ Base que consumen todas las tareas siguientes. Sin esto, nada más compila.
   - `TYPE_COLORS: Record<string,string>`
   - `PRIORITIES: string[]` = `["high","medium","low"]`
   - `PRIORITY_COLORS: Record<string,string>`
-  - Claves de `CLASSES` nuevas (ver Step 1)
   - Tipos `CommentType`, `CommentPriority`, `CommentContext` en `index.d.ts`
+
+> **Ninguna clave de `CLASSES` se añade en esta tarea.** `test/constants.test.js`
+> tiene un guard preexistente (`has no dead constants`) que exige que toda clave
+> de `CLASSES`/`IDS` esté referenciada desde `src/`. Cada clase CSS nueva se
+> declara en la tarea que primero la usa: `CLASSIFY_ROW`, `TAGS_INPUT`,
+> `TAG_CHIP`, `TAG_CHIP_REMOVE` e `INBOX_BADGES` en la Task 11; `BADGE`,
+> `BADGE_TYPE`, `BADGE_PRIORITY`, `BADGE_TAG`, `BADGE_DURATION` en la Task 12;
+> `CONTEXT_BLOCK` y `CONTEXT_ROW` en la Task 14.
 
 - [ ] **Step 1: Añadir constantes a `src/constants.js`**
 
-Añadir estas claves dentro del objeto `CLASSES` existente, justo antes de `HIGHLIGHT`:
-
-```js
-  INBOX_BADGES: "inbox-badges",
-  BADGE: "helldots-badge",
-  BADGE_TYPE: "helldots-badge--type",
-  BADGE_PRIORITY: "helldots-badge--priority",
-  BADGE_TAG: "helldots-badge--tag",
-  BADGE_DURATION: "helldots-badge--duration",
-  CLASSIFY_ROW: "classify-row",
-  TAGS_INPUT: "tags-input",
-  TAG_CHIP: "tag-chip",
-  TAG_CHIP_REMOVE: "tag-chip-remove",
-  CONTEXT_BLOCK: "inbox-context",
-  CONTEXT_ROW: "inbox-context-row",
-```
-
-Y al final del archivo, después de `STATUS_COLORS`:
+Al final del archivo, después de `STATUS_COLORS`:
 
 ```js
 // RF3 — comment category. Order matters: it's the order shown in the picker.
@@ -2232,7 +2222,22 @@ describe("createCommentBox", () => {
 Run: `npx vitest run test/components.test.js`
 Expected: FAIL — `createClassifyRow is not a function`.
 
-- [ ] **Step 3: Implementar `createClassifyRow` en `src/components.js`**
+- [ ] **Step 3: Declarar las clases CSS de esta tarea en `src/constants.js`**
+
+Añadir dentro del objeto `CLASSES`, justo antes de `HIGHLIGHT`:
+
+```js
+  CLASSIFY_ROW: "classify-row",
+  TAGS_INPUT: "tags-input",
+  TAG_CHIP: "tag-chip",
+  TAG_CHIP_REMOVE: "tag-chip-remove",
+  INBOX_BADGES: "inbox-badges",
+```
+
+`test/constants.test.js` verifica que toda clave de `CLASSES` esté usada en
+`src/`, así que estas se declaran aquí — la tarea que las consume — y no antes.
+
+- [ ] **Step 4: Implementar `createClassifyRow` en `src/components.js`**
 
 Añadir al import de constantes las claves nuevas y las de clasificación, e importar los helpers:
 
@@ -2366,7 +2371,7 @@ export const createClassifyRow = (strings) => {
 };
 ```
 
-- [ ] **Step 4: Montar la fila en `createCommentBox`**
+- [ ] **Step 5: Montar la fila en `createCommentBox`**
 
 Reemplazar el cuerpo entre `createInputArea(...)` y `return commentBox;`:
 
@@ -2382,7 +2387,7 @@ commentBox.style.display = "none";
 return commentBox;
 ```
 
-- [ ] **Step 5: Leer los valores en `saveComment`**
+- [ ] **Step 6: Leer los valores en `saveComment`**
 
 En `src/overlay.js`, reemplazar las líneas `type: null,`, `priority: null,` y `tags: [],` del literal por:
 
@@ -2392,7 +2397,7 @@ En `src/overlay.js`, reemplazar las líneas `type: null,`, `priority: null,` y `
       tags: this.commentBox.classify?.getTags() ?? [],
 ```
 
-- [ ] **Step 6: Resetear la fila al cerrar el box**
+- [ ] **Step 7: Resetear la fila al cerrar el box**
 
 En `hideCommentBox` de `src/overlay.js`, junto a la limpieza de `_pendingScreenshots` y `_pendingContextScreenshot`:
 
@@ -2400,7 +2405,7 @@ En `hideCommentBox` de `src/overlay.js`, junto a la limpieza de `_pendingScreens
 this.commentBox.classify?.reset();
 ```
 
-- [ ] **Step 7: Añadir los estilos en `src/styles.js`**
+- [ ] **Step 8: Añadir los estilos en `src/styles.js`**
 
 Añadir dentro de la plantilla que devuelve `getStyles()`:
 
@@ -2447,7 +2452,7 @@ Añadir dentro de la plantilla que devuelve `getStyles()`:
 }
 ```
 
-- [ ] **Step 8: Escribir el test de reset**
+- [ ] **Step 9: Escribir el test de reset**
 
 Añadir a `test/overlay.test.js`:
 
@@ -2469,12 +2474,12 @@ it("resets the classification row between comments", async () => {
 });
 ```
 
-- [ ] **Step 9: Correr los tests y verificar que pasan**
+- [ ] **Step 10: Correr los tests y verificar que pasan**
 
 Run: `npx vitest run test/components.test.js test/overlay.test.js test/styles.test.js`
 Expected: PASS.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add src/components.js src/overlay.js src/styles.js test/components.test.js test/overlay.test.js
@@ -2572,7 +2577,21 @@ describe("card badges", () => {
 Run: `npx vitest run test/inbox.test.js -t "card badges"`
 Expected: FAIL — no existe `.helldots-badge`.
 
-- [ ] **Step 3: Implementar `_buildBadges` en `src/inbox.js`**
+- [ ] **Step 3: Declarar las clases CSS de esta tarea en `src/constants.js`**
+
+Añadir dentro del objeto `CLASSES`, justo antes de `HIGHLIGHT`:
+
+```js
+  BADGE: "helldots-badge",
+  BADGE_TYPE: "helldots-badge--type",
+  BADGE_PRIORITY: "helldots-badge--priority",
+  BADGE_TAG: "helldots-badge--tag",
+  BADGE_DURATION: "helldots-badge--duration",
+```
+
+`INBOX_BADGES` ya lo declaró la Task 11 — no lo dupliques.
+
+- [ ] **Step 4: Implementar `_buildBadges` en `src/inbox.js`**
 
 Actualizar imports. `formatTemplate` sustituye `{n}` por cualquier string, así que sirve igual para `"2d 4h"` que para `"—"`:
 
@@ -2648,7 +2667,7 @@ Añadir el método después de `_buildTag`:
   }
 ```
 
-- [ ] **Step 4: Montar la fila en `_buildCard`**
+- [ ] **Step 5: Montar la fila en `_buildCard`**
 
 Reemplazar las líneas `const tag = this._buildTag(comment); if (tag) card.appendChild(tag);` por:
 
@@ -2660,7 +2679,7 @@ const tag = this._buildTag(comment);
 if (tag) card.appendChild(tag);
 ```
 
-- [ ] **Step 5: Añadir los estilos en `src/styles.js`**
+- [ ] **Step 6: Añadir los estilos en `src/styles.js`**
 
 ```css
 .inbox-badges {
@@ -2689,12 +2708,12 @@ if (tag) card.appendChild(tag);
 }
 ```
 
-- [ ] **Step 6: Correr los tests y verificar que pasan**
+- [ ] **Step 7: Correr los tests y verificar que pasan**
 
 Run: `npx vitest run test/inbox.test.js test/styles.test.js`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/inbox.js src/styles.js test/inbox.test.js
@@ -2975,7 +2994,16 @@ describe("context block in the detail view", () => {
 Run: `npx vitest run test/inbox.test.js -t "context block"`
 Expected: FAIL — no existe `.inbox-context`.
 
-- [ ] **Step 3: Implementar `_buildContextBlock` en `src/inbox.js`**
+- [ ] **Step 3: Declarar las clases CSS de esta tarea en `src/constants.js`**
+
+Añadir dentro del objeto `CLASSES`, justo antes de `HIGHLIGHT`:
+
+```js
+  CONTEXT_BLOCK: "inbox-context",
+  CONTEXT_ROW: "inbox-context-row",
+```
+
+- [ ] **Step 4: Implementar `_buildContextBlock` en `src/inbox.js`**
 
 Añadir después de `_buildBadges`:
 
@@ -3040,7 +3068,7 @@ Añadir después de `_buildBadges`:
   }
 ```
 
-- [ ] **Step 4: Montar el bloque en `_renderDetail`**
+- [ ] **Step 5: Montar el bloque en `_renderDetail`**
 
 Insertar justo después de `detail.appendChild(this._buildCard(comment, { interactive: false }));`:
 
@@ -3049,7 +3077,7 @@ const context = this._buildContextBlock(comment);
 if (context) detail.appendChild(context);
 ```
 
-- [ ] **Step 5: Añadir los estilos en `src/styles.js`**
+- [ ] **Step 6: Añadir los estilos en `src/styles.js`**
 
 ```css
 .inbox-context {
@@ -3078,12 +3106,12 @@ if (context) detail.appendChild(context);
 }
 ```
 
-- [ ] **Step 6: Correr los tests y verificar que pasan**
+- [ ] **Step 7: Correr los tests y verificar que pasan**
 
 Run: `npx vitest run test/inbox.test.js test/styles.test.js`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/inbox.js src/styles.js test/inbox.test.js
