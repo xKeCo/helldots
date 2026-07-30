@@ -272,9 +272,10 @@ export const createClassifyRow = (strings) => {
     });
   };
 
-  input.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" && e.key !== ",") return;
-    e.preventDefault();
+  // Commits whatever is currently typed (if anything) as a tag. Shared by
+  // the Enter/comma keydown handler and getTags(), so text left in the
+  // input when the user clicks Send isn't silently discarded.
+  const commitPendingTag = () => {
     const tag = input.value.trim().toLowerCase();
     // Blanks and duplicates are silently ignored — nothing to tell the user.
     if (tag && !tags.includes(tag)) {
@@ -282,6 +283,12 @@ export const createClassifyRow = (strings) => {
       renderChips();
     }
     input.value = "";
+  };
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== ",") return;
+    e.preventDefault();
+    commitPendingTag();
   });
 
   // Pickers keep their selection internally, so returning them to neutral
@@ -297,6 +304,7 @@ export const createClassifyRow = (strings) => {
         labelOf: (value) => typeLabelOf(value, strings),
         tooltipLabel: strings.typeLabel,
         onSelect: (value) => (type = value),
+        showLabel: true,
       })
     );
     container.appendChild(
@@ -308,6 +316,7 @@ export const createClassifyRow = (strings) => {
         labelOf: (value) => priorityLabelOf(value, strings),
         tooltipLabel: strings.priorityLabel,
         onSelect: (value) => (priority = value),
+        showLabel: true,
       })
     );
     container.appendChild(input);
@@ -320,7 +329,10 @@ export const createClassifyRow = (strings) => {
     container,
     getType: () => type,
     getPriority: () => priority,
-    getTags: () => [...tags],
+    getTags: () => {
+      commitPendingTag();
+      return [...tags];
+    },
     reset: () => {
       type = null;
       priority = null;

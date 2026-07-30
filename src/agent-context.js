@@ -57,9 +57,17 @@ export function buildAgentContext(
     : openingTagFromFingerprint(fingerprint);
   const path = live ? domPathOf(live) : "(unavailable)";
 
+  // The reporter's viewport, not the reader's: `comment.context.viewport`
+  // was captured at report time (RF2) and travels with the comment. Live
+  // `viewportWidth`/`viewportHeight` (the copying browser's window) is only
+  // a fallback for legacy records persisted before RF1/RF2 had no context.
+  const capturedViewport = comment.context?.viewport;
+  const reportedViewportWidth = capturedViewport?.width ?? viewportWidth;
+  const reportedViewportHeight = capturedViewport?.height ?? viewportHeight;
+
   const lines = [
     `Page: ${comment.page}`,
-    `Viewport: ${viewportWidth}x${viewportHeight}`,
+    `Viewport: ${reportedViewportWidth}x${reportedViewportHeight}`,
     `Anchor state: ${state}`,
     `Status: ${comment.status || "open"}`,
     `Selector: ${anchor?.selector || "(none)"}`,

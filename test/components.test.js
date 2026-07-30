@@ -307,6 +307,34 @@ describe("createClassifyRow", () => {
     );
   });
 
+  it("flushes an uncommitted tag typed into the input when getTags() is called (e.g. clicking Send without pressing Enter/comma)", () => {
+    const row = createClassifyRow(strings);
+    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
+    input.value = "checkout";
+
+    // No keydown dispatched — text is only committed via getTags() itself.
+    expect(row.getTags()).toEqual(["checkout"]);
+    expect(input.value).toBe("");
+  });
+
+  it("does not flush a blank or whitespace-only uncommitted value", () => {
+    const row = createClassifyRow(strings);
+    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
+    input.value = "   ";
+
+    expect(row.getTags()).toEqual([]);
+  });
+
+  it("flushing an uncommitted value that duplicates an existing tag does not add it twice", () => {
+    const row = createClassifyRow(strings);
+    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
+    input.value = "checkout";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    input.value = "Checkout";
+
+    expect(row.getTags()).toEqual(["checkout"]);
+  });
+
   it("reset() rebuilds the type picker's DOM back to neutral, not just its accessor", () => {
     const row = createClassifyRow(strings);
     const pick = (value) =>

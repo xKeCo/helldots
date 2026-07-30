@@ -1001,9 +1001,11 @@ class CommentOverlay {
       status: comment.status || "open",
       type: comment.type || null,
       priority: comment.priority || null,
-      tags: comment.tags || [],
+      // Copied rather than referenced: a host mutating serializeComments()
+      // output must not be able to reach back into overlay internals.
+      tags: comment.tags ? [...comment.tags] : [],
       resolvedAt: comment.resolvedAt || null,
-      context: comment.context || null,
+      context: comment.context ? { ...comment.context } : null,
       contextScreenshot: comment.contextScreenshot || null,
     };
   }
@@ -1019,6 +1021,10 @@ class CommentOverlay {
     if (!STATUSES.includes(status)) return false;
     const comment = this.comments.find((c) => c.id === id);
     if (!comment) return false;
+    // No-op: picking the status the comment is already in must not re-stamp
+    // resolvedAt (that would reset RF5's elapsed time to "<1m") or trigger a
+    // storage write / inbox refresh / callback for nothing having changed.
+    if (comment.status === status) return true;
     comment.status = status;
     // RF5 — the timestamp always describes the CURRENT resolution: a
     // reopened comment loses it, and resolving again re-stamps it.

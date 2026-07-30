@@ -523,6 +523,26 @@ export const getStyles = () => `
         color: white;
     }
 
+    /* Type/priority pickers show their current value as text next to the
+       dot (colour alone can't tell bug/high apart — same hex, and there's
+       no hover on touch). Grow from the square icon-button width but stay
+       bounded so the strip doesn't crowd out copy/status/⋯ next to it. */
+    .${CLASSES.INBOX_ACTION_BTN_LABELED} {
+        width: auto;
+        max-width: 72px;
+        padding: 0 8px 0 6px;
+        gap: 5px;
+        justify-content: flex-start;
+    }
+
+    .${CLASSES.INBOX_ACTION_LABEL} {
+        font-size: 11px;
+        line-height: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     .${CLASSES.INBOX_STATUS_DOT} {
         width: 12px;
         height: 12px;

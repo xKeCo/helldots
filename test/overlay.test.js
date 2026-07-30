@@ -1653,8 +1653,22 @@ describe("automatic context capture", () => {
 
   it("does not leak a pending capture into the next comment", async () => {
     vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
+    vi.spyOn(document, "createElement").mockImplementation((tag) =>
+      tag === "canvas"
+        ? /** @type {any} */ (fakeOutCanvas())
+        : Object.getPrototypeOf(document).createElement.call(document, tag)
+    );
+
     overlay = makeOverlay();
     await clickAt(overlay, 50, 50);
+    // Without stubbing the canvas above, jsdom's getContext("2d") returns
+    // null, cropViewport bails out early, and _pendingContextScreenshot is
+    // already null before hideCommentBox() runs — making the assertion
+    // below pass for the wrong reason. Assert it's actually populated first.
+    expect(overlay._pendingContextScreenshot).toBe(
+      "data:image/jpeg;base64,auto"
+    );
+
     overlay.hideCommentBox();
     expect(overlay._pendingContextScreenshot).toBeNull();
   });

@@ -202,6 +202,35 @@ describe("classification and context in the agent block", () => {
     );
   });
 
+  it("prints the reporter's captured viewport, not the reader's live one", () => {
+    // A bug filed on a phone (context.viewport captured at report time) and
+    // copied from a laptop (live window.innerWidth/Height at copy time)
+    // must not print a viewport/screen mismatch — the reported viewport is
+    // ground truth for the agent, not whatever window is doing the copying.
+    const block = buildAgentContext(
+      {
+        ...base,
+        context: {
+          version: 1,
+          url: "https://example.test/pricing",
+          viewport: { width: 390, height: 844 },
+          screen: { width: 390, height: 844 },
+        },
+      },
+      { viewportWidth: 1440, viewportHeight: 900, strings: getStrings("en") }
+    );
+    expect(block).toContain("Viewport: 390x844");
+    expect(block).not.toContain("Viewport: 1440x900");
+  });
+
+  it("falls back to the live viewport for legacy records with no context", () => {
+    const block = buildAgentContext(
+      { ...base, context: null },
+      { viewportWidth: 1440, viewportHeight: 900, strings: getStrings("en") }
+    );
+    expect(block).toContain("Viewport: 1440x900");
+  });
+
   it("still works without a strings dictionary", () => {
     // Back-compat: existing callers pass only viewport dimensions.
     const block = buildAgentContext(

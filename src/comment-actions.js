@@ -68,6 +68,7 @@ export const priorityLabelOf = (priority, strings) =>
  *   labelOf: (option: string|null) => string,
  *   tooltipLabel: string,
  *   onSelect: (option: string|null) => void,
+ *   showLabel?: boolean,
  * }} config
  * @returns {HTMLElement}
  */
@@ -79,6 +80,7 @@ export const createPicker = ({
   labelOf,
   tooltipLabel,
   onSelect,
+  showLabel = false,
 }) => {
   const wrapper = document.createElement("div");
   wrapper.style.position = "relative";
@@ -86,12 +88,24 @@ export const createPicker = ({
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = CLASSES.INBOX_ACTION_BTN;
+  if (showLabel) btn.classList.add(CLASSES.INBOX_ACTION_BTN_LABELED);
   btn.dataset.action = action;
   btn.setAttribute("aria-haspopup", "true");
 
   const dot = document.createElement("span");
   dot.className = CLASSES.INBOX_STATUS_DOT;
   btn.appendChild(dot);
+
+  // Type and priority share exact colours (bug === high === #FF453A), and
+  // unset shares "no colour" with unset — the dot alone can't tell them
+  // apart, and hover-only disambiguation doesn't exist on touch. A short
+  // text label next to the dot makes the current value legible without it.
+  let labelEl = null;
+  if (showLabel) {
+    labelEl = document.createElement("span");
+    labelEl.className = CLASSES.INBOX_ACTION_LABEL;
+    btn.appendChild(labelEl);
+  }
 
   const menu = document.createElement("div");
   menu.className = CLASSES.INBOX_MENU;
@@ -105,6 +119,7 @@ export const createPicker = ({
     dot.style.backgroundColor = colorOf(current);
     btn.dataset.hdTooltip = label;
     btn.setAttribute("aria-label", label);
+    if (labelEl) labelEl.textContent = labelOf(current);
     menu
       .querySelectorAll("[data-picker-option]")
       .forEach((/** @type {HTMLElement} */ item) => {
@@ -131,6 +146,10 @@ export const createPicker = ({
     item.addEventListener("click", (e) => {
       e.stopPropagation();
       menu.style.display = "none";
+      // No-op: re-picking the option that's already selected must not fire
+      // onSelect — for the status picker that would re-stamp resolvedAt on
+      // every redundant "Resolved" click, destroying RF5's elapsed time.
+      if (option === current) return;
       current = option;
       onSelect(option);
       syncUi();
@@ -205,6 +224,7 @@ export const createCommentActions = (
       labelOf: (type) => typeLabelOf(type, strings),
       tooltipLabel: strings.typeLabel,
       onSelect: (type) => onSetType?.(comment, type),
+      showLabel: true,
     })
   );
 
@@ -218,6 +238,7 @@ export const createCommentActions = (
       labelOf: (priority) => priorityLabelOf(priority, strings),
       tooltipLabel: strings.priorityLabel,
       onSelect: (priority) => onSetPriority?.(comment, priority),
+      showLabel: true,
     })
   );
 

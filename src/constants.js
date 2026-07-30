@@ -52,6 +52,8 @@ export const CLASSES = {
   INBOX_CARD_TAG: "inbox-card-tag",
   INBOX_CARD_REPLY_LINK: "inbox-card-reply-link",
   INBOX_ACTION_BTN: "inbox-action-btn",
+  INBOX_ACTION_BTN_LABELED: "inbox-action-btn--labeled",
+  INBOX_ACTION_LABEL: "inbox-action-label",
   INBOX_STATUS_DOT: "inbox-status-dot",
   INBOX_MENU: "inbox-menu",
   INBOX_MENU_ITEM: "inbox-menu-item",

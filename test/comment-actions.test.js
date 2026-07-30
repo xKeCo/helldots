@@ -208,6 +208,24 @@ describe("createPicker", () => {
     expect(btn.getAttribute("aria-label")).toBe("Thing: Unset");
   });
 
+  it("does not call onSelect when clicking the option that's already selected (no-op)", () => {
+    const onSelect = vi.fn();
+    const wrapper = build({ value: "a", onSelect });
+    const btn = wrapper.querySelector("button");
+    const items = wrapper.querySelectorAll(`.${CLASSES.INBOX_MENU_ITEM}`);
+    const menu = wrapper.querySelector(`.${CLASSES.INBOX_MENU}`);
+
+    btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(menu.style.display).toBe("block");
+
+    // items[1] is "a" — the current value.
+    items[1].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(onSelect).not.toHaveBeenCalled();
+    // The menu still closes even on a no-op pick.
+    expect(menu.style.display).toBe("none");
+  });
+
   it("re-syncs ui when selecting the unset entry", () => {
     const onSelect = vi.fn();
     const wrapper = build({ value: "b", onSelect });
@@ -296,5 +314,64 @@ describe("type and priority pickers in the actions bar", () => {
       expect.objectContaining({ id: 1 }),
       "high"
     );
+  });
+
+  // bug and high share the exact same colour (#FF453A), so the dot alone
+  // can't tell "bug" from "high priority" apart — and there's no hover on
+  // touch. The picker buttons must show a text label too.
+  it("renders the type label as visible text next to the dot", () => {
+    const actions = build({ type: "bug" });
+    const label = actions.querySelector(
+      `[data-action="type"] .${CLASSES.INBOX_ACTION_LABEL}`
+    );
+    expect(label.textContent).toBe("Bug");
+  });
+
+  it("renders the priority label as visible text next to the dot", () => {
+    const actions = build({ priority: "high" });
+    const label = actions.querySelector(
+      `[data-action="priority"] .${CLASSES.INBOX_ACTION_LABEL}`
+    );
+    expect(label.textContent).toBe("High");
+  });
+
+  it("a bug type and a high priority are distinguishable by text even though their dots are the same colour", () => {
+    const actions = build({ type: "bug", priority: "high" });
+    const typeDot = actions.querySelector(
+      `[data-action="type"] .${CLASSES.INBOX_STATUS_DOT}`
+    );
+    const priorityDot = actions.querySelector(
+      `[data-action="priority"] .${CLASSES.INBOX_STATUS_DOT}`
+    );
+    // Same colour — this is the actual finding, not a hypothetical.
+    expect(typeDot.style.backgroundColor).toBe(
+      priorityDot.style.backgroundColor
+    );
+
+    const typeLabel = actions.querySelector(
+      `[data-action="type"] .${CLASSES.INBOX_ACTION_LABEL}`
+    );
+    const priorityLabel = actions.querySelector(
+      `[data-action="priority"] .${CLASSES.INBOX_ACTION_LABEL}`
+    );
+    expect(typeLabel.textContent).toBe("Bug");
+    expect(priorityLabel.textContent).toBe("High");
+    expect(typeLabel.textContent).not.toBe(priorityLabel.textContent);
+  });
+
+  it("an unset picker reads 'Unset' in text, distinguishing it from a set one without relying on colour", () => {
+    const actions = build({ type: null });
+    const label = actions.querySelector(
+      `[data-action="type"] .${CLASSES.INBOX_ACTION_LABEL}`
+    );
+    expect(label.textContent).toBe("Unset");
+  });
+
+  it("keeps the status picker dot-only (pre-existing, unambiguous)", () => {
+    const actions = build({});
+    const statusBtn = actions.querySelector('[data-action="status"]');
+    expect(
+      statusBtn.querySelector(`.${CLASSES.INBOX_ACTION_LABEL}`)
+    ).toBeNull();
   });
 });

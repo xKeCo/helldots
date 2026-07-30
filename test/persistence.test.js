@@ -532,6 +532,59 @@ describe("persistence", () => {
 
       expect(JSON.parse(localStorage.getItem("helldots-comments"))).toEqual([]);
     });
+
+    it("under localStorage quota pressure, sheds the oldest automatic screenshots but keeps every comment and user-attached screenshots[]", async () => {
+      overlay = makeOverlay({ persistence: "localStorage" });
+      const target = document.getElementById("target");
+
+      const c1 = await createCommentOn(overlay, target, "oldest");
+      c1.createdAt = "2026-01-01T00:00:00.000Z";
+      c1.contextScreenshot = "data:image/jpeg;base64,shot1";
+
+      const c2 = await createCommentOn(overlay, target, "middle");
+      c2.createdAt = "2026-01-02T00:00:00.000Z";
+      c2.contextScreenshot = "data:image/jpeg;base64,shot2";
+      c2.screenshots = ["data:image/png;base64,user-attached"];
+
+      const c3 = await createCommentOn(overlay, target, "newest");
+      c3.createdAt = "2026-01-03T00:00:00.000Z";
+      c3.contextScreenshot = "data:image/jpeg;base64,shot3";
+
+      // Simulates a corpus that only fits localStorage once at most one
+      // automatic screenshot remains aboard: real writes go through, but a
+      // payload carrying more than one contextScreenshot throws, forcing
+      // writeStoredComments to shed twice before it fits.
+      const originalSetItem = Storage.prototype.setItem;
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(Storage.prototype, "setItem").mockImplementation(
+        function (key, value) {
+          const parsed = JSON.parse(value);
+          const withShots = parsed.filter((c) => c.contextScreenshot).length;
+          if (withShots > 1) throw new Error("QuotaExceededError");
+          originalSetItem.call(this, key, value);
+        }
+      );
+
+      // Any mutation triggers a full-corpus _syncStorage rewrite.
+      expect(overlay.setCommentStatus(c3.id, "in_progress")).toBe(true);
+
+      expect(warn).toHaveBeenCalled();
+      const stored = JSON.parse(localStorage.getItem("helldots-comments"));
+      expect(stored).toHaveLength(3);
+      const byText = (text) => stored.find((c) => c.text === text);
+
+      expect(byText("oldest").contextScreenshot).toBeNull();
+      expect(byText("middle").contextScreenshot).toBeNull();
+      expect(byText("newest").contextScreenshot).toBe(
+        "data:image/jpeg;base64,shot3"
+      );
+      // Deliberate, user-attached screenshots are never shed.
+      expect(byText("middle").screenshots).toEqual([
+        "data:image/png;base64,user-attached",
+      ]);
+      // The status change that triggered the rewrite still took effect.
+      expect(byText("newest").status).toBe("in_progress");
+    });
   });
 
   describe("comment status lifecycle (RF09)", () => {
@@ -766,12 +819,14 @@ describe("resolvedAt lifecycle", () => {
   beforeEach(() => {
     document.elementFromPoint = () => null;
     document.body.innerHTML = `<section id="target">Compare our plans and pick one today</section>`;
+    localStorage.clear();
   });
 
   afterEach(() => {
     overlay?.cleanup?.();
     cleanupDom();
     vi.restoreAllMocks();
+    localStorage.clear();
   });
 
   it("stamps resolvedAt when entering resolved", () => {
@@ -810,5 +865,36 @@ describe("resolvedAt lifecycle", () => {
 
     // The displayed duration must describe the CURRENT resolution.
     expect(overlay.comments[0].resolvedAt).not.toBe(first);
+  });
+
+  it("a no-op status pick (already resolved, resolved again) preserves the original resolvedAt", async () => {
+    overlay = makeOverlay();
+    seed(overlay);
+    overlay.setCommentStatus(10, "resolved");
+    const first = overlay.comments[0].resolvedAt;
+
+    await new Promise((r) => setTimeout(r, 2));
+    // Same status as current — must not re-stamp and destroy the elapsed
+    // resolution time (RF5).
+    expect(overlay.setCommentStatus(10, "resolved")).toBe(true);
+
+    expect(overlay.comments[0].resolvedAt).toBe(first);
+  });
+
+  it("a no-op status pick fires no onCommentStatusChanged and does not touch storage", async () => {
+    const onCommentStatusChanged = vi.fn();
+    overlay = makeOverlay({
+      persistence: "localStorage",
+      onCommentStatusChanged,
+    });
+    seed(overlay);
+    overlay.setCommentStatus(10, "resolved");
+    onCommentStatusChanged.mockClear();
+    const storedBefore = localStorage.getItem("helldots-comments");
+
+    overlay.setCommentStatus(10, "resolved");
+
+    expect(onCommentStatusChanged).not.toHaveBeenCalled();
+    expect(localStorage.getItem("helldots-comments")).toBe(storedBefore);
   });
 });
