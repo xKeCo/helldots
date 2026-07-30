@@ -1,10 +1,14 @@
 name: CI
 
+# Runs on all three long-lived branches. Gating only `main` would catch
+# problems after integration, which is too late to be useful: work reaches
+# `dev` first, is validated as a whole on `staging`, and only then lands on
+# `main`, which is what gets published.
 on:
   push:
-    branches: [main]
+    branches: [main, staging, dev]
   pull_request:
-    branches: [main]
+    branches: [main, staging, dev]
 
 jobs:
   build-and-test:
