@@ -11,6 +11,7 @@ import {
   PRIORITIES,
 } from "./constants.js";
 import { buildAgentContext } from "./agent-context.js";
+import { attachMenuToggle } from "./menus.js";
 import { formatDuration, formatTemplate } from "./i18n.js";
 import {
   createCommentActions,
@@ -254,7 +255,8 @@ export class InboxView {
 
     const menu = document.createElement("div");
     menu.className = CLASSES.INBOX_FILTER_MENU;
-    menu.style.display = "none";
+
+    attachMenuToggle(btn, menu);
 
     const addSection = (title) => {
       const section = document.createElement("div");
@@ -326,13 +328,6 @@ export class InboxView {
         () => (this.priorityFilter = value)
       );
     }
-
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const open = menu.style.display !== "none";
-      menu.style.display = open ? "none" : "block";
-      btn.setAttribute("aria-expanded", String(!open));
-    });
 
     wrapper.appendChild(btn);
     wrapper.appendChild(menu);

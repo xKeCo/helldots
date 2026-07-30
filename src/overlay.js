@@ -39,6 +39,7 @@ import {
 import { InboxView } from "./inbox.js";
 import { createCommentActions, copyToClipboard } from "./comment-actions.js";
 import { buildAgentContext } from "./agent-context.js";
+import { closeOpenMenus } from "./menus.js";
 
 // Tags are user-typed, so they arrive with stray case and whitespace.
 // Normalising here (rather than at each entry point) is what makes
@@ -706,7 +707,8 @@ class CommentOverlay {
         const target = e.composedPath()[0] || e.target;
         if (
           !this.inboxView.el?.contains(target) &&
-          !this.inboxBtn.contains(target)
+          !this.inboxBtn.contains(target) &&
+          !this._isInsideLightbox(target)
         ) {
           this.closeInbox();
         }
@@ -906,7 +908,11 @@ class CommentOverlay {
     setTimeout(() => {
       this._threadClickHandler = (e) => {
         const target = e.composedPath()[0] || e.target;
-        if (!popover.contains(target) && !circle?.contains(target)) {
+        if (
+          !popover.contains(target) &&
+          !circle?.contains(target) &&
+          !this._isInsideLightbox(target)
+        ) {
           this.closeThreadPopover();
         }
       };
@@ -957,6 +963,14 @@ class CommentOverlay {
   closeLightbox() {
     this._activeLightbox?.remove();
     this._activeLightbox = null;
+  }
+
+  // The lightbox is opened *from* the inbox and the thread popover but lives
+  // as their sibling in the shadow root, so a naive "is this click outside my
+  // element?" test reads every click on it — including its own close button —
+  // as a click away from the panel, and tears the panel down behind it.
+  _isInsideLightbox(target) {
+    return Boolean(target?.closest?.(`.${CLASSES.LIGHTBOX}`));
   }
 
   addReply(comment, text, screenshots = []) {
@@ -1680,6 +1694,10 @@ class CommentOverlay {
    * Cleanup method to remove all event listeners and observers
    */
   cleanup() {
+    // Dropping the panels leaves their dropdowns detached-but-open, which
+    // would keep the menu registry's document listener alive until the next
+    // stray mousedown.
+    closeOpenMenus();
     this.closeThreadPopover();
     this.closeInbox();
     this.closeLightbox();

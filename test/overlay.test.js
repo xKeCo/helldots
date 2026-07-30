@@ -879,6 +879,77 @@ describe("CommentOverlay", () => {
       );
       expect(overlay._activeLightbox).toBeNull();
     });
+
+    // Regression: the lightbox is opened *from* the thread popover and the
+    // inbox but is mounted as their sibling in the shadow root, so their
+    // "click landed outside me" test used to read every click on it — its
+    // own close button included — as a click away, and tore the panel down
+    // behind the image.
+    describe("does not tear down the surface that opened it", () => {
+      const withScreenshots = (id) => ({
+        id,
+        text: "with shots",
+        replies: [],
+        author: "Author",
+        createdAt: new Date().toISOString(),
+        container: document.body,
+        relativeX: 0.5,
+        relativeY: 0.5,
+        screenshots: ["data:image/png;base64,zzz"],
+      });
+
+      const mousedown = (el) =>
+        el.dispatchEvent(
+          new MouseEvent("mousedown", { bubbles: true, composed: true })
+        );
+
+      it("keeps the thread popover open while the lightbox is used and closed", async () => {
+        overlay = makeOverlay();
+        const comment = withScreenshots(90);
+        overlay.comments.push(comment);
+        overlay.renderCommentCircle(comment);
+        const circle = overlay.shadowRoot.querySelector(
+          '[data-comment-id="90"]'
+        );
+        overlay.showThreadPopover(circle, comment);
+        // The outside-click handler is registered on a macrotask.
+        await wait(5);
+
+        const img = overlay.activeThreadPopover.querySelector(
+          `.${CLASSES.SCREENSHOT_IMG}`
+        );
+        img.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        expect(overlay._activeLightbox).toBeTruthy();
+
+        mousedown(
+          overlay._activeLightbox.querySelector(`.${CLASSES.LIGHTBOX_IMG}`)
+        );
+        expect(overlay.activeThreadPopover).toBeTruthy();
+
+        const closeBtn = overlay._activeLightbox.querySelector(
+          `.${CLASSES.LIGHTBOX_CLOSE}`
+        );
+        mousedown(closeBtn);
+        closeBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+        expect(overlay._activeLightbox).toBeNull();
+        expect(overlay.activeThreadPopover).toBeTruthy();
+      });
+
+      it("keeps the inbox open while the lightbox is used", async () => {
+        overlay = makeOverlay();
+        overlay.showInbox();
+        await wait(5);
+        expect(overlay.inboxView.isOpen()).toBe(true);
+
+        overlay.showLightbox("data:image/png;base64,a");
+        mousedown(
+          overlay._activeLightbox.querySelector(`.${CLASSES.LIGHTBOX_CLOSE}`)
+        );
+
+        expect(overlay.inboxView.isOpen()).toBe(true);
+      });
+    });
   });
 
   describe("addReply", () => {

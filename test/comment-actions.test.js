@@ -375,3 +375,113 @@ describe("type and priority pickers in the actions bar", () => {
     ).toBeNull();
   });
 });
+
+// Regression: every dropdown used to own its open state in isolation and
+// stop the click from propagating, so opening the type picker while the
+// status picker was open left both — and, with priority, all three — hanging
+// open on top of each other inside the thread popover.
+describe("only one menu is open at a time", () => {
+  const strings = getStrings("en");
+
+  const build = () => {
+    const actions = createCommentActions(
+      { id: 1, status: "open", type: null, priority: null },
+      {
+        strings,
+        onCopy: vi.fn(),
+        onSetStatus: vi.fn(),
+        onSetType: vi.fn(),
+        onSetPriority: vi.fn(),
+        onDelete: vi.fn(),
+      }
+    );
+    document.body.appendChild(actions);
+    return actions;
+  };
+
+  const menuOf = (actions, action) =>
+    actions
+      .querySelector(`[data-action="${action}"]`)
+      .parentElement.querySelector(`.${CLASSES.INBOX_MENU}`);
+
+  const btnOf = (actions, action) =>
+    actions.querySelector(`[data-action="${action}"]`);
+
+  const mousedown = (el) =>
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+
+  it("opening the type picker closes the status picker", () => {
+    const actions = build();
+    click(btnOf(actions, "status"));
+    click(btnOf(actions, "type"));
+
+    expect(menuOf(actions, "type").style.display).toBe("block");
+    expect(menuOf(actions, "status").style.display).toBe("none");
+  });
+
+  it("never leaves status, type and priority open together", () => {
+    const actions = build();
+    click(btnOf(actions, "status"));
+    click(btnOf(actions, "type"));
+    click(btnOf(actions, "priority"));
+
+    const open = ["status", "type", "priority", "menu"].filter(
+      (action) => menuOf(actions, action).style.display === "block"
+    );
+    expect(open).toEqual(["priority"]);
+  });
+
+  it("opening the ⋯ menu closes an open picker, and vice versa", () => {
+    const actions = build();
+    click(btnOf(actions, "priority"));
+    click(btnOf(actions, "menu"));
+    expect(menuOf(actions, "priority").style.display).toBe("none");
+    expect(menuOf(actions, "menu").style.display).toBe("block");
+
+    click(btnOf(actions, "status"));
+    expect(menuOf(actions, "menu").style.display).toBe("none");
+    expect(menuOf(actions, "status").style.display).toBe("block");
+  });
+
+  it("a mousedown outside the open menu closes it", () => {
+    const actions = build();
+    click(btnOf(actions, "status"));
+    expect(menuOf(actions, "status").style.display).toBe("block");
+
+    mousedown(document.body);
+    expect(menuOf(actions, "status").style.display).toBe("none");
+  });
+
+  it("a mousedown inside the open menu leaves it open", () => {
+    const actions = build();
+    click(btnOf(actions, "status"));
+
+    mousedown(menuOf(actions, "status"));
+    expect(menuOf(actions, "status").style.display).toBe("block");
+  });
+
+  it("marks the open state on the toggle for assistive tech", () => {
+    const actions = build();
+    const statusBtn = btnOf(actions, "status");
+    expect(statusBtn.getAttribute("aria-expanded")).toBe("false");
+
+    click(statusBtn);
+    expect(statusBtn.getAttribute("aria-expanded")).toBe("true");
+
+    click(btnOf(actions, "type"));
+    expect(statusBtn.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("reopens a menu that was closed by picking an option", () => {
+    const actions = build();
+    const statusBtn = btnOf(actions, "status");
+    click(statusBtn);
+    click(
+      statusBtn.parentElement.querySelector('[data-picker-option="resolved"]')
+    );
+    expect(menuOf(actions, "status").style.display).toBe("none");
+
+    click(statusBtn);
+    expect(menuOf(actions, "status").style.display).toBe("block");
+  });
+});

@@ -12,6 +12,7 @@ import {
   PRIORITIES,
   PRIORITY_COLORS,
 } from "./constants.js";
+import { attachMenuToggle } from "./menus.js";
 
 const COPY_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const CHECK_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -109,8 +110,9 @@ export const createPicker = ({
 
   const menu = document.createElement("div");
   menu.className = CLASSES.INBOX_MENU;
-  menu.style.display = "none";
   menu.setAttribute("role", "menu");
+
+  const toggle = attachMenuToggle(btn, menu);
 
   let current = value;
 
@@ -145,7 +147,7 @@ export const createPicker = ({
 
     item.addEventListener("click", (e) => {
       e.stopPropagation();
-      menu.style.display = "none";
+      toggle.close();
       // No-op: re-picking the option that's already selected must not fire
       // onSelect — for the status picker that would re-stamp resolvedAt on
       // every redundant "Resolved" click, destroying RF5's elapsed time.
@@ -156,11 +158,6 @@ export const createPicker = ({
     });
     menu.appendChild(item);
   }
-
-  btn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    menu.style.display = menu.style.display === "none" ? "block" : "none";
-  });
 
   wrapper.appendChild(btn);
   wrapper.appendChild(menu);
@@ -256,7 +253,8 @@ export const createCommentActions = (
 
   const menu = document.createElement("div");
   menu.className = CLASSES.INBOX_MENU;
-  menu.style.display = "none";
+
+  const menuToggle = attachMenuToggle(menuBtn, menu);
 
   const deleteItem = document.createElement("button");
   deleteItem.type = "button";
@@ -264,15 +262,10 @@ export const createCommentActions = (
   deleteItem.textContent = strings.deleteComment;
   deleteItem.addEventListener("click", (e) => {
     e.stopPropagation();
-    menu.style.display = "none";
+    menuToggle.close();
     onDelete(comment);
   });
   menu.appendChild(deleteItem);
-
-  menuBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    menu.style.display = menu.style.display === "none" ? "block" : "none";
-  });
 
   menuWrapper.appendChild(menuBtn);
   menuWrapper.appendChild(menu);
