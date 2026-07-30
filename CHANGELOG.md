@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.0 — 2026-07-29
+## 0.3.0 — 2026-07-30
 
 First published release. Preview: the feature set is substantial and covered
 by tests, but the API may still change before 1.0.
