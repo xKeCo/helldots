@@ -41,17 +41,24 @@ describe("createCommentOverlay", () => {
     expect(overlay.options.shortcutModifier).toBe("shift");
   });
 
-  it("defers initialization until DOMContentLoaded when the document is still loading", () => {
+  it("still returns the instance when the document is loading, deferring only the DOM work", () => {
+    // Regression guard. This used to register a DOMContentLoaded listener AND
+    // return the uninvoked initializer: a caller who invoked it — reasonable,
+    // since the signature said it might be a function — got a SECOND overlay,
+    // and the one the listener built was unreachable, so it could never be
+    // cleaned up. The readyState branch belongs to CommentOverlay's
+    // constructor, which already has it; duplicating it here was the bug.
     const readyStateSpy = vi
       .spyOn(document, "readyState", "get")
       .mockReturnValue("loading");
     const addEventListenerSpy = vi.spyOn(document, "addEventListener");
 
-    const result = createCommentOverlay({ autoInit: true });
+    const overlay = createCommentOverlay({ autoInit: true });
 
-    // autoInit defers to DOMContentLoaded but the function still returns the
-    // (uninvoked) initializer, same as the autoInit:false path.
-    expect(typeof result).toBe("function");
+    expect(overlay).toBeInstanceOf(CommentOverlay);
+    // The constructor defers mounting, so nothing is in the DOM yet...
+    expect(document.querySelector(TAG_NAME)).toBeNull();
+    // ...but it did arrange to mount once the document is ready.
     expect(addEventListenerSpy).toHaveBeenCalledWith(
       "DOMContentLoaded",
       expect.any(Function)
@@ -59,5 +66,19 @@ describe("createCommentOverlay", () => {
 
     readyStateSpy.mockRestore();
     addEventListenerSpy.mockRestore();
+  });
+
+  it("creates exactly one overlay while the document is loading", () => {
+    // The old double-registration meant two hosts could end up mounted.
+    const readyStateSpy = vi
+      .spyOn(document, "readyState", "get")
+      .mockReturnValue("loading");
+
+    const overlay = createCommentOverlay();
+    overlay.initOverlay();
+
+    expect(document.querySelectorAll(TAG_NAME)).toHaveLength(1);
+
+    readyStateSpy.mockRestore();
   });
 });

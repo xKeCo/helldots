@@ -1,9 +1,18 @@
 # Changelog
 
-## 0.1.0 — 2026-07-29
+## 0.5.0 — 2026-07-29
 
-First published release. Preview: the API is usable and tested, but may still
-change before 1.0.
+First published release. Preview: the feature set is substantial and covered
+by tests, but the API may still change before 1.0.
+
+**`createCommentOverlay` now always returns the instance.** While the document
+was still loading it used to register a `DOMContentLoaded` listener _and_
+return the uninvoked initializer, so a caller who invoked it — reasonable,
+since the signature said it might be a function — ended up with two overlays,
+and the one the listener built had no handle to `cleanup()` with. The
+`readyState` branch belongs to `CommentOverlay`'s constructor, which already
+had it. Typed with overloads, so `autoInit: false` still yields an initializer
+and everyone else gets a `CommentOverlay` without narrowing a union.
 
 **Anchoring.** Comments capture a JSON-serializable anchor at creation — a
 best-effort CSS selector, a content fingerprint and relative coordinates — so

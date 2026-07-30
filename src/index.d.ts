@@ -181,8 +181,19 @@ export declare class CommentOverlay {
   cleanup(): void;
 }
 
+/**
+ * Creates a CommentOverlay and mounts it. Safe to call before the document
+ * is ready — the instance defers its own DOM work to `DOMContentLoaded`.
+ */
 export declare function createCommentOverlay(
-  options?: CommentOverlayOptions
-): CommentOverlay | (() => CommentOverlay);
+  options?: CommentOverlayOptions & { autoInit?: true }
+): CommentOverlay;
+/**
+ * With `autoInit: false`, nothing is mounted yet: you get an initializer to
+ * call when you are ready.
+ */
+export declare function createCommentOverlay(
+  options: CommentOverlayOptions & { autoInit: false }
+): () => CommentOverlay;
 
 export default createCommentOverlay;
