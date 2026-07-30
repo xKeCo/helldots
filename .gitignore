@@ -4,3 +4,6 @@ coverage/
 .lighthouseci/
 lhci-reports/
 .playwright-mcp/
+.DS_Store
+.superpowers/
+*.tgz

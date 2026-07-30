@@ -1,6 +1,57 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 — 2026-07-29
+
+First published release. Preview: the API is usable and tested, but may still
+change before 1.0.
+
+**Anchoring.** Comments capture a JSON-serializable anchor at creation — a
+best-effort CSS selector, a content fingerprint and relative coordinates — so
+they re-attach after the page changes and are marked orphaned rather than
+dropped when their element disappears. Public API: `serializeComments()`,
+`loadComments()`, and the `onCommentCreated` / `onReplyAdded` / `onAnchorLost`
+callbacks.
+
+**Inbox.** A right-side sidebar listing every comment, with a detail view,
+thread replies, delete, and a copy button that puts an agent-ready context
+block on the clipboard. Optional `persistence: "localStorage"` mode stores
+comments across pages; a `user` option sets authorship.
+
+**Lifecycle.** Every comment carries a status — open, in progress or resolved —
+shown as a coloured dot and changeable from a picker in both the inbox and the
+thread popover. Resolved comments lose their on-page marker and sink to the
+bottom of the list. `setCommentStatus()` plus an `onCommentStatusChanged`
+callback.
+
+**Automatic capture (RF1, RF2).** Every new comment records a viewport
+screenshot (JPEG at half scale) and an environment snapshot: URL, viewport,
+screen resolution, device pixel ratio, user agent, browser, OS and language.
+The widget hides itself during the render, so its own toolbar never lands
+inside the image. Opt out with `autoScreenshot: false`.
+
+**Classification (RF3, RF4).** Comments can carry a type (bug, suggestion,
+question, improvement), a priority (high, medium, low) and free-form tags. All
+optional and neutral by default, settable while writing the comment or later
+from the actions bar. The inbox filters on all of them. New `setCommentType()`,
+`setCommentPriority()` and `setCommentTags()`, plus one `onCommentUpdated`
+callback.
+
+**Resolution time (RF5).** Resolved comments show how long they took, measured
+from creation. Reopening clears it.
+
+**Screenshot engine.** Drag-to-capture is correct on scrolled pages — the
+previous engine double-counted the window scroll, so captures taken further
+down showed content from higher up. Moved to `modern-screenshot` and HellDots
+now owns the crop.
+
+**Storage resilience.** When localStorage fills, the oldest automatic
+screenshots are shed and the write retried, so comments survive. Screenshots a
+user deliberately attached are never discarded.
+
+**Foundations.** Shadow DOM isolation, English and Spanish locales, and
+TypeScript definitions shipped with the package.
+
+### Development notes
 
 - **fix(shadow-dom)**: el cursor personalizado de modo comentario dejó de
   aplicarse tras la Tarea 1. La clase `comment-cursor` se sigue poniendo en

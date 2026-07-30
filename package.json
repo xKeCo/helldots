@@ -1,23 +1,47 @@
 {
   "name": "helldots",
-  "version": "1.0.0",
-  "description": "Comment overlay library for web applications",
-  "main": "dist/helldots.esm.js",
-  "module": "dist/helldots.esm.js",
-  "types": "src/index.d.ts",
+  "version": "0.1.0",
+  "description": "Drop-in comment overlay for web apps — click anywhere to leave a comment anchored to that element, with an automatic screenshot and environment capture",
+  "keywords": [
+    "comments",
+    "annotations",
+    "feedback",
+    "bug-report",
+    "screenshot",
+    "overlay",
+    "review",
+    "shadow-dom",
+    "widget"
+  ],
+  "homepage": "https://github.com/xKeCo/helldots#readme",
+  "bugs": {
+    "url": "https://github.com/xKeCo/helldots/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xKeCo/helldots.git"
+  },
+  "author": "xKeCo <kevcollazos@gmail.com>",
+  "license": "MIT",
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
-      "types": "./src/index.d.ts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/helldots.esm.js",
       "default": "./dist/helldots.esm.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
+  "types": "./dist/index.d.ts",
   "unpkg": "dist/helldots.umd.js",
+  "jsdelivr": "dist/helldots.umd.js",
   "files": [
-    "src/",
     "dist/"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -27,13 +51,11 @@
     "format:check": "prettier --check .",
     "build": "node scripts/build.mjs",
     "size": "node scripts/check-size.mjs",
-    "prepublishOnly": "npm run build",
+    "verify": "npm run lint && npm run typecheck && npm run format:check && npm test && npm run build && npm run size",
+    "prepublishOnly": "npm run verify",
     "changeset": "changeset",
     "release": "changeset version"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10.0.1",

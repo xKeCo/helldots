@@ -1,16 +1,22 @@
 const TAG_NAME = "helldots-root";
 
-class HelldotsRoot extends HTMLElement {
-  constructor() {
-    super();
-    this.attachShadow({ mode: "open" });
-  }
-}
-
+// Defined lazily rather than at module scope: `extends HTMLElement` is
+// evaluated when the class expression runs, so a top-level declaration makes
+// a bare `import "helldots"` throw on any server renderer (Next.js, Remix,
+// Astro) long before the app calls anything. Deferring it keeps the module
+// import-safe everywhere and only touches the DOM when we actually mount.
 const ensureDefined = () => {
-  if (!customElements.get(TAG_NAME)) {
-    customElements.define(TAG_NAME, HelldotsRoot);
-  }
+  if (customElements.get(TAG_NAME)) return;
+
+  customElements.define(
+    TAG_NAME,
+    class HelldotsRoot extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: "open" });
+      }
+    }
+  );
 };
 
 /**

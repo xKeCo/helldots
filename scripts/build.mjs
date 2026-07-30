@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { mkdir, rm } from "node:fs/promises";
+import { copyFile, mkdir, rm } from "node:fs/promises";
 
 const outdir = new URL("../dist/", import.meta.url);
 
@@ -29,7 +29,10 @@ await build({
   outfile: "dist/helldots.umd.js",
   bundle: true,
   minify: true,
-  sourcemap: true,
+  // No sourcemap: this artifact targets <script>-tag demos, and its map was
+  // 40% of the published tarball for something nobody step-debugs. The ESM
+  // bundle — what production apps actually load — keeps its map.
+  sourcemap: false,
   format: "iife",
   platform: "browser",
   globalName: "HellDots",
@@ -38,4 +41,14 @@ await build({
   },
 });
 
-console.log("Build complete: dist/helldots.esm.js, dist/helldots.umd.js");
+// The published tarball ships dist/ only — src/ stays out of it, since the
+// sourcemaps already embed every source file. So the hand-maintained type
+// declarations have to travel to where `exports.types` points.
+await copyFile(
+  new URL("../src/index.d.ts", import.meta.url),
+  new URL("index.d.ts", outdir)
+);
+
+console.log(
+  "Build complete: dist/helldots.esm.js, dist/helldots.umd.js, dist/index.d.ts"
+);
