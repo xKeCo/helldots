@@ -143,11 +143,17 @@ grouped by feature.
   initial gate — instead an absolute minimum threshold applies (`warn` from
   0.5) that does not block the merge but leaves a record in the log.
   Documented here as a known limitation, not as a fully met criterion.
-- **`release.yml` documented but not functional**: it publishes to npm on `v*`
-  tags, but depends on an `NPM_TOKEN` secret that does not exist in this
-  repository — the workflow will fail at the publish step until someone with
-  repo access configures it. This is intentional: the flow is meant to be
-  documented without real secrets.
+- **`release.yml` was documented before it was functional**: it publishes to
+  npm on `v*` tags but depends on an `NPM_TOKEN` secret, which was
+  deliberately not created when the workflow was written — the flow was meant
+  to be documented without real credentials, so until then the workflow would
+  have failed at the publish step. **Resolved on 2026-07-30**: the secret was
+  configured and `v0.3.0` published through it. The workflow is now live, and
+  a `v*` tag publishes for real.
+- **A tag is the only thing that publishes**: `release.yml` triggers on
+  `push: tags: v*` and nothing else, so pushing or merging to any branch —
+  `main` included — never touches npm. The other route to the registry is a
+  manual `npm publish`, which `prepublishOnly` gates behind `npm run verify`.
 
 ## Typecheck
 

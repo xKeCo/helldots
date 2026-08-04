@@ -2,10 +2,11 @@ name: Release
 
 # Publishes to npm when a v* tag is pushed. Requires an NPM_TOKEN repo
 # secret (Settings > Secrets and variables > Actions) with publish
-# permission for this package — not configured yet, so this workflow will
-# fail at the publish step until that secret is added. Documented here so
-# the release path is ready as soon as credentials exist; not wired up with
-# real secrets by the agent that authored it.
+# permission for this package.
+#
+# This is LIVE: the secret was configured on 2026-07-30 and v0.3.0 published
+# through it. Pushing a v* tag publishes to npm for real — nothing else does,
+# so pushing to any branch, main included, is safe.
 on:
   push:
     tags:
