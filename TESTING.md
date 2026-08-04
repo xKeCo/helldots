@@ -17,7 +17,7 @@ Lighthouse (accessibility/performance) runs against
 `playground/lighthouse.html`, a minimal fixture kept separate from the
 feature-rich `playground/index.html` demo — see `DECISIONS.md` for why.
 
-## Manual keyboard navigation (WCAG 2.1 AA — Tarea 8)
+## Manual keyboard navigation (WCAG 2.1 AA)
 
 Verified 2026-07-01 against `playground/index.html` in a real Chromium
 browser (Playwright), keyboard only unless noted:
@@ -47,7 +47,7 @@ buttons, comment input, reply input, and comment circles, then deliberately
 reverted at the user's request to restore exact pixel parity with the
 pre-Shadow-DOM UI (`dev-v2`) — see `DECISIONS.md`. Keyboard users
 currently get no visible focus indicator on these elements, same as before
-Tarea 8; this is a known, intentional accessibility gap.
+the accessibility pass; this is a known, intentional accessibility gap.
 
 Re-run this checklist whenever `src/overlay.js` or `src/components.js`
 change focus/keyboard-handling logic.

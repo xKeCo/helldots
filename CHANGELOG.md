@@ -62,138 +62,132 @@ TypeScript definitions shipped with the package.
 
 ### Development notes
 
-- **fix(shadow-dom)**: el cursor personalizado de modo comentario dejó de
-  aplicarse tras la Tarea 1. La clase `comment-cursor` se sigue poniendo en
-  `document.body` (fuera del shadow root), pero su regla CSS vivía dentro
-  del `<style>` inyectado en el shadow root — que nunca llega al host.
-  Se agrega `getGlobalStyles()` en `src/styles.js` para las pocas reglas
-  que deben aplicar al host page (hoy, solo esta), inyectadas en un
-  `<style id="comment-overlay-global-styles">` aparte en `document.head`
-  (`CommentOverlay.injectStyles`/`cleanup`), separado del stylesheet
-  encapsulado del widget. Verificado contra `dev-v2` con Playwright:
-  `getComputedStyle(document.body).cursor` ahora coincide.
-  Además, a pedido explícito del usuario, la regla ahora también fuerza el
-  cursor sobre **todos** los descendientes del host (`.comment-cursor,
-.comment-cursor *`) — antes (incluso en `dev-v2`) enlaces y botones de
-  la página anfitriona conservaban su propio `cursor: pointer` porque el
-  valor heredado de `body` no gana contra una regla explícita en el
-  descendiente. Con `!important` + el selector `*`, el ícono de comentario
-  ahora se ve sin importar sobre qué elemento del host esté el mouse. El
-  selector no cruza el shadow boundary, así que los controles propios del
-  widget (toolbar, botones) conservan su cursor normal.
-- **revert(a11y)**: por decisión explícita del usuario, se quitaron los 4
-  anillos `:focus-visible` agregados en la Tarea 8 (toolbar, input de
-  comentario, input de respuesta, círculo de comentario) para restaurar el
-  aspecto visual exacto de antes de esa tarea — verificado pixel a pixel
-  contra `dev-v2`. El resto de la Tarea 8 (roles ARIA, `aria-label`,
-  activación por teclado de los círculos, contraste del placeholder) se
-  mantiene intacto. Ver `DECISIONS.md` para el trade-off de accesibilidad
-  que esto reintroduce.
+- **fix(shadow-dom)**: the custom comment-mode cursor stopped applying once
+  the UI moved into a shadow root. The `comment-cursor` class is still set on
+  `document.body` (outside the shadow root), but its CSS rule lived inside the
+  `<style>` injected into the shadow root — which never reaches the host.
+  `getGlobalStyles()` was added to `src/styles.js` for the few rules that must
+  apply to the host page (today, only this one), injected into a separate
+  `<style id="comment-overlay-global-styles">` in `document.head`
+  (`CommentOverlay.injectStyles`/`cleanup`), apart from the widget's
+  encapsulated stylesheet. Verified against `dev-v2` with Playwright:
+  `getComputedStyle(document.body).cursor` now matches.
+  On top of that, at the user's explicit request, the rule now also forces the
+  cursor over **every** descendant of the host (`.comment-cursor,
+.comment-cursor *`) — previously (even in `dev-v2`) links and buttons on the
+  host page kept their own `cursor: pointer`, because a value inherited from
+  `body` does not win against an explicit rule on the descendant. With
+  `!important` plus the `*` selector, the comment icon now shows regardless of
+  which host element the mouse is over. The selector does not cross the shadow
+  boundary, so the widget's own controls (toolbar, buttons) keep their normal
+  cursor.
+- **revert(a11y)**: by explicit user decision, the four `:focus-visible` rings
+  added during the accessibility pass (toolbar, comment input, reply input,
+  comment circle) were removed to restore the exact visual appearance from
+  before that work — verified pixel by pixel against `dev-v2`. The rest of the
+  accessibility work (ARIA roles, `aria-label`, keyboard activation of the
+  circles, placeholder contrast) is untouched. See `DECISIONS.md` for the
+  accessibility trade-off this reintroduces.
 
-- **feat(shadow-dom)**: HellDots ahora se monta dentro de un custom element
-  `<helldots-root>` con un shadow root abierto (`src/root-element.js`). Toda
-  la UI (toolbar, comment box, tooltips, popovers, lightbox, selection rect) y
-  los estilos inyectados (`src/styles.js`) viven dentro del shadow tree, en
-  vez de en `document.body` / `document.head`. Esto cumple RNF07: ningún
-  estilo del widget se filtra al host ni viceversa. El anclaje de comentarios
-  a elementos del host (fuera del shadow root) y el atajo de teclado
-  configurable siguen funcionando sin cambios en la API pública. Ver
-  `DECISIONS.md` para detalle de las decisiones tomadas.
-- **test**: se agrega Vitest + jsdom (`vitest.config.js`, `test/`) con la
-  primera suite de pruebas, enfocada en regresión de la encapsulación Shadow
-  DOM (Tarea 1 del plan técnico). `npm test` ahora corre Vitest.
-- **build**: se agrega un pipeline de build con esbuild (`scripts/build.mjs`).
-  `npm run build` genera `dist/helldots.esm.js` (ESM, minificado, tree-shake
-  friendly, `html2canvas` externo) y `dist/helldots.umd.js` (IIFE
-  autocontenido para `<script>` plano, con `html2canvas` empaquetado).
-  `npm run size` mide el tamaño gzip de `dist/helldots.esm.js` y falla si
-  supera el presupuesto de 50 KB (RNF01/RNF08) — actualmente ~10.4 KB gzip.
-  `package.json` ahora apunta `main`/`module`/`exports` a `dist/`; el
-  playground sigue importando directamente desde `src/index.js`, sin
-  bundler. Ver `DECISIONS.md` para el tratamiento de `html2canvas`.
-- **test**: cobertura medible ≥80% sobre `src/` (RNF08). Se agrega
-  `@vitest/coverage-v8` con umbrales (`lines`/`functions`/`branches`/
-  `statements`) configurados en `vitest.config.js`; `npm run test:coverage`
-  falla si la cobertura cae por debajo de 80%. Se añadieron suites para
-  `index.js`, `components.js`, `overlay.js`, `styles.js`, `constants.js` y
-  `root-element.js` (105 tests, ~97%/85%/95%/99% stmts/branches/funcs/lines).
-  Escribir estas pruebas encontró y corrigió tres bugs reales:
-  - `cleanup()` nunca quitaba el listener `mousedown` de `handleDocumentClick`
-    de `document`, dejándolo filtrarse (memory/listener leak) cada vez que se
-    destruía una instancia de `CommentOverlay`.
-  - `CLASSES.TOOLBAR`, `CLASSES.COMMENT_BOX` y `CLASSES.SCREENSHOT_PREVIEW`
-    eran constantes muertas (nunca usadas como className en ningún lado, dos
-    de ellas además colisionaban en valor con sus `IDS` homónimos) — removidas.
-  - El selector `:scope > .screenshots-container` en `showThreadPopover` no
-    es resoluble de forma fiable en todos los entornos de testing basados en
-    jsdom; se reemplazó por una búsqueda explícita sobre `popover.children`
-    con el mismo comportamiento en navegadores reales pero verificable en CI.
-- **lint/format**: se agrega ESLint (flat config, `eslint.config.js`) con
-  `@eslint/js` recomendado + `eslint-config-prettier`, y Prettier
-  (`.prettierrc.json`). `npm run lint` corre sin errores sobre `src/`,
-  `test/` y `scripts/`; `npm run format` / `npm run format:check` formatean
-  o verifican el repo (excluyendo `playground/index.html`, una plantilla de
-  terceros que no es código de HellDots — ver `DECISIONS.md`). Se eliminó
-  un parámetro `circle` sin usar en `createMutationObserver`.
-- **ci**: se agrega `.github/workflows/ci.yml`, que en cada push/PR a `main`
-  corre `npm run lint`, `npm test`, `npm run test:coverage`, `npm run build`,
-  `npm run size`, y una auditoría de Lighthouse CI sobre un fixture mínimo
-  (`playground/lighthouse.html`) que falla si Accessibility < 90 (proxy de
-  RNF09/WCAG 2.1 AA). Se agrega también `.github/workflows/release.yml`
-  (documentado, sin publicar realmente — requiere un secret `NPM_TOKEN` que
-  no está configurado). Escribir el gate de accesibilidad encontró un bug
-  real: los botones de la toolbar (Comment/Inbox) y otros botones solo-ícono
-  (adjuntar imagen, enviar, cerrar, quitar captura) no tenían nombre
-  accesible (`aria-label`) — corregido en `src/components.js`/`src/overlay.js`,
-  además de `alt` en las imágenes de captura de pantalla. Ver `DECISIONS.md`
-  para el porqué del fixture dedicado en vez de auditar `playground/index.html`.
-- **typecheck**: se agrega `tsconfig.json` (`checkJs`, sin emitir) y
-  `npm run typecheck` (`tsc --noEmit`), integrado como gate en
-  `ci.yml`/`release.yml`. Se anotó `src/index.js` con JSDoc que referencia
-  los tipos de `src/index.d.ts`, y se corrigieron ~20 errores de tipos reales
-  en `src/overlay.js`/`src/components.js` (elementos DOM sin narrowing —
-  `HTMLInputElement`, `HTMLTextAreaElement`, `HTMLImageElement`, etc.) vía
-  anotaciones JSDoc puntuales, sin cambiar ningún comportamiento. Se agrega
-  `typecheck/consistency-check.ts` (fuera de `src/`, no se publica) para que
-  el checkeo realmente contraste `index.d.ts` contra la implementación —
-  ver `DECISIONS.md` para el problema de TypeScript que esto rodea.
-- **versionado**: se agrega [changesets](https://github.com/changesets/changesets)
-  (`.changeset/`, `npm run changeset`, `npm run release`) para versionado
-  semántico y `CHANGELOG.md` de releases de npm automatizados a partir de
-  los changesets acumulados. Documentado en `CONTRIBUTING.md`, junto con la
-  convención de Conventional Commits que ya seguía el historial del repo.
-  Verificado manualmente: un changeset de prueba (`minor`) hace que
-  `npm run release` haga bump de `1.0.0 → 1.1.0` y anteponga la entrada
-  correspondiente a `CHANGELOG.md`; revertido después de confirmar.
-- **accesibilidad (WCAG 2.1 AA)**: cierre de la Tarea 8. Los marcadores de
-  comentario (círculos) ahora son alcanzables por teclado
-  (`role="button"`, `tabindex="0"`, `aria-label` con el texto del
-  comentario, `Enter`/`Space` los activa igual que un click). Los botones
-  de cerrar (`×`) pasaron de `<span>` a `<button>` reales con
-  `aria-label="Close"`. El botón "Comment" de la toolbar expone
-  `aria-pressed` reflejando si el modo comentario está activo. Los
-  contenedores de comment box / tooltip / popover llevan `role="dialog"` y
-  `aria-label`; los inputs de texto tienen `aria-label`. Se agregaron
-  anillos de foco visibles (`:focus-visible`) en botones, inputs y círculos
-  donde antes se quitaba el `outline` sin reemplazo. Se corrigió el único
-  contraste de color bajo el umbral (placeholder text `rgba(255,255,255,0.4)`
-  → `0.5`, de 3.79:1 a 5.16:1). Verificado con Lighthouse (fixture: 100/100
-  Accessibility, supera el objetivo de ≥95) y con un recorrido 100% por
-  teclado en un navegador real vía Playwright — documentado en
-  `TESTING.md`. Colocar un comentario **nuevo** sigue requiriendo apuntar a
-  un punto de la página con el mouse (inherente a anclar comentarios a
-  ubicaciones arbitrarias, igual que Vercel Toolbar/Userback/Marker.io);
-  todo lo demás es 100% operable por teclado.
-- **i18n**: se agrega internacionalización mínima (Tarea 9, cierra P2). Todos
-  los strings visibles de `src/components.js` se extrajeron a
-  `src/locales/en.js` / `src/locales/es.js` (no `.json` — ver
-  `DECISIONS.md`). Nueva opción `locale: "en" | "es"` en
-  `createCommentOverlay(...)`, con detección automática desde
-  `navigator.language` como default (`src/i18n.js`). Los nombres de mes en
-  el tooltip de fecha completa (`data-full-date`) usan
-  `Intl.DateTimeFormat(locale, ...)` en vez de una tabla de meses en inglés
-  a mano, localizándose gratis para cualquier locale del navegador, no solo
-  `en`/`es`. Verificado: cero strings hardcodeados en `src/components.js`
-  (test de regresión con regex sobre el archivo fuente), y un cambio de
-  `locale: "es"` visible de punta a punta (toolbar, comment box, thread
-  popover, reply) tanto en Vitest como en un navegador real vía Playwright.
+- **feat(shadow-dom)**: HellDots now mounts inside a `<helldots-root>` custom
+  element with an open shadow root (`src/root-element.js`). The entire UI
+  (toolbar, comment box, tooltips, popovers, lightbox, selection rect) and the
+  injected styles (`src/styles.js`) live inside the shadow tree instead of in
+  `document.body` / `document.head`. This satisfies RNF07: no widget style
+  leaks into the host, or the other way around. Anchoring comments to host
+  elements (outside the shadow root) and the configurable keyboard shortcut
+  keep working with no public API change. See `DECISIONS.md` for the details.
+- **test**: Vitest + jsdom added (`vitest.config.js`, `test/`) with the first
+  test suite, focused on regressions in the Shadow DOM encapsulation.
+  `npm test` now runs Vitest.
+- **build**: an esbuild build pipeline was added (`scripts/build.mjs`).
+  `npm run build` produces `dist/helldots.esm.js` (ESM, minified,
+  tree-shake friendly, `html2canvas` external) and `dist/helldots.umd.js`
+  (self-contained IIFE for a plain `<script>` tag, with `html2canvas`
+  bundled). `npm run size` measures the gzip size of `dist/helldots.esm.js`
+  and fails if it exceeds the 50 KB budget (RNF01/RNF08) — currently ~10.4 KB
+  gzip. `package.json` now points `main`/`module`/`exports` at `dist/`; the
+  playground still imports straight from `src/index.js`, with no bundler. See
+  `DECISIONS.md` for how `html2canvas` is treated.
+- **test**: measurable coverage ≥80% over `src/` (RNF08). `@vitest/coverage-v8`
+  was added with thresholds (`lines`/`functions`/`branches`/`statements`)
+  configured in `vitest.config.js`; `npm run test:coverage` fails if coverage
+  drops below 80%. Suites were added for `index.js`, `components.js`,
+  `overlay.js`, `styles.js`, `constants.js` and `root-element.js` (105 tests,
+  ~97%/85%/95%/99% stmts/branches/funcs/lines). Writing them found and fixed
+  three real bugs:
+  - `cleanup()` never removed `handleDocumentClick`'s `mousedown` listener
+    from `document`, leaking it (memory/listener leak) every time a
+    `CommentOverlay` instance was destroyed.
+  - `CLASSES.TOOLBAR`, `CLASSES.COMMENT_BOX` and `CLASSES.SCREENSHOT_PREVIEW`
+    were dead constants (never used as a className anywhere, and two of them
+    collided in value with their identically named `IDS` entries) — removed.
+  - The `:scope > .screenshots-container` selector in `showThreadPopover` is
+    not reliably resolvable across jsdom-based testing environments; it was
+    replaced by an explicit search over `popover.children`, with the same
+    behavior in real browsers but verifiable in CI.
+- **lint/format**: ESLint added (flat config, `eslint.config.js`) with the
+  recommended `@eslint/js` + `eslint-config-prettier`, plus Prettier
+  (`.prettierrc.json`). `npm run lint` runs clean over `src/`, `test/` and
+  `scripts/`; `npm run format` / `npm run format:check` format or verify the
+  repo (excluding `playground/index.html`, a third-party template that is not
+  HellDots' code — see `DECISIONS.md`). An unused `circle` parameter was
+  removed from `createMutationObserver`.
+- **ci**: `.github/workflows/ci.yml` added, running `npm run lint`,
+  `npm test`, `npm run test:coverage`, `npm run build`, `npm run size` and a
+  Lighthouse CI audit over a minimal fixture (`playground/lighthouse.html`)
+  that fails if Accessibility < 90 (a proxy for RNF09/WCAG 2.1 AA).
+  `.github/workflows/release.yml` was added too (documented, not actually
+  publishing — it needs an `NPM_TOKEN` secret that is not configured).
+  Writing the accessibility gate found a real bug: the toolbar buttons
+  (Comment/Inbox) and other icon-only buttons (attach image, send, close,
+  remove screenshot) had no accessible name (`aria-label`) — fixed in
+  `src/components.js`/`src/overlay.js`, along with `alt` on the screenshot
+  images. See `DECISIONS.md` for why a dedicated fixture is audited instead of
+  `playground/index.html`.
+- **typecheck**: `tsconfig.json` added (`checkJs`, no emit) plus
+  `npm run typecheck` (`tsc --noEmit`), wired as a gate in
+  `ci.yml`/`release.yml`. `src/index.js` was annotated with JSDoc referencing
+  the types in `src/index.d.ts`, and ~20 real type errors were fixed in
+  `src/overlay.js`/`src/components.js` (DOM elements without narrowing —
+  `HTMLInputElement`, `HTMLTextAreaElement`, `HTMLImageElement`, and so on)
+  through targeted JSDoc annotations, with no behavior change.
+  `typecheck/consistency-check.ts` was added (outside `src/`, not published)
+  so the check really does contrast `index.d.ts` against the implementation —
+  see `DECISIONS.md` for the TypeScript problem this works around.
+- **versioning**: [changesets](https://github.com/changesets/changesets) added
+  (`.changeset/`, `npm run changeset`, `npm run release`) for semantic
+  versioning and an npm-release `CHANGELOG.md` automated from the accumulated
+  changesets. Documented in `CONTRIBUTING.md`, along with the Conventional
+  Commits convention the repo history already followed. Manually verified: a
+  test changeset (`minor`) makes `npm run release` bump `1.0.0 → 1.1.0` and
+  prepend the matching entry to `CHANGELOG.md`; reverted after confirming.
+- **accessibility (WCAG 2.1 AA)**: comment markers (circles) are now
+  keyboard-reachable (`role="button"`, `tabindex="0"`, `aria-label` carrying
+  the comment text, `Enter`/`Space` activating them like a click). The close
+  buttons (`×`) went from `<span>` to real `<button>` elements with
+  `aria-label="Close"`. The toolbar's "Comment" button exposes `aria-pressed`
+  reflecting whether comment mode is active. The comment box / tooltip /
+  popover containers carry `role="dialog"` and `aria-label`; text inputs have
+  `aria-label`. Visible focus rings (`:focus-visible`) were added on buttons,
+  inputs and circles where `outline` had been removed with no replacement. The
+  single below-threshold color contrast was fixed (placeholder text
+  `rgba(255,255,255,0.4)` → `0.5`, from 3.79:1 to 5.16:1). Verified with
+  Lighthouse (fixture: 100/100 Accessibility, above the ≥95 target) and with a
+  fully keyboard-driven walkthrough in a real browser via Playwright —
+  documented in `TESTING.md`. Placing a **new** comment still requires
+  pointing at a spot on the page with the mouse (inherent to anchoring
+  comments to arbitrary locations, same as Vercel Toolbar/Userback/Marker.io);
+  everything else is fully keyboard-operable.
+- **i18n**: minimal internationalization added. Every user-visible string in
+  `src/components.js` was extracted into `src/locales/en.js` /
+  `src/locales/es.js` (not `.json` — see `DECISIONS.md`). A new
+  `locale: "en" | "es"` option on `createCommentOverlay(...)`, with automatic
+  detection from `navigator.language` as the default (`src/i18n.js`). Month
+  names in the full-date tooltip (`data-full-date`) use
+  `Intl.DateTimeFormat(locale, ...)` instead of a hand-written English month
+  table, localizing for free to any browser locale, not just `en`/`es`.
+  Verified: zero hardcoded strings in `src/components.js` (a regression test
+  running a regex over the source file), and a `locale: "es"` switch visible
+  end to end (toolbar, comment box, thread popover, reply) both in Vitest and
+  in a real browser via Playwright.

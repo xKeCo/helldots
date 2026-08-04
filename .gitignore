@@ -7,3 +7,9 @@ lhci-reports/
 .DS_Store
 .superpowers/
 *.tgz
+
+# Claude Code: shared project config (settings.json, skills/, commands/,
+# agents/, launch.json) is committed — only per-developer and ephemeral
+# files are ignored.
+.claude/settings.local.json
+.claude/*.lock

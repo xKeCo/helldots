@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Idioma del código:** identificadores y comentarios en inglés. Los docs (`DECISIONS.md`, specs, planes) van en español, siguiendo lo que ya hay en el repo.
+- **Idioma:** todo lo que se escribe en el repo va en inglés — identificadores, comentarios de código, docs (`DECISIONS.md`, specs, planes), mensajes de commit y changesets. Ver `CONTRIBUTING.md`. _(Corregido el 2026-07-30: este plan decía originalmente que los docs iban en español, siguiendo lo que había en el repo entonces.)_
 - **Presupuesto de tamaño:** `npm run size` debe seguir pasando. Punto de partida: 19.63 KB de 50 KB gzip.
 - **i18n obligatorio:** todo string visible se añade a `src/locales/en.js` **y** `src/locales/es.js`. Nunca literales en la UI.
 - **Accesibilidad:** ningún badge comunica significado solo con color — todos llevan texto. Gate de Lighthouse a11y en 0.9.

@@ -1,482 +1,491 @@
-# Decisiones de diseño
+# Design decisions
 
-Registro de decisiones técnicas tomadas durante la ejecución del plan de mejora
-técnica de HellDots, cuando el plan no especificaba una opción concreta.
+Why HellDots is built the way it is. Each entry records a choice where more
+than one option was defensible, along with the reasoning and — where it
+applies — the limitation the choice accepts.
 
-## Shadow DOM (Tarea 1)
+This is a living log: when a decision is made that the code cannot explain on
+its own, it belongs here. Entries are append-only in spirit; when a decision
+is reversed, the new entry says so rather than the old one being deleted.
 
-- **Custom element vs. `attachShadow` en un `<div>` suelto**: se optó por un
-  custom element `<helldots-root>` (`src/root-element.js`) registrado vía
-  `customElements.define`, en línea con lo sugerido por el plan, en vez de
-  llamar `attachShadow` directamente sobre un `<div>` (que el spec también
-  permite). Un custom element deja la intención explícita en el DOM del host
-  y facilita debug (`document.querySelector('helldots-root')`).
-- **Mount singleton**: `getShadowRoot()` reutiliza el host existente si ya fue
-  montado, en vez de crear uno nuevo por instancia de `CommentOverlay`. Si en
-  el futuro se necesita soportar múltiples overlays independientes en la
-  misma página, esto deberá revisarse.
-- **Aislamiento de estilos**: se añadió una regla `:host { all: initial; ... }`
-  al inicio de la hoja de estilos inyectada (`src/styles.js`) para anular
-  cualquier propiedad heredable que el host pudiera filtrar hacia adentro del
-  shadow tree (p. ej. un reset agresivo `* { all: unset !important; }` en la
-  página anfitriona). Las reglas CSS del host no pueden seleccionar nodos
-  dentro del shadow tree (el shadow boundary no es atravesado por selectores),
-  pero sí pueden filtrar _valores heredados_ (color, font-family, etc.) hacia
-  el host element — `:host { all: initial }` corta esa herencia.
-- **Retargeting de eventos**: los listeners globales en `document` (click
-  fuera para cerrar comment box / thread popover) usaban `e.target`, que se
-  retarget al shadow host cuando el listener vive fuera del shadow tree. Se
-  cambiaron a `e.composedPath()[0]` para recuperar el nodo real dentro del
-  shadow tree antes de hacer `.contains()` / `.closest()`.
-- **Anclaje de comentarios**: el contenedor de anclaje (`comment.container`)
-  sigue siendo siempre un elemento del DOM "light" (host), nunca un nodo del
-  shadow tree — esto no cambió. Solo los círculos visuales (que se posicionan
-  con `position: fixed`/`absolute` en coordenadas de viewport) viven dentro
-  del shadow root.
+The early sections come from the initial hardening pass (shadow DOM, build,
+testing, CI, typecheck, versioning, accessibility, i18n); later ones are
+grouped by feature.
 
-## Build pipeline (Tarea 2)
+## Shadow DOM
 
-- **esbuild sobre Rollup/Webpack**: se eligió esbuild por simplicidad de
-  configuración (un script `scripts/build.mjs` con la API de Node, sin
-  archivo de config aparte) y velocidad. El proyecto no tiene necesidades de
-  bundling complejas (sin code-splitting entre múltiples entradas, sin
-  plugins de framework) que justifiquen Rollup.
-- **`html2canvas` como dependencia externa en el bundle ESM**: medido en
-  ~45 KB gzip (`html2canvas.min.js` por sí solo), bundlearlo dejaría casi sin
-  margen el presupuesto de 50 KB. Se marca `external: ["html2canvas"]` en el
-  build ESM (`dist/helldots.esm.js`, el artefacto medido por `npm run size`)
-  y se deja como `dependency` normal en `package.json` — cualquier bundler
-  del consumidor (Vite, webpack, esbuild, etc.) lo resuelve igual que
-  cualquier otra dependencia transitiva de npm. Verificado importando el
-  bundle desde un proyecto Vite de prueba: resuelve y compila sin errores.
-- **`dist/helldots.umd.js` (IIFE) SÍ empaqueta `html2canvas`**: es un
-  artefacto de conveniencia para `<script>` plano sin bundler ni resolución
-  de módulos disponible, así que necesita ser autocontenido. Por eso queda
-  **fuera** del presupuesto de 50 KB que mide `npm run size` — ese gate solo
-  audita el punto de entrada real del paquete npm (`dist/helldots.esm.js`),
-  que es el que importan la inmensa mayoría de consumidores reales.
-- **El playground no usa `dist/`**: sigue importando `../src/index.js`
-  directamente vía ES Modules nativos (con `html2canvas` resuelto por
-  import map a un CDN), tal como antes del pipeline de build. `dist/` solo
-  se genera para publicar el paquete, nunca se commitea (ya estaba en
-  `.gitignore`).
+- **Custom element vs. `attachShadow` on a bare `<div>`**: we went with a
+  custom element `<helldots-root>` (`src/root-element.js`) registered through
+  `customElements.define`, rather than calling `attachShadow` directly on a
+  `<div>` (which the spec also allows). A custom element makes the intent
+  explicit in the host's DOM and makes debugging easier
+  (`document.querySelector('helldots-root')`).
+- **Singleton mount**: `getShadowRoot()` reuses the existing host if one is
+  already mounted, instead of creating a new one per `CommentOverlay`
+  instance. If multiple independent overlays on the same page ever need to be
+  supported, this has to be revisited.
+- **Style isolation**: a `:host { all: initial; ... }` rule was added at the
+  top of the injected stylesheet (`src/styles.js`) to cancel any inheritable
+  property the host page might leak into the shadow tree (for example an
+  aggressive `* { all: unset !important; }` reset). The host's CSS rules
+  cannot select nodes inside the shadow tree — selectors do not cross the
+  shadow boundary — but they can leak _inherited values_ (color, font-family,
+  and so on) into the host element. `:host { all: initial }` cuts that
+  inheritance off.
+- **Event retargeting**: the global listeners on `document` (outside click to
+  close the comment box / thread popover) used `e.target`, which retargets to
+  the shadow host when the listener lives outside the shadow tree. They were
+  changed to `e.composedPath()[0]` to recover the real node inside the shadow
+  tree before calling `.contains()` / `.closest()`.
+- **Comment anchoring**: the anchor container (`comment.container`) is still
+  always an element in the light (host) DOM, never a node in the shadow tree —
+  that did not change. Only the visual circles, positioned with
+  `position: fixed`/`absolute` in viewport coordinates, live inside the shadow
+  root.
 
-## Testing y cobertura (Tarea 3)
+## Build pipeline
 
-- **Vitest + jsdom**: ya eran la elección natural dado que el proyecto corre
-  100% en ESM sin transpilador (Vitest soporta ESM nativo) y `jsdom` es
-  necesario para testear manipulación de Shadow DOM, `MutationObserver`, etc.
-  `happy-dom` se consideró pero `jsdom` tiene mejor soporte de Shadow DOM en
-  la práctica (aunque con limitaciones, ver abajo).
-- **`createOverlay` en tests crea `new CommentOverlay(options)` directamente,
-  sin llamar `.initOverlay()` aparte**: el constructor de `CommentOverlay` ya
-  llama `initOverlay()` de forma síncrona salvo que `document.readyState`
-  sea `"loading"` (no lo es en jsdom). `autoInit` es un concepto que solo
-  consume la factory `createCommentOverlay()` de `index.js`, no la clase en
-  sí — pasarlo directamente a `new CommentOverlay()` no tiene efecto. Una
-  primera versión de las pruebas llamaba `.initOverlay()` una segunda vez
-  "por si acaso", lo que registraba cada listener del documento dos veces y
-  causaba fugas de listeners detectables entre tests (ver bug de `cleanup()`
-  abajo). Ya corregido en `test/overlay.test.js` y `test/shadow-dom.test.js`.
-- **Límite real de jsdom con `:scope` dentro de un shadow root**: al escribir
-  pruebas para `showThreadPopover`, se detectó que `element.querySelector(
-':scope > .clase')` devuelve `null` quando `element` vive dentro de un
-  shadow root en jsdom (nwsapi no resuelve `:scope` correctamente ahí),
-  aunque la combinación es válida y funciona en todos los navegadores reales.
-  Se optó por **eliminar la dependencia de `:scope`** en `src/overlay.js`
-  (reemplazada por una búsqueda sobre `popover.children`) en vez de dejar ese
-  camino sin cobertura — mismo comportamiento observable, pero ahora
-  verificable en CI con el stack de testing elegido para todo el proyecto.
+- **esbuild over Rollup/Webpack**: esbuild was chosen for configuration
+  simplicity — a single `scripts/build.mjs` using the Node API, with no
+  separate config file — and for speed. The project has no complex bundling
+  needs (no code-splitting across multiple entries, no framework plugins) that
+  would justify Rollup.
+- **`html2canvas` external in the ESM bundle**: measured at ~45 KB gzip
+  (`html2canvas.min.js` on its own), bundling it would leave almost no room in
+  the 50 KB budget. It is marked `external: ["html2canvas"]` in the ESM build
+  (`dist/helldots.esm.js`, the artifact `npm run size` measures) and kept as a
+  regular `dependency` in `package.json` — any consumer bundler (Vite, webpack,
+  esbuild) resolves it like any other transitive npm dependency. Verified by
+  importing the bundle from a scratch Vite project: it resolves and compiles
+  without errors.
+- **`dist/helldots.umd.js` (IIFE) DOES bundle `html2canvas`**: it is a
+  convenience artifact for a plain `<script>` tag with no bundler or module
+  resolution available, so it has to be self-contained. That is why it sits
+  **outside** the 50 KB budget `npm run size` enforces — that gate audits only
+  the package's real entry point (`dist/helldots.esm.js`), which is what the
+  overwhelming majority of real consumers import.
+- **The playground does not use `dist/`**: it still imports `../src/index.js`
+  directly through native ES Modules (with `html2canvas` resolved by import
+  map from a CDN), exactly as it did before the build pipeline existed.
+  `dist/` is only produced to publish the package and is never committed (it
+  was already in `.gitignore`).
 
-## Linting y formato (Tarea 5)
+## Testing and coverage
 
-- **ESLint flat config + `eslint-config-prettier`**: se usa la config plana
-  (`eslint.config.js`) en vez del formato legado `.eslintrc`, ya que es el
-  formato recomendado para proyectos ESM nuevos. `eslint-config-prettier`
-  desactiva las reglas de estilo de ESLint que pisarían a Prettier, evitando
-  conflictos entre ambas herramientas.
-- **`playground/index.html` excluido de Prettier**: es una plantilla HTML de
-  terceros ("Dev Space" de Lapa Ninja) usada solo como fixture visual de
-  desarrollo, no código propio de HellDots. Reformatearla generaba un diff
-  enorme e irrelevante; se excluyó vía `.prettierignore` en vez de
-  reformatearla.
-- **`no-empty: { allowEmptyCatch: true }`**: los bloques `catch {}` vacíos en
-  la limpieza de `ResizeObserver`/`MutationObserver` (`src/overlay.js`) son
-  intencionales (ignoran errores de `disconnect()` en observers ya
-  desconectados) — se permite la excepción vía configuración de ESLint en
-  vez de añadir comentarios o lógica superflua solo para silenciar la regla.
+- **Vitest + jsdom**: the natural choice given that the project runs entirely
+  on ESM with no transpiler (Vitest supports native ESM) and that `jsdom` is
+  required to test Shadow DOM manipulation, `MutationObserver`, and so on.
+  `happy-dom` was considered, but `jsdom` has better Shadow DOM support in
+  practice (with caveats — see below).
+- **`createOverlay` in tests builds `new CommentOverlay(options)` directly,
+  without a separate `.initOverlay()` call**: `CommentOverlay`'s constructor
+  already calls `initOverlay()` synchronously unless `document.readyState` is
+  `"loading"` (it isn't, in jsdom). `autoInit` is a concept only the
+  `createCommentOverlay()` factory in `index.js` consumes, not the class
+  itself — passing it straight to `new CommentOverlay()` has no effect. An
+  early version of the tests called `.initOverlay()` a second time "just in
+  case", which registered every document listener twice and caused listener
+  leaks detectable across tests (see the `cleanup()` bug below). Already fixed
+  in `test/overlay.test.js` and `test/shadow-dom.test.js`.
+- **A real jsdom limitation with `:scope` inside a shadow root**: while
+  writing tests for `showThreadPopover`, we found that
+  `element.querySelector(':scope > .class')` returns `null` when `element`
+  lives inside a shadow root in jsdom (nwsapi does not resolve `:scope`
+  correctly there), even though the combination is valid and works in every
+  real browser. We chose to **drop the dependency on `:scope`** in
+  `src/overlay.js` — replaced by a search over `popover.children` — rather
+  than leave that path uncovered. Same observable behavior, now verifiable in
+  CI with the testing stack chosen for the whole project.
 
-## CI/CD (Tarea 4)
+## Linting and formatting
 
-- **GitHub Actions, un solo workflow `ci.yml`**: corre en cada push/PR a
-  `main` y encadena lint → test → coverage → build → size → Lighthouse, en
-  ese orden (falla rápido en los gates más baratos antes de los más caros).
-- **Fixture dedicado para Lighthouse (`playground/lighthouse.html`) en vez
-  de auditar `playground/index.html`**: el demo de `playground/index.html`
-  es una plantilla de terceros ("Dev Space" de Lapa Ninja) con problemas de
-  accesibilidad preexistentes y ajenos a HellDots (`color-contrast`,
-  `heading-order`, `link-name` en el propio markup de la plantilla) — medido
-  localmente con `@lhci/cli`: 0.82 de Accessibility, por debajo del umbral
-  de RNF09. Auditar esa página haría que el gate de CI fallara por razones
-  que HellDots no controla y no puede arreglar (no se reformatea código de
-  terceros, ver Tarea 5). Se creó un fixture mínimo y semánticamente limpio
-  que monta el widget sobre una página propia, para que el gate de
-  Lighthouse audite exclusivamente la UI que HellDots controla. Con el
-  fixture: Accessibility 1.0 tras corregir el bug de abajo.
-- **Bug real encontrado por el gate de accesibilidad**: los botones
-  solo-ícono de la toolbar (Comment/Inbox) no tenían nombre accesible,
-  haciendo fallar la auditoría `button-name` incluso en el fixture limpio.
-  Se agregaron `aria-label` a esos botones y a los demás botones solo-ícono
-  del widget (adjuntar imagen, enviar respuesta, cerrar tooltip/lightbox,
-  quitar captura), y `alt` a las imágenes de captura de pantalla. Esto
-  adelanta una porción mínima de la Tarea 8 (accesibilidad WCAG 2.1 AA);
-  el resto de esa tarea (navegación completa por teclado documentada,
-  contraste de color, roles ARIA en popovers) queda pendiente como P2.
-- **Sin comparación de regresión de Performance contra el run anterior**:
-  el plan pide fallar "si Performance regresa más de un umbral razonable
-  (ej. 10 puntos) respecto al run anterior", lo cual requiere almacenamiento
-  persistente entre runs (LHCI server con base de datos, o un servicio como
-  Lighthouse CI Server / temporary-public-storage con histórico). Se
-  consideró fuera de alcance para este gate inicial — en su lugar se aplica
-  un umbral absoluto mínimo (`warn` a partir de 0.5) que no bloquea el
-  merge pero deja constancia en el log. Documentado aquí como limitación
-  conocida, no como criterio cumplido al 100%.
-- **`release.yml` documentado pero no funcional**: publica a npm en tags
-  `v*`, pero depende de un secret `NPM_TOKEN` que no existe en este
-  repositorio — el workflow fallará en el paso de publish hasta que alguien
-  con acceso al repo lo configure. Es intencional: el plan pide dejar este
-  flujo "documentado pero sin secretos reales".
+- **ESLint flat config + `eslint-config-prettier`**: the flat config
+  (`eslint.config.js`) is used instead of the legacy `.eslintrc` format, since
+  it is the recommended format for new ESM projects. `eslint-config-prettier`
+  turns off the ESLint style rules that would fight Prettier, avoiding
+  conflicts between the two tools.
+- **`playground/index.html` excluded from Prettier**: it is a third-party HTML
+  template ("Dev Space" by Lapa Ninja) used only as a visual development
+  fixture, not HellDots' own code. Reformatting it produced a huge, irrelevant
+  diff, so it was excluded through `.prettierignore` instead.
+- **`no-empty: { allowEmptyCatch: true }`**: the empty `catch {}` blocks in
+  the `ResizeObserver`/`MutationObserver` cleanup (`src/overlay.js`) are
+  intentional — they swallow `disconnect()` errors on already-disconnected
+  observers. The exception is allowed through ESLint configuration rather than
+  by adding comments or superfluous logic just to silence the rule.
 
-## Typecheck (Tarea 6)
+## CI/CD
 
-- **`checkJs` en vez de migrar a TypeScript**: exactamente lo que pedía el
-  plan — validar consistencia sin migrar. `tsconfig.json` tiene `allowJs`,
-  `checkJs`, `noEmit`, sin `declaration`.
-- **Bug real de TypeScript descubierto al implementar el gate**: cuando un
-  `foo.d.ts` vive junto a un `foo.js` (nuestro caso: `src/index.d.ts` junto
-  a `src/index.js`), TypeScript deja de re-derivar/chequear el cuerpo del
-  `.js` y trata el `.d.ts` como la única fuente de verdad para ese módulo.
-  Un primer intento de `npm run typecheck` "pasaba" incluso con
-  `index.d.ts` deliberadamente roto (comprobado insertando un método que no
-  existe en la implementación real y cambiando el tipo de `commentMode`):
-  el archivo `src/index.js` simplemente nunca se estaba analizando.
-  Verificado con `tsc --listFiles`, que no listaba `src/index.js` en el
-  programa compilado.
-- **Archivo de consistencia dedicado (`typecheck/consistency-check.ts`),
-  fuera de `src/`**: importa la implementación real (`src/overlay.js`, que
-  al no tener un `.d.ts` hermano sí conserva su tipo inferido) y los tipos
-  declarados (`src/index.d.ts`), y los asigna entre sí — si divergen, este
-  archivo deja de compilar. Verificado deliberadamente: romper
-  `commentMode: boolean` a `string`, o agregar un método inexistente, hace
-  fallar `npm run typecheck` (exit code 2) apuntando exactamente a la
-  discrepancia; revertido el cambio, vuelve a pasar (exit 0).
-- **Trampa adicional con el nombre del archivo**: un primer intento se
-  llamó `src/index.d.consistency.ts`. TypeScript también lo clasificó como
-  archivo de declaración ambient (cualquier nombre con el infijo `.d.`
-  activa esa heurística, no solo el sufijo exacto `.d.ts`), por lo que las
-  aserciones de tipo dentro de él tampoco se chequeaban — mismo síntoma que
-  el bug anterior. Renombrado a `typecheck/consistency-check.ts` (sin `.d.`
-  en el nombre) para evitarlo.
-- **`src/index.js` con JSDoc que referencia `import('./index.d.ts').X`
-  directamente**: hace que la implementación declare explícitamente su
-  contrato contra el `.d.ts`, en vez de que `checkJs` intente inferir tipos
-  de parámetros JS sin anotar (que habrían quedado como `any` en la mayoría
-  de los casos, sin dar ninguna señal útil).
+- **GitHub Actions, a single `ci.yml` workflow**: it runs on every push/PR and
+  chains lint → test → coverage → build → size → Lighthouse, in that order, so
+  the cheapest gates fail first.
+- **A dedicated Lighthouse fixture (`playground/lighthouse.html`) instead of
+  auditing `playground/index.html`**: the `playground/index.html` demo is a
+  third-party template ("Dev Space" by Lapa Ninja) with pre-existing
+  accessibility problems that have nothing to do with HellDots
+  (`color-contrast`, `heading-order`, `link-name` in the template's own
+  markup) — measured locally with `@lhci/cli` at 0.82 Accessibility, below the
+  required threshold. Auditing that page would make the CI gate fail for
+  reasons HellDots neither controls nor can fix (third-party code is not
+  reformatted — see the linting section). A minimal, semantically clean
+  fixture was created that mounts the widget on our own page, so the
+  Lighthouse gate audits exclusively the UI HellDots controls. With the
+  fixture: Accessibility 1.0, after fixing the bug below.
+- **A real bug found by the accessibility gate**: the icon-only toolbar
+  buttons (Comment/Inbox) had no accessible name, failing the `button-name`
+  audit even on the clean fixture. `aria-label` was added to those and to the
+  widget's other icon-only buttons (attach image, send reply, close
+  tooltip/lightbox, remove screenshot), plus `alt` on the screenshot images.
+- **No Performance regression comparison against the previous run**: failing
+  when Performance regresses beyond a threshold relative to the previous run
+  requires persistent storage between runs (an LHCI server with a database, or
+  a service keeping history). That was considered out of scope for this
+  initial gate — instead an absolute minimum threshold applies (`warn` from
+  0.5) that does not block the merge but leaves a record in the log.
+  Documented here as a known limitation, not as a fully met criterion.
+- **`release.yml` documented but not functional**: it publishes to npm on `v*`
+  tags, but depends on an `NPM_TOKEN` secret that does not exist in this
+  repository — the workflow will fail at the publish step until someone with
+  repo access configures it. This is intentional: the flow is meant to be
+  documented without real secrets.
 
-## Versionado (Tarea 7)
+## Typecheck
 
-- **changesets sobre `standard-version`**: se eligió changesets porque
-  encaja mejor con un flujo de PRs individuales (cada cambio agrega su
-  propio archivo de changeset, sin depender de que el mensaje de commit de
-  merge tenga el prefijo correcto) y porque soporta bien un único paquete
-  publicado con `access: "public"`, que es nuestro caso.
-- **`CHANGELOG.md` de la raíz vs. el generado por changesets**: son
-  documentos distintos con propósitos distintos, no un conflicto — ver
-  `CONTRIBUTING.md`. El de la raíz narra decisiones de arquitectura durante
-  la ejecución de este plan técnico; el de changesets (que se antepone al
-  mismo archivo a partir de la primera release real) documenta versiones
-  de npm publicadas. Cuando se corte la primera release, ambos coexistirán
-  en el mismo archivo, con las entradas de versión arriba.
+- **`checkJs` instead of migrating to TypeScript**: validate consistency
+  without migrating. `tsconfig.json` sets `allowJs`, `checkJs` and `noEmit`,
+  with no `declaration`.
+- **A real TypeScript gotcha discovered while building the gate**: when a
+  `foo.d.ts` sits next to a `foo.js` (our case: `src/index.d.ts` next to
+  `src/index.js`), TypeScript stops re-deriving and checking the `.js` body
+  and treats the `.d.ts` as the single source of truth for that module. An
+  early `npm run typecheck` "passed" even with `index.d.ts` deliberately
+  broken (verified by adding a method that does not exist in the real
+  implementation and by changing the type of `commentMode`): `src/index.js`
+  was simply never being analyzed. Confirmed with `tsc --listFiles`, which did
+  not list `src/index.js` in the compiled program.
+- **A dedicated consistency file (`typecheck/consistency-check.ts`), outside
+  `src/`**: it imports the real implementation (`src/overlay.js`, which does
+  keep its inferred type since it has no sibling `.d.ts`) and the declared
+  types (`src/index.d.ts`), and assigns them to each other — if they diverge,
+  this file stops compiling. Deliberately verified: breaking
+  `commentMode: boolean` into `string`, or adding a nonexistent method, makes
+  `npm run typecheck` fail (exit code 2) pointing exactly at the mismatch;
+  reverting the change makes it pass again (exit 0).
+- **An extra trap in the file name**: a first attempt was called
+  `src/index.d.consistency.ts`. TypeScript classified it as an ambient
+  declaration file too — any name containing the `.d.` infix triggers that
+  heuristic, not just the exact `.d.ts` suffix — so the type assertions inside
+  it were not being checked either, the same symptom as the bug above.
+  Renamed to `typecheck/consistency-check.ts` (no `.d.` in the name) to avoid
+  it.
+- **`src/index.js` carries JSDoc referencing `import('./index.d.ts').X`
+  directly**: this makes the implementation declare its contract against the
+  `.d.ts` explicitly, instead of letting `checkJs` try to infer types for
+  unannotated JS parameters — which would have landed on `any` in most cases
+  and given no useful signal.
 
-## Accesibilidad (Tarea 8)
+## Versioning
 
-- **Marcadores de comentario como `<div role="button">` en vez de
-  `<button>`**: se necesita la forma custom del círculo (border-radius
-  asimétrico) y posicionamiento absoluto que un `<button>` real complicaría
-  ligeramente por sus estilos base; en vez de pelear con el reset, se usó
-  el patrón estándar `role="button"` + `tabindex="0"` + manejo explícito de
-  `keydown` para `Enter`/`Space` (documentado como patrón válido en la
-  guía ARIA Authoring Practices).
-- **`role="dialog"` sin `aria-modal="true"` en popover/tooltip/comment
-  box**: no se implementó un verdadero focus-trap (que exigiría
-  interceptar `Tab`/`Shift+Tab` para ciclar el foco dentro del diálogo) —
-  fuera de alcance para esta pasada. `aria-modal` sin un trap real sería
-  engañoso para tecnología asistiva, así que se omitió deliberadamente en
-  vez de declarar una garantía que no se cumple.
-- **Colocar un comentario nuevo sigue requiriendo el mouse**: es inherente
-  a la función (anclar a una posición arbitraria de la página host), no
-  una omisión — mismo trade-off que hacen Vercel Toolbar, Userback,
-  BugHerd y Marker.io. Todo lo demás (activar un marcador existente,
-  responder, cerrar tooltips/popovers/lightbox, salir del modo comentario)
-  es 100% operable por teclado, verificado en `TESTING.md`.
-- **Fixture de Lighthouse sin escenario interactivo**: la auditoría de
-  accesibilidad de CI (`playground/lighthouse.html`) solo audita el estado
-  inicial de la página (toolbar visible, nada más montado) porque Lighthouse
-  no simula interacción de usuario. El recorrido por teclado que ejercita
-  popover/tooltip/comment box se verificó manualmente vía Playwright y se
-  documentó en `TESTING.md`, no vía el gate automatizado de CI.
+- **changesets over `standard-version`**: changesets fits a per-PR flow better
+  (each change adds its own changeset file, without depending on the merge
+  commit message carrying the right prefix) and handles a single published
+  package with `access: "public"`, which is our case.
+- **The root `CHANGELOG.md` vs. the one changesets generates**: two documents
+  with different purposes, not a conflict — see `CONTRIBUTING.md`. The root
+  one narrates architectural decisions made while building the library; the
+  changesets one (prepended to the same file from the first real release
+  onward) documents published npm versions. Once the first release is cut,
+  both coexist in the same file, with the version entries on top.
 
-## i18n (Tarea 9)
+## Accessibility
 
-- **`src/locales/en.js` / `es.js` en vez de `.json`**: el plan sugería
-  `.json`, pero importar JSON con ES Modules nativos en el navegador exige
-  la sintaxis `import x from './y.json' with { type: 'json' }`, cuyo
-  soporte entre navegadores es más reciente e irregular que un `import`
-  de módulo JS normal — y el playground carga `src/index.js` sin bundler,
-  directo en el navegador (Tarea 2). Un módulo `.js` con
-  `export default {...}` es funcionalmente idéntico a un `.json` para
-  este propósito, funciona igual en Vitest/esbuild/navegador sin
-  condicionales, y evita ese riesgo de compatibilidad por completo.
-- **Nombres de mes vía `Intl.DateTimeFormat` en vez de una tabla `MONTHS`
-  traducida a mano**: más simple, más correcto (usa datos reales de
-  localización del runtime en vez de una traducción propia que solo
-  cubriría `en`/`es`), y elimina una categoría entera de strings
-  hardcodeados sin tener que mantenerla.
-- **Cobertura de i18n limitada a `en`/`es`**: es lo que pide la Tarea 9
-  explícitamente ("locale: 'es' | 'en'"). `detectLocale()` cae a `en` para
-  cualquier idioma de navegador no soportado (no lanza error ni deja
-  strings vacíos), así que agregar más locales después es aditivo: un
-  archivo nuevo en `src/locales/` y una entrada en el mapa de `i18n.js`,
-  sin tocar `components.js`/`overlay.js`.
-- **Limitación conocida, no nueva de esta tarea**: `getShadowRoot()`
-  reutiliza un único host `<helldots-root>` por página (decisión de la
-  Tarea 1). Si una página monta dos instancias de `CommentOverlay` con
-  locales distintos, ambas comparten el mismo shadow root y "gana" quien
-  montó su toolbar primero — no es algo que esta tarea introduce ni
-  intenta resolver (el caso de uso real es una sola instancia por página).
+- **Comment markers are `<div role="button">` rather than `<button>`**: the
+  circle needs a custom shape (asymmetric border-radius) and absolute
+  positioning that a real `<button>` would complicate slightly through its
+  base styles. Instead of fighting the reset, the standard pattern was used:
+  `role="button"` + `tabindex="0"` + explicit `keydown` handling for
+  `Enter`/`Space`, which the ARIA Authoring Practices guide documents as
+  valid.
+- **`role="dialog"` without `aria-modal="true"` on popover/tooltip/comment
+  box**: no real focus trap was implemented (it would require intercepting
+  `Tab`/`Shift+Tab` to cycle focus inside the dialog) — out of scope for that
+  pass. `aria-modal` without a real trap would mislead assistive technology,
+  so it was deliberately omitted rather than declaring a guarantee that is not
+  met.
+- **Placing a new comment still requires a mouse**: this is inherent to the
+  feature (anchoring to an arbitrary position on the host page), not an
+  omission — the same trade-off Vercel Toolbar, Userback, BugHerd and
+  Marker.io make. Everything else (activating an existing marker, replying,
+  closing tooltips/popovers/lightbox, leaving comment mode) is fully
+  keyboard-operable, verified in `TESTING.md`.
+- **The Lighthouse fixture has no interactive scenario**: the CI accessibility
+  audit (`playground/lighthouse.html`) only audits the page's initial state
+  (toolbar visible, nothing else mounted) because Lighthouse does not simulate
+  user interaction. The keyboard walkthrough that exercises
+  popover/tooltip/comment box was verified manually through Playwright and
+  documented in `TESTING.md`, not through the automated CI gate.
 
-## Anclaje serializable de comentarios (Requisito #1)
+## i18n
 
-- **Sin XPath, pese a que el requisito original decía "selector CSS/XPath"**:
-  acordado explícitamente con el usuario ("este requisito puede ser
-  modificado, solo quiero el mejor formato"). Un XPath estructural es
-  estrictamente más frágil que la combinación elegida (selector CSS en
-  cascada + fingerprint de contenido con scoring) y no aporta nada que el
-  selector CSS no cubra. Diseño completo en
-  `docs/superpowers/specs/2026-07-02-comment-anchoring-design.md`.
-- **Verificación obligatoria del fingerprint**: un match de
-  `querySelector` nunca se acepta a ciegas — se puntúa contra el
-  fingerprint (texto 0.5 / atributos 0.3 / posición entre hermanos 0.2,
-  con redistribución de pesos cuando falta una señal). Umbral 0.6 vía
-  selector, 0.7 vía búsqueda de rescate (sin señal estructural se exige
-  más confianza). Elementos "anónimos" (sin texto ni atributos) solo se
-  resuelven vía selector; el rescate se omite porque cualquier match
-  tag-wide sería una adivinanza.
-- **Screenshots fuera de la serialización v1**: son data-URLs de cientos
-  de KB; `SerializedComment` debe ser barato de persistir. La app
-  anfitriona puede guardarlos aparte usando el `id` del comentario.
-- **Persistencia delegada a la app anfitriona**: HellDots expone
-  `serializeComments()` / `loadComments()` y callbacks
-  (`onCommentCreated`, `onReplyAdded`, `onAnchorLost`); no incluye
-  `localStorage` ni backend propio — patrón de librería sin opiniones de
-  storage, decidido en el brainstorm.
-- **Bug real encontrado por el test de round-trip JSON**: un contenedor
-  con tamaño 0 (display:none, aún sin layout) producía
-  `relativeX/Y = Infinity` (división por cero), que ni siquiera es
-  JSON-serializable (`JSON.stringify` lo vuelve `null`). Se agregó un
-  guard en `_placeCommentAtPoint` que colapsa a 0 en ese caso.
-- **Inbox mínimo**: el botón de la toolbar era un stub; ahora abre un
-  panel que lista todos los comentarios y marca los huérfanos con un
-  badge localizado ("Unanchored"/"Desanclado"). Click en un huérfano abre
-  su thread popover centrado en el viewport (`showThreadPopover` acepta
-  `circle = null`), porque un comentario desanclado no tiene posición
-  válida en la página — nunca se posiciona "mejor esfuerzo" sobre
-  contenido equivocado.
+- **`src/locales/en.js` / `es.js` instead of `.json`**: importing JSON through
+  native ES Modules in the browser requires the
+  `import x from './y.json' with { type: 'json' }` syntax, whose cross-browser
+  support is more recent and uneven than a plain JS module import — and the
+  playground loads `src/index.js` without a bundler, straight in the browser.
+  A `.js` module with `export default {...}` is functionally identical to a
+  `.json` for this purpose, works the same in Vitest/esbuild/browser with no
+  conditionals, and sidesteps that compatibility risk entirely.
+- **Month names through `Intl.DateTimeFormat` instead of a hand-translated
+  `MONTHS` table**: simpler, more correct (it uses the runtime's real
+  localization data instead of a homegrown translation that would only cover
+  `en`/`es`), and it removes an entire category of hardcoded strings with
+  nothing left to maintain.
+- **i18n coverage limited to `en`/`es`**: `detectLocale()` falls back to `en`
+  for any unsupported browser language (it neither throws nor leaves empty
+  strings), so adding more locales later is purely additive: a new file in
+  `src/locales/` and an entry in the map in `i18n.js`, without touching
+  `components.js`/`overlay.js`.
+- **A known limitation, not introduced here**: `getShadowRoot()` reuses a
+  single `<helldots-root>` host per page (see the Shadow DOM section). If a
+  page mounts two `CommentOverlay` instances with different locales, both
+  share the same shadow root and whoever mounted their toolbar first "wins" —
+  not something this work introduces or tries to solve (the real use case is a
+  single instance per page).
 
-## Inbox sidebar, persistencia localStorage y estado oculto
+## Serializable comment anchoring
 
-- **Enmienda a la serialización v1**: `SerializedComment` ahora SÍ incluye
-  `screenshots` (y `replies[].screenshots`). El modo `localStorage` y las
-  cards del inbox los necesitan; mantener dos formatos de serialización
-  (con y sin screenshots) costaba más que el ahorro. También se agregó
-  `page` (`location.pathname` al crear) para el filtro por página.
-- **`anchorState: "inactive"` para comentarios de otras páginas**: al
-  restaurar, un comentario cuyo `page` no coincide con el pathname actual
-  no está "roto" — su elemento simplemente no existe aquí. No se intenta
-  resolver su ancla, no renderiza círculo y no dispara `onAnchorLost`
-  (evita falsas alarmas); solo aparece en el filtro "Todos" del inbox con
-  su pathname como tag.
-- **`hidden` es estado runtime, no serializado**: depende del viewport del
-  momento (media queries). Se detecta con tamaño 0 del contenedor en
-  `updateCommentPosition` — el `console.warn` de "invalid dimensions" se
-  eliminó porque tamaño cero dejó de ser anomalía: es el estado normal de
-  un elemento con `display:none` responsive (caso `slogan-img`).
-- **El botón "copiar" genera contexto para agentes**, no copia el texto:
-  decisión del usuario inspirada en Vercel Toolbar. El template
-  (`src/agent-context.js`) incluye page/viewport/estado/selector/elemento/
-  DOM path/texto cercano/thread — sin árbol de componentes de framework
-  (HellDots es framework-agnóstico; el DOM real es lo que puede ofrecer).
-- **`InboxView` como vista pura** (`src/inbox.js`): toda mutación
-  (responder, eliminar) vuelve al overlay vía callbacks; el sidebar nunca
-  toca storage ni los marcadores directamente. El panel bottom-center de
-  la iteración anterior se eliminó por completo.
-- **El modal del playground usa `class="modal-content"`** deliberadamente:
-  el selector de contenedores de anclaje
-  (`section, div[class*="container"], div[class*="content"]`) debe
-  matchear el dialog para que los comentarios anclen al modal y no a
-  `document.body` — si anclaran a body, cerrar el modal no ocultaría el
-  marcador.
+- **No XPath, despite the original requirement saying "CSS/XPath selector"**:
+  agreed explicitly with the user ("this requirement can be modified, I just
+  want the best format"). A structural XPath is strictly more fragile than the
+  chosen combination (cascading CSS selector + content fingerprint with
+  scoring) and adds nothing the CSS selector does not already cover. Full
+  design in `docs/superpowers/specs/2026-07-02-comment-anchoring-design.md`.
+- **Mandatory fingerprint verification**: a `querySelector` match is never
+  accepted blindly — it is scored against the fingerprint (text 0.5 /
+  attributes 0.3 / position among siblings 0.2, with weights redistributed
+  when a signal is missing). Threshold 0.6 via selector, 0.7 via rescue search
+  (with no structural signal, more confidence is demanded). "Anonymous"
+  elements (no text, no attributes) resolve only via selector; the rescue is
+  skipped because any tag-wide match would be a guess.
+- **Screenshots excluded from v1 serialization**: they are data URLs hundreds
+  of KB in size, and `SerializedComment` has to be cheap to persist. The host
+  app can store them separately keyed by the comment's `id`.
+- **Persistence delegated to the host app**: HellDots exposes
+  `serializeComments()` / `loadComments()` and callbacks
+  (`onCommentCreated`, `onReplyAdded`, `onAnchorLost`); it ships neither
+  `localStorage` nor a backend of its own — the unopinionated-library pattern,
+  decided during the brainstorm.
+- **A real bug found by the JSON round-trip test**: a container with zero size
+  (`display: none`, no layout yet) produced `relativeX/Y = Infinity` (division
+  by zero), which is not even JSON-serializable (`JSON.stringify` turns it
+  into `null`). A guard was added in `_placeCommentAtPoint` that collapses to
+  0 in that case.
+- **Minimal inbox**: the toolbar button was a stub; it now opens a panel
+  listing every comment and flagging orphans with a localized badge
+  ("Unanchored"/"Desanclado"). Clicking an orphan opens its thread popover
+  centered in the viewport (`showThreadPopover` accepts `circle = null`),
+  because an unanchored comment has no valid position on the page — it is
+  never positioned "best effort" over the wrong content.
 
-## Migración de html2canvas a modern-screenshot (captura de pantalla)
+## Inbox sidebar, localStorage persistence and hidden state
 
-- **Bug real que motivó el cambio**: con la página con scroll, la captura
-  por arrastre devolvía contenido desplazado hacia arriba exactamente
-  `window.scrollY` px (aparecía el hero al capturar secciones inferiores).
-  Reproducido y aislado con Playwright: html2canvas v1.4.1 usa por defecto
-  `scrollX/scrollY = window.pageXOffset/pageYOffset` y desplaza el render
-  del clon; nuestro recorte ya sumaba el scroll a `x/y` → doble conteo
-  (issues conocidos #1878/#2333 de html2canvas). Verificado empíricamente:
-  `scrollX: 0, scrollY: 0` producía el recorte correcto.
-- **Migración en vez de solo el fix** (decisión del usuario): html2canvas
-  está sin mantenimiento desde 2022 y no soporta CSS moderno (funciones de
-  color `oklch`/`lab` que usa p. ej. Tailwind v4 — rompería la captura en
-  páginas modernas). `modern-screenshot` (fork mantenido de html-to-image,
-  ~10 KB gzip vs ~45 KB) usa SVG foreignObject con mejor fidelidad.
-- **El recorte ahora es nuestro** (`src/capture.js`): se renderiza la
-  página completa una vez (`domToCanvas`, `scale: 1` = píxeles CSS) y el
-  recorte se hace con `drawImage` en coordenadas de página
-  (`viewport + scroll`). Al no delegar el crop a la librería, la clase de
-  bug de doble-scroll queda eliminada por diseño, y cambiar de motor de
-  render en el futuro no toca la lógica de coordenadas.
-- **Mismo tratamiento de dependencia**: external en el bundle ESM (dentro
-  del presupuesto de 50 KB), bundleada en el UMD autocontenido; import
-  maps del playground actualizados a esm.sh/modern-screenshot@4.7.0.
-- **Fondo efectivo de página, no blanco fijo**: los renders DOM-based
-  producen PNG transparente cuando `<html>`/`<body>` no pintan fondo (el
-  blanco que se ve en pantalla lo pinta el navegador, fuera del DOM) — la
-  captura quedaba invisible sobre la UI oscura del inbox. Se pasa
-  `backgroundColor` a `domToCanvas` resolviendo el color computado de
-  html → body → `#ffffff` como fallback (replica lo que el usuario ve:
-  páginas oscuras salen oscuras, páginas sin fondo salen blancas).
-  Verificado midiendo el alfa de los píxeles del PNG capturado en
-  `/about` antes (0) y después (255).
+- **Amendment to v1 serialization**: `SerializedComment` now DOES include
+  `screenshots` (and `replies[].screenshots`). The `localStorage` mode and the
+  inbox cards need them, and maintaining two serialization formats (with and
+  without screenshots) cost more than it saved. `page`
+  (`location.pathname` at creation time) was also added, for the per-page
+  filter.
+- **`anchorState: "inactive"` for comments from other pages**: on restore, a
+  comment whose `page` does not match the current pathname is not "broken" —
+  its element simply does not exist here. Its anchor is not resolved, no
+  circle is rendered and `onAnchorLost` does not fire (avoiding false alarms);
+  it only shows up under the inbox's "All" filter, tagged with its pathname.
+- **`hidden` is runtime state, not serialized**: it depends on the viewport at
+  that moment (media queries). It is detected from a zero-sized container in
+  `updateCommentPosition` — the "invalid dimensions" `console.warn` was
+  removed because zero size stopped being an anomaly: it is the normal state
+  of a responsively `display: none` element (the `slogan-img` case).
+- **The "copy" button generates agent context** rather than copying the text:
+  a user decision inspired by Vercel Toolbar. The template
+  (`src/agent-context.js`) includes page/viewport/state/selector/element/DOM
+  path/nearby text/thread — with no framework component tree, since HellDots
+  is framework-agnostic and the real DOM is what it can offer.
+- **`InboxView` as a pure view** (`src/inbox.js`): every mutation (reply,
+  delete) goes back to the overlay through callbacks; the sidebar never
+  touches storage or the markers directly. The bottom-center panel from the
+  previous iteration was removed entirely.
+- **The playground modal uses `class="modal-content"`** deliberately: the
+  anchor-container selector
+  (`section, div[class*="container"], div[class*="content"]`) has to match the
+  dialog so comments anchor to the modal and not to `document.body` — if they
+  anchored to body, closing the modal would not hide the marker.
 
-## Fix de paridad visual post-Shadow DOM
+## Migration from html2canvas to modern-screenshot
 
-- **Bug real: cursor de modo comentario roto por el shadow root**: al
-  encapsular estilos en la Tarea 1, la regla `.comment-cursor` (que
-  necesita aplicar a `document.body`, un elemento del host que el widget
-  no controla) quedó atrapada dentro del `<style>` del shadow root. Un
-  shadow root no permite que sus estilos escapen hacia el documento — por
-  diseño — así que la regla dejó de tener efecto. Se separó en
-  `getGlobalStyles()`, inyectado en un segundo `<style>` en
-  `document.head`. Es la primera (y por ahora única) regla que necesita
-  este tratamiento; si aparecen más casos así, agregarlas a
-  `getGlobalStyles()` en vez de duplicar el mecanismo.
-- **`.comment-cursor *` en vez de solo `.comment-cursor`**: el pedido
-  original era "restaurar el cursor", pero al verificar contra `dev-v2` se
-  confirmó que ni siquiera la versión original forzaba el cursor sobre
-  elementos con su propio `cursor` explícito (links, botones de la
-  plantilla) — la herencia de `cursor` en CSS no puede ganarle a una
-  declaración explícita en el propio elemento, con o sin Shadow DOM de por
-  medio. El usuario pidió expresamente que el ícono aparezca "sea donde
-  sea que me mueva el cursor", así que se agregó el descendant selector
-  `*` junto con `!important` para forzarlo sobre todo el host mientras
-  dura el modo comentario. No cruza el shadow boundary (los selectores CSS
-  no pueden hacerlo), así que los controles propios del widget (toolbar,
-  botones del comment box) conservan su cursor normal — solo se ve
-  afectada la página anfitriona, que es la intención.
-- **Reversión deliberada de los 4 `:focus-visible` de la Tarea 8**: el
-  usuario probó la rama contra `dev-v2` (el estado pre-Shadow DOM) y pidió
-  explícitamente restaurar el aspecto visual exacto de antes, incluyendo
-  perder el anillo de foco visible que se había agregado por accesibilidad
-  (WCAG 2.1 AA, criterio 2.4.7 Focus Visible). Es una decisión consciente
-  de producto, no un descuido: se documenta aquí para que quede claro que
-  **esto reintroduce una brecha de accesibilidad conocida** — los
-  elementos interactivos del widget (toolbar, inputs, círculos) vuelven a
-  no mostrar ningún indicador de foco al navegar por teclado, igual que en
-  `dev-v2`. Si en el futuro se requiere volver a cumplir ese criterio,
-  revisar el historial de la Tarea 8 y este commit de reversión.
+- **The real bug that motivated the change**: on a scrolled page, drag capture
+  returned content shifted upward by exactly `window.scrollY` px (the hero
+  appeared when capturing lower sections). Reproduced and isolated with
+  Playwright: html2canvas v1.4.1 defaults `scrollX/scrollY` to
+  `window.pageXOffset/pageYOffset` and offsets the clone's render, while our
+  crop already added the scroll to `x/y` → double counting (html2canvas issues
+  #1878/#2333). Verified empirically: `scrollX: 0, scrollY: 0` produced the
+  correct crop.
+- **Migrating rather than just fixing** (user decision): html2canvas has been
+  unmaintained since 2022 and does not support modern CSS (`oklch`/`lab` color
+  functions, used by Tailwind v4 among others — it would break capture on
+  modern pages). `modern-screenshot` (a maintained fork of html-to-image,
+  ~10 KB gzip vs ~45 KB) uses SVG foreignObject with better fidelity.
+- **The crop is now ours** (`src/capture.js`): the full page is rendered once
+  (`domToCanvas`, `scale: 1` = CSS pixels) and the crop is done with
+  `drawImage` in page coordinates (`viewport + scroll`). By not delegating the
+  crop to the library, the double-scroll class of bug is eliminated by design,
+  and swapping render engines later does not touch the coordinate logic.
+- **Same dependency treatment**: external in the ESM bundle (inside the 50 KB
+  budget), bundled into the self-contained UMD; the playground's import maps
+  point at esm.sh/modern-screenshot@4.7.0.
+- **Effective page background, not a fixed white**: DOM-based renders produce
+  a transparent PNG when `<html>`/`<body>` paint no background (the white you
+  see on screen is painted by the browser, outside the DOM) — the capture came
+  out invisible against the inbox's dark UI. `backgroundColor` is now passed
+  to `domToCanvas`, resolving the computed color of html → body → `#ffffff` as
+  a fallback (mirroring what the user sees: dark pages come out dark, pages
+  with no background come out white). Verified by measuring the alpha of the
+  captured PNG's pixels on `/about` before (0) and after (255).
 
-## Contexto automático, clasificación y tiempo de resolución (RF1–RF5)
+## Visual parity fix after Shadow DOM
 
-- **`contextScreenshot` en un campo aparte de `screenshots[]`**: las dos
-  cosas tienen semánticas distintas. `screenshots[]` es evidencia que el
-  usuario adjuntó a propósito; `contextScreenshot` lo recoge la librería
-  sola. Separarlos permite mostrarlos distinto, purgar solo el automático si
-  se llega a tocar la cuota de localStorage, y que el usuario no borre por
-  accidente algo que no puso él.
-- **JPEG q0.7 a escala 0.5 para la captura automática**: un PNG de viewport a
-  escala 1 pesa 300 KB–1.5 MB como data URL y con 3–4 comentarios revienta la
-  cuota de ~5 MB de localStorage (toda la persistencia vive en una sola key).
-  A media escala son ~40–120 KB. El drag manual se queda en PNG a escala 1:
-  cuando el usuario selecciona una región a propósito, la fidelidad importa.
-- **`renderPage` / `cropRegion` / `cropViewport` en vez de un solo
-  `captureRegion`**: el render de la página es prácticamente todo el coste de
-  una captura. Con el flujo de drag ya rindiendo una vez, una auto-captura
-  independiente habría hecho que cada comentario con drag pagara ese coste
-  dos veces. El canvas compartido lo evita. `captureRegion` se mantiene como
-  export por compatibilidad.
-- **La captura se espera antes de mostrar el comment box**: el host tiene que
-  estar oculto durante el render, así que mostrar el box en paralelo sería
-  una condición de carrera que lo metería a medias dentro de la propia
-  captura. La ruta sin drag renderiza a `scale: 0.5` (~4× más barato) para
-  acotar la latencia, y `autoScreenshot: false` la elimina del todo.
-- **`withHiddenOverlay` oculta el host `<helldots-root>` entero, no solo
-  `this.overlay`**: el flujo de drag anterior solo ocultaba el overlay, así
-  que el toolbar de HellDots salía dentro de los screenshots manuales. Bug
-  preexistente, arreglado de paso al compartir el helper.
-- **`captureContext()` con `navigator.userAgentData` y fallback a regex**:
-  Chromium expone marcas y plataforma ya estructuradas; Safari y Firefox
-  requieren parsear el UA. El orden de la tabla es load-bearing (el UA de
-  Edge contiene "Chrome", el de Chrome contiene "Safari"). El UA crudo se
-  guarda siempre, así que un parseo fallido degrada a `unknown` sin perder
-  información.
-- **Tipos como enum fijo + `tags: string[]` libres, en vez de tipos
-  configurables por el host**: los tags cubren la personalización sin que la
-  librería tenga que traducir ni colorear etiquetas que no conoce.
-- **La prioridad reusa el rojo de `bug` y el naranja de `in_progress`**:
-  deliberado. La rampa rojo/naranja/gris se lee como escala de urgencia de
-  inmediato, y son dimensiones distintas en slots distintos de la UI. Ningún
-  badge comunica su significado solo con color — todos llevan texto
-  (WCAG 1.4.1, y el gate de Lighthouse a11y está en 0.9).
-- **`createPicker` genérico en vez de tres pickers duplicados**: estado, tipo
-  y prioridad son el mismo widget con distinto diccionario. El picker de
-  estado que ya existía pasó a ser su primer consumidor, sin cambio de
-  comportamiento observable.
-- **Un solo `onCommentUpdated` para tipo/prioridad/tags**: tres callbacks
-  separados habrían sido ruido en la API. `onCommentStatusChanged` se
-  mantiene intacto para no romper consumidores existentes.
-- **`resolvedAt` único en vez de historial de estados**: se sella al entrar
-  en `resolved` y se limpia al salir, así que el dato mostrado siempre
-  corresponde a la resolución vigente. Un `statusHistory` completo daba más
-  valor analítico del que el requisito pedía, a cambio de más payload por
-  comentario. Los comentarios resueltos antes de este cambio no tienen
-  timestamp: se muestran con `—`, nunca con una duración inventada.
-- **RF6 (reacciones con emoji) queda fuera**: se reserva
-  `reactions?: Record<string, string[]>` (emoji → autores). Al ser opcional
-  y ausente por defecto, implementarlo después no requiere migración.
-- **`createPicker` recibió un parámetro `action`.** Los tests preexistentes
-  consultaban el picker de estado por `[data-action="status"]`, atributo que
-  el picker genérico no emitía. En vez de reescribir esas consultas, el
-  genérico acepta `action` y lo pone en el botón — lo que además hace que
-  los tres pickers (estado, tipo, prioridad) sean direccionables por
-  separado en el DOM. El único renombrado inevitable fue
-  `data-status-option` → `data-picker-option`, mecánico y sin tocar ninguna
-  aserción.
-- **Dos guards del repo tenían el alcance mal puesto y se corrigieron.** El
-  de i18n (`components.js has no hardcoded, user-visible English UI
-strings`) marcaba `"Enter"` —un nombre de tecla del DOM, no texto de
-  UI— como infracción, y empujó a escribir `e.key.toLowerCase() !==
-"enter"`, menos idiomático y capaz de lanzar si `e.key` viene `undefined`.
-  Se restauró la comparación idiomática y se enseñó al guard a excluir
-  nombres de tecla mediante una allowlist nombrada y estrecha. El de
-  constantes decía "referenced from `src/`" pero solo leía tres archivos,
-  dejando `inbox.js` fuera; ahora escanea todos los `.js` de `src/`. En
-  ambos casos se verificó después que el guard sigue cazando la infracción
-  real, para no cambiar un falso positivo por un falso negativo.
-- **El botón colapsado del filtro del inbox refleja los cuatro filtros.** Al
-  añadir tipo y prioridad, la etiqueta seguía componiéndose solo de página y
-  estado, así que un filtro activo podía ocultar comentarios sin ninguna
-  señal visible. Se extrajo `_filterSummaryLabel()` y ahora todo filtro
-  activo aparece en la etiqueta.
+- **A real bug: comment-mode cursor broken by the shadow root**: when styles
+  were encapsulated, the `.comment-cursor` rule — which has to apply to
+  `document.body`, a host element the widget does not control — got trapped
+  inside the shadow root's `<style>`. A shadow root does not let its styles
+  escape into the document, by design, so the rule stopped having any effect.
+  It was split into `getGlobalStyles()`, injected in a second `<style>` in
+  `document.head`. It is the first (and so far only) rule that needs this
+  treatment; if more cases appear, add them to `getGlobalStyles()` rather than
+  duplicating the mechanism.
+- **`.comment-cursor *` instead of just `.comment-cursor`**: the original ask
+  was "restore the cursor", but checking against `dev-v2` confirmed that not
+  even the original version forced the cursor over elements with their own
+  explicit `cursor` (links, template buttons) — CSS `cursor` inheritance
+  cannot beat an explicit declaration on the element itself, Shadow DOM or
+  not. The user explicitly asked for the icon to appear "wherever I move the
+  cursor", so the descendant selector `*` was added along with `!important` to
+  force it across the whole host while comment mode is active. It does not
+  cross the shadow boundary (CSS selectors cannot), so the widget's own
+  controls (toolbar, comment box buttons) keep their normal cursor — only the
+  host page is affected, which is the intent.
+- **Deliberate reversal of the four `:focus-visible` rules**: the user tested
+  the branch against `dev-v2` (the pre-Shadow-DOM state) and explicitly asked
+  to restore the exact previous look, including losing the visible focus ring
+  that had been added for accessibility (WCAG 2.1 AA, criterion 2.4.7 Focus
+  Visible). This is a conscious product decision, not an oversight, and is
+  documented here to make clear that **it reintroduces a known accessibility
+  gap** — the widget's interactive elements (toolbar, inputs, circles) once
+  again show no focus indicator under keyboard navigation, exactly as in
+  `dev-v2`. If that criterion has to be met again in the future, review the
+  accessibility work's history and this reversal commit.
+
+## Automatic context, classification and resolution time
+
+- **`contextScreenshot` in a field separate from `screenshots[]`**: the two
+  have different semantics. `screenshots[]` is evidence the user attached on
+  purpose; `contextScreenshot` is collected by the library on its own.
+  Separating them allows displaying them differently, purging only the
+  automatic one if the localStorage quota is ever hit, and prevents the user
+  from accidentally deleting something they did not add.
+- **JPEG q0.7 at 0.5 scale for the automatic capture**: a full-scale viewport
+  PNG weighs 300 KB–1.5 MB as a data URL and blows through the ~5 MB
+  localStorage quota after three or four comments (all persistence lives under
+  a single key). At half scale it is ~40–120 KB. Manual drag stays PNG at
+  scale 1: when the user deliberately selects a region, fidelity matters.
+- **`renderPage` / `cropRegion` / `cropViewport` instead of a single
+  `captureRegion`**: rendering the page is practically the entire cost of a
+  capture. With the drag flow already rendering once, an independent
+  auto-capture would have made every dragged comment pay that cost twice. The
+  shared canvas avoids it. `captureRegion` is kept as an export for
+  compatibility.
+- **The capture is awaited before showing the comment box**: the host has to
+  be hidden during the render, so showing the box in parallel would be a race
+  that would put it halfway into the capture itself. The non-drag path renders
+  at `scale: 0.5` (~4× cheaper) to bound the latency, and
+  `autoScreenshot: false` removes it entirely.
+- **`withHiddenOverlay` hides the whole `<helldots-root>` host, not just
+  `this.overlay`**: the previous drag flow only hid the overlay, so the
+  HellDots toolbar ended up inside manual screenshots. A pre-existing bug,
+  fixed along the way by sharing the helper.
+- **`captureContext()` uses `navigator.userAgentData` with a regex fallback**:
+  Chromium exposes brands and platform already structured; Safari and Firefox
+  require parsing the UA. The table's order is load-bearing (Edge's UA
+  contains "Chrome", Chrome's contains "Safari"). The raw UA is always stored,
+  so a failed parse degrades to `unknown` without losing information.
+- **Types as a fixed enum + free-form `tags: string[]`, rather than
+  host-configurable types**: tags cover customization without the library
+  having to translate or color labels it does not know about.
+- **Priority reuses `bug`'s red and `in_progress`'s orange**: deliberate. The
+  red/orange/gray ramp reads as an urgency scale immediately, and these are
+  different dimensions in different UI slots. No badge communicates its
+  meaning through color alone — all of them carry text (WCAG 1.4.1, and the
+  Lighthouse a11y gate sits at 0.9).
+- **A generic `createPicker` instead of three duplicated pickers**: status,
+  type and priority are the same widget with a different dictionary. The
+  pre-existing status picker became its first consumer, with no observable
+  behavior change.
+- **A single `onCommentUpdated` for type/priority/tags**: three separate
+  callbacks would have been API noise. `onCommentStatusChanged` is left
+  untouched so existing consumers do not break.
+- **A single `resolvedAt` instead of a status history**: it is stamped on
+  entering `resolved` and cleared on leaving, so the displayed figure always
+  corresponds to the current resolution. A full `statusHistory` offered more
+  analytical value than the requirement asked for, at the cost of more payload
+  per comment. Comments resolved before this change have no timestamp: they
+  render as `—`, never as an invented duration.
+- **Emoji reactions are out of scope**: `reactions?: Record<string, string[]>`
+  (emoji → authors) is reserved. Being optional and absent by default,
+  implementing it later requires no migration.
+- **`createPicker` gained an `action` parameter.** Pre-existing tests queried
+  the status picker by `[data-action="status"]`, an attribute the generic
+  picker did not emit. Rather than rewriting those queries, the generic picker
+  accepts `action` and puts it on the button — which also makes all three
+  pickers (status, type, priority) separately addressable in the DOM. The only
+  unavoidable rename was `data-status-option` → `data-picker-option`,
+  mechanical and touching no assertion.
+- **Two repo guards had their scope wrong and were corrected.** The i18n one
+  (`components.js has no hardcoded, user-visible English UI strings`) flagged
+  `"Enter"` — a DOM key name, not UI text — as a violation, which pushed the
+  code toward `e.key.toLowerCase() !== "enter"`: less idiomatic and able to
+  throw when `e.key` is `undefined`. The idiomatic comparison was restored and
+  the guard taught to exclude key names through a named, narrow allowlist. The
+  constants guard claimed to check code "referenced from `src/`" but only read
+  three files, leaving `inbox.js` out; it now scans every `.js` in `src/`. In
+  both cases the guard was re-verified afterwards to confirm it still catches
+  the real violation, so a false positive was not traded for a false negative.
+- **The inbox's collapsed filter button reflects all four filters.** When type
+  and priority were added, the label was still composed from page and status
+  alone, so an active filter could hide comments with no visible signal.
+  `_filterSummaryLabel()` was extracted, and every active filter now shows up
+  in the label.
+
+## Overlay dismissal: lightbox and dropdown menus
+
+- **The lightbox is excluded from the inbox's and thread popover's
+  outside-click test.** The lightbox is opened _from_ those panels but is
+  mounted as their sibling in the shadow root, so the naive "did this click
+  land outside me?" check read every click on it — its own close button
+  included — as a click away, and tore the panel down behind the image.
+  `handleDocumentClick` already had this exclusion; the two panel handlers did
+  not. Shared as `_isInsideLightbox()` so the three stay in sync.
+- **A single registry (`src/menus.js`) for every dropdown**, rather than each
+  one owning its open state. The status, type and priority pickers, the ⋯ menu
+  and the inbox filter each toggled independently _and_ called
+  `stopPropagation()`, so nothing could close a menu except its own button:
+  three menus could sit open on top of each other in the thread popover, and
+  clicking elsewhere in the panel closed none of them. The registry enforces
+  one rule — at most one menu open, any outside mousedown closes it.
+- **The outside listener runs in the capture phase.** It has to: the toggles
+  call `stopPropagation()`, so a bubble-phase listener on `document` would
+  never hear the click at all.
+- **Open state is read from the DOM (`menu.style.display`), not from the
+  registry's set.** Callers that hide a menu by hand, and re-renders that
+  detach one while it is open, would otherwise leave a stale entry stuck
+  "open" and refusing to reopen. A detached menu is never in a click path, so
+  the next outside mousedown evicts it and releases the document listener.
