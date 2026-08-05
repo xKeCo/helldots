@@ -3,19 +3,14 @@
 // to CommentOverlay through the callbacks contract passed to the
 // constructor, so this module never touches storage or the page markers.
 
-import {
-  CLASSES,
-  TYPE_COLORS,
-  PRIORITY_COLORS,
-  COMMENT_TYPES,
-  PRIORITIES,
-} from "./constants.js";
+import { CLASSES, COMMENT_TYPES, PRIORITIES, STATUSES } from "./constants.js";
 import { buildAgentContext } from "./agent-context.js";
 import { attachMenuToggle } from "./menus.js";
-import { formatDuration, formatTemplate } from "./i18n.js";
+import { createContextBlock } from "./context-block.js";
 import {
   createCommentActions,
   copyToClipboard,
+  statusLabelOf,
   typeLabelOf,
   priorityLabelOf,
 } from "./comment-actions.js";
@@ -24,6 +19,7 @@ import {
   createScreenshotsDisplay,
   createInputArea,
   createReplyElement,
+  createBadgeRow,
 } from "./components.js";
 
 const CARET_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
@@ -56,7 +52,7 @@ export class InboxView {
     this.getComments = getComments;
     this.callbacks = callbacks;
     this.pageFilter = "page"; // "all" | "page"
-    this.statusFilter = "all"; // "all" | "unresolved" | "resolved"
+    this.statusFilter = "all"; // "all" | STATUSES
     this.typeFilter = "all"; // "all" | COMMENT_TYPES
     this.priorityFilter = "all"; // "all" | PRIORITIES
     this.detailId = null;
@@ -118,10 +114,12 @@ export class InboxView {
         (comment) => comment.page === this.currentPage
       );
     }
-    if (this.statusFilter === "resolved") {
-      comments = comments.filter((comment) => comment.status === "resolved");
-    } else if (this.statusFilter === "unresolved") {
-      comments = comments.filter((comment) => comment.status !== "resolved");
+    if (this.statusFilter !== "all") {
+      // `open` is the implicit default: comments saved before RF09 have no
+      // status at all and must still match the "open" chip.
+      comments = comments.filter(
+        (comment) => (comment.status || "open") === this.statusFilter
+      );
     }
     if (this.typeFilter !== "all") {
       comments = comments.filter((comment) => comment.type === this.typeFilter);
@@ -214,22 +212,16 @@ export class InboxView {
       : this.strings.filterCurrentPage;
   }
 
-  _statusFilterLabel(value) {
-    if (value === "unresolved") return this.strings.filterUnresolved;
-    if (value === "resolved") return this.strings.filterResolved;
-    return this.strings.filterStatusAll;
-  }
-
   /**
    * Summary label for the collapsed filter button. The page filter always
-   * contributes (it's either "All" or "Current page"); status, type, and
-   * priority only join in when active, so an active filter is never hidden
-   * from a user who hasn't opened the menu.
+   * contributes (it's either "All pages" or "Current page"); status, type,
+   * and priority only join in when active, so an active filter is never
+   * hidden from a user who hasn't opened the menu.
    */
   _filterSummaryLabel() {
     const parts = [this._pageFilterLabel(this.pageFilter)];
     if (this.statusFilter !== "all") {
-      parts.push(this._statusFilterLabel(this.statusFilter));
+      parts.push(statusLabelOf(this.statusFilter, this.strings));
     }
     if (this.typeFilter !== "all") {
       parts.push(typeLabelOf(this.typeFilter, this.strings));
@@ -240,94 +232,151 @@ export class InboxView {
     return parts.join(" · ");
   }
 
+  _isFilterActive() {
+    return (
+      this.pageFilter !== "page" ||
+      this.statusFilter !== "all" ||
+      this.typeFilter !== "all" ||
+      this.priorityFilter !== "all"
+    );
+  }
+
+  /**
+   * One chip group. Status, type and priority chips toggle: activating the
+   * chip that is already on clears the group back to "all", which is why
+   * they carry no explicit "All" chip. The page group does — it has no
+   * neutral state, it's always one of two answers.
+   *
+   * @param {{ title: string, dataAttr: string, values: string[],
+   *   labelOf: (value: string) => string, selected: string,
+   *   toggles?: boolean, onSelect: (value: string) => void }} config
+   */
+  _buildFilterGroup({
+    title,
+    dataAttr,
+    values,
+    labelOf,
+    selected,
+    toggles = true,
+    onSelect,
+  }) {
+    const group = document.createElement("div");
+    group.className = CLASSES.INBOX_FILTER_GROUP;
+
+    const heading = document.createElement("div");
+    heading.className = CLASSES.INBOX_FILTER_SECTION;
+    heading.textContent = title;
+    group.appendChild(heading);
+
+    const chips = document.createElement("div");
+    chips.className = CLASSES.INBOX_FILTER_CHIPS;
+
+    for (const value of values) {
+      const checked = selected === value;
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = CLASSES.INBOX_FILTER_CHIP;
+      chip.dataset[dataAttr] = value;
+      chip.setAttribute("role", toggles ? "switch" : "radio");
+      chip.setAttribute("aria-checked", String(checked));
+      chip.textContent = labelOf(value);
+      chip.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onSelect(toggles && checked ? "all" : value);
+        this.render();
+      });
+      chips.appendChild(chip);
+    }
+
+    group.appendChild(chips);
+    return group;
+  }
+
   _buildFilter() {
     const wrapper = document.createElement("div");
     wrapper.className = CLASSES.INBOX_FILTER + "-wrapper";
-
-    const label = this._filterSummaryLabel();
 
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = CLASSES.INBOX_FILTER;
     btn.setAttribute("aria-haspopup", "true");
     btn.setAttribute("aria-expanded", "false");
-    btn.innerHTML = `<span>${label}</span>${CARET_ICON_SVG}`;
+    btn.innerHTML = `<span>${this._filterSummaryLabel()}</span>${CARET_ICON_SVG}`;
 
     const menu = document.createElement("div");
     menu.className = CLASSES.INBOX_FILTER_MENU;
+    menu.setAttribute("role", "group");
+    menu.setAttribute("aria-label", this.strings.filterTitle);
 
     attachMenuToggle(btn, menu);
 
-    const addSection = (title) => {
-      const section = document.createElement("div");
-      section.className = CLASSES.INBOX_FILTER_SECTION;
-      section.textContent = title;
-      menu.appendChild(section);
-    };
+    const header = document.createElement("div");
+    header.className = CLASSES.INBOX_FILTER_MENU_HEADER;
 
-    const addOption = (text, checked, dataAttr, value, onSelect) => {
-      const option = document.createElement("button");
-      option.type = "button";
-      option.className = CLASSES.INBOX_FILTER_OPTION;
-      option.dataset[dataAttr] = value;
-      option.setAttribute("role", "menuitemradio");
-      option.setAttribute("aria-checked", String(checked));
-      option.innerHTML = `<span>${text}</span>${checked ? "✓" : ""}`;
-      option.addEventListener("click", (e) => {
-        e.stopPropagation();
-        onSelect();
-        this.render();
-      });
-      menu.appendChild(option);
-    };
+    const title = document.createElement("span");
+    title.textContent = this.strings.filterTitle;
+    header.appendChild(title);
 
-    addSection(this.strings.filterByPage);
-    for (const value of ["all", "page"]) {
-      addOption(
-        this._pageFilterLabel(value),
-        this.pageFilter === value,
-        "filterPage",
-        value,
-        () => (this.pageFilter = value)
-      );
-    }
+    const clear = document.createElement("button");
+    clear.type = "button";
+    clear.className = CLASSES.INBOX_FILTER_CLEAR;
+    clear.textContent = this.strings.filterClear;
+    clear.disabled = !this._isFilterActive();
+    clear.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.pageFilter = "page";
+      this.statusFilter = "all";
+      this.typeFilter = "all";
+      this.priorityFilter = "all";
+      this.render();
+    });
+    header.appendChild(clear);
+    menu.appendChild(header);
 
-    addSection(this.strings.filterByStatus);
-    for (const value of ["all", "unresolved", "resolved"]) {
-      addOption(
-        this._statusFilterLabel(value),
-        this.statusFilter === value,
-        "filterStatus",
-        value,
-        () => (this.statusFilter = value)
-      );
-    }
+    menu.appendChild(
+      this._buildFilterGroup({
+        title: this.strings.filterByPage,
+        dataAttr: "filterPage",
+        values: ["page", "all"],
+        labelOf: (value) => this._pageFilterLabel(value),
+        selected: this.pageFilter,
+        toggles: false,
+        onSelect: (value) => (this.pageFilter = value),
+      })
+    );
 
-    addSection(this.strings.filterByType);
-    for (const value of ["all", ...COMMENT_TYPES]) {
-      addOption(
-        value === "all"
-          ? this.strings.filterStatusAll
-          : typeLabelOf(value, this.strings),
-        this.typeFilter === value,
-        "filterType",
-        value,
-        () => (this.typeFilter = value)
-      );
-    }
+    menu.appendChild(
+      this._buildFilterGroup({
+        title: this.strings.filterByStatus,
+        dataAttr: "filterStatus",
+        values: [...STATUSES],
+        labelOf: (value) => statusLabelOf(value, this.strings),
+        selected: this.statusFilter,
+        onSelect: (value) => (this.statusFilter = value),
+      })
+    );
 
-    addSection(this.strings.filterByPriority);
-    for (const value of ["all", ...PRIORITIES]) {
-      addOption(
-        value === "all"
-          ? this.strings.filterStatusAll
-          : priorityLabelOf(value, this.strings),
-        this.priorityFilter === value,
-        "filterPriority",
-        value,
-        () => (this.priorityFilter = value)
-      );
-    }
+    menu.appendChild(
+      this._buildFilterGroup({
+        title: this.strings.filterByType,
+        dataAttr: "filterType",
+        values: [...COMMENT_TYPES],
+        labelOf: (value) => typeLabelOf(value, this.strings),
+        selected: this.typeFilter,
+        onSelect: (value) => (this.typeFilter = value),
+      })
+    );
+
+    menu.appendChild(
+      this._buildFilterGroup({
+        title: this.strings.filterByPriority,
+        dataAttr: "filterPriority",
+        values: [...PRIORITIES],
+        labelOf: (value) => priorityLabelOf(value, this.strings),
+        selected: this.priorityFilter,
+        onSelect: (value) => (this.priorityFilter = value),
+      })
+    );
 
     wrapper.appendChild(btn);
     wrapper.appendChild(menu);
@@ -342,6 +391,8 @@ export class InboxView {
     }
     card.dataset.commentId = comment.id;
 
+    // The action strip lives in the footer, not up here: five controls and
+    // the author on one row squeezed the name into ~90px and wrapped it.
     const header = document.createElement("div");
     header.className = CLASSES.INBOX_CARD_HEADER;
     header.appendChild(
@@ -352,7 +403,6 @@ export class InboxView {
         this.locale
       )
     );
-    header.appendChild(this._buildCardActions(comment));
     card.appendChild(header);
 
     const text = document.createElement("div");
@@ -373,11 +423,16 @@ export class InboxView {
       card.appendChild(shots);
     }
 
-    const badges = this._buildBadges(comment);
+    const badges = createBadgeRow(comment, this.strings);
     if (badges) card.appendChild(badges);
 
     const tag = this._buildTag(comment);
     if (tag) card.appendChild(tag);
+
+    // Footer: reply on the left, the action strip on the right with the
+    // card's full width to lay out in.
+    const footer = document.createElement("div");
+    footer.className = CLASSES.INBOX_CARD_FOOTER;
 
     if (interactive) {
       card.setAttribute("role", "button");
@@ -398,7 +453,7 @@ export class InboxView {
         e.stopPropagation();
         activate();
       });
-      card.appendChild(replyLink);
+      footer.appendChild(replyLink);
 
       card.addEventListener("click", activate);
       card.addEventListener("keydown", (/** @type {KeyboardEvent} */ e) => {
@@ -414,6 +469,9 @@ export class InboxView {
       card.addEventListener("mouseleave", () => this._clearHighlight());
     }
 
+    footer.appendChild(this._buildCardActions(comment));
+    card.appendChild(footer);
+
     return card;
   }
 
@@ -428,126 +486,6 @@ export class InboxView {
     tag.className = CLASSES.INBOX_CARD_TAG;
     tag.textContent = label;
     return tag;
-  }
-
-  /**
-   * RF3/RF4/RF5 — classification and resolution-time badges. Every badge
-   * carries text: colour alone must never be the only signal (WCAG 1.4.1).
-   * @param {any} comment
-   * @returns {HTMLElement | null} null when there's nothing to show
-   */
-  _buildBadges(comment) {
-    const row = document.createElement("div");
-    row.className = CLASSES.INBOX_BADGES;
-
-    const addBadge = (text, modifier, color) => {
-      const badge = document.createElement("span");
-      badge.className = `${CLASSES.BADGE} ${modifier}`;
-      badge.textContent = text;
-      if (color) badge.style.borderColor = color;
-      row.appendChild(badge);
-    };
-
-    if (comment.type) {
-      addBadge(
-        typeLabelOf(comment.type, this.strings),
-        CLASSES.BADGE_TYPE,
-        TYPE_COLORS[comment.type]
-      );
-    }
-    if (comment.priority) {
-      addBadge(
-        priorityLabelOf(comment.priority, this.strings),
-        CLASSES.BADGE_PRIORITY,
-        PRIORITY_COLORS[comment.priority]
-      );
-    }
-    for (const tag of comment.tags || []) {
-      addBadge(tag, CLASSES.BADGE_TAG, null);
-    }
-
-    if (comment.status === "resolved") {
-      // Comments resolved before RF5 shipped have no timestamp — show a
-      // dash rather than a duration computed from data we don't have.
-      const elapsed = comment.resolvedAt
-        ? formatDuration(
-            new Date(comment.resolvedAt).getTime() -
-              new Date(comment.createdAt).getTime(),
-            this.strings
-          )
-        : "";
-      addBadge(
-        formatTemplate(this.strings.resolvedInTemplate, elapsed || "—"),
-        CLASSES.BADGE_DURATION,
-        null
-      );
-    }
-
-    return row.children.length ? row : null;
-  }
-
-  /**
-   * RF2 — the environment the comment was reported from, plus the
-   * automatic capture. Returns null for comments created before RF1/RF2.
-   * @param {any} comment
-   * @returns {HTMLElement | null}
-   */
-  _buildContextBlock(comment) {
-    const { context, contextScreenshot } = comment;
-    if (!context && !contextScreenshot) return null;
-
-    const block = document.createElement("div");
-    block.className = CLASSES.CONTEXT_BLOCK;
-
-    const title = document.createElement("div");
-    title.className = CLASSES.INBOX_FILTER_SECTION;
-    title.textContent = this.strings.contextSection;
-    block.appendChild(title);
-
-    if (contextScreenshot) {
-      const caption = document.createElement("div");
-      caption.className = CLASSES.CONTEXT_SCREENSHOT_CAPTION;
-      caption.textContent = this.strings.autoScreenshotLabel;
-      block.appendChild(caption);
-
-      const img = document.createElement("img");
-      img.className = CLASSES.SCREENSHOT_IMG;
-      img.src = contextScreenshot;
-      img.alt = this.strings.autoScreenshotLabel;
-      img.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.callbacks.onShowLightbox(contextScreenshot);
-      });
-      block.appendChild(img);
-    }
-
-    if (context) {
-      const addRow = (label, value) => {
-        if (!value) return;
-        const row = document.createElement("div");
-        row.className = CLASSES.CONTEXT_ROW;
-        const key = document.createElement("span");
-        key.textContent = label;
-        const val = document.createElement("span");
-        val.textContent = value;
-        row.appendChild(key);
-        row.appendChild(val);
-        block.appendChild(row);
-      };
-
-      const size = (dimensions) =>
-        dimensions ? `${dimensions.width}×${dimensions.height}` : "";
-      const named = (entry) =>
-        entry?.name ? `${entry.name} ${entry.version || ""}`.trim() : "";
-
-      addRow(this.strings.contextUrl, context.url);
-      addRow(this.strings.contextViewport, size(context.viewport));
-      addRow(this.strings.contextScreen, size(context.screen));
-      addRow(this.strings.contextBrowser, named(context.browser));
-      addRow(this.strings.contextOs, named(context.os));
-    }
-
-    return block;
   }
 
   _buildCardActions(comment) {
@@ -621,7 +559,12 @@ export class InboxView {
 
     detail.appendChild(this._buildCard(comment, { interactive: false }));
 
-    const context = this._buildContextBlock(comment);
+    // Always expanded here: the detail view exists to show everything. The
+    // thread popover renders the same block as a collapsed disclosure.
+    const context = createContextBlock(comment, {
+      strings: this.strings,
+      onShowLightbox: (src) => this.callbacks.onShowLightbox(src),
+    });
     if (context) detail.appendChild(context);
 
     const replies = document.createElement("div");

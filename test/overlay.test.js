@@ -404,6 +404,74 @@ describe("CommentOverlay", () => {
     });
   });
 
+  describe("narrow-viewport positioning", () => {
+    // jsdom never lays anything out, so the measured width the real code
+    // reads has to be stubbed. The point of these tests is the arithmetic
+    // around that width, which is where the mobile overflow came from.
+    const withViewport = (width, fn) => {
+      const original = window.innerWidth;
+      Object.defineProperty(window, "innerWidth", {
+        value: width,
+        configurable: true,
+      });
+      try {
+        fn();
+      } finally {
+        Object.defineProperty(window, "innerWidth", {
+          value: original,
+          configurable: true,
+        });
+      }
+    };
+
+    const stubWidth = (el, width) => {
+      vi.spyOn(el, "getBoundingClientRect").mockReturnValue(
+        /** @type {any} */ ({ width, height: 200, top: 0, left: 0 })
+      );
+    };
+
+    it("keeps the comment box inside a phone-width viewport", () => {
+      overlay = makeOverlay();
+      // `min(400px, 100vw - 24px)` at 375px wide.
+      stubWidth(overlay.commentBox, 351);
+
+      withViewport(375, () => {
+        overlay.showCommentBox(300, 40);
+        const left = parseFloat(overlay.commentBox.style.left);
+        expect(left).toBeGreaterThanOrEqual(0);
+        expect(left + 351).toBeLessThanOrEqual(375);
+      });
+    });
+
+    it("keeps a popover pinned to a marker inside a phone-width viewport", () => {
+      overlay = makeOverlay();
+      const el = document.createElement("div");
+      const circle = document.createElement("div");
+      stubWidth(el, 351);
+      vi.spyOn(circle, "getBoundingClientRect").mockReturnValue(
+        /** @type {any} */ ({ width: 28, height: 28, top: 40, left: 320 })
+      );
+
+      withViewport(375, () => {
+        overlay.positionPopoverAtCircle(el, circle);
+        const left = parseFloat(el.style.left);
+        expect(left).toBeGreaterThanOrEqual(0);
+        expect(left + 351).toBeLessThanOrEqual(375);
+      });
+    });
+
+    it("still flips the comment box to the left of the marker when there is room", () => {
+      overlay = makeOverlay();
+      stubWidth(overlay.commentBox, 400);
+
+      withViewport(1024, () => {
+        overlay.showCommentBox(900, 40);
+        // 914 (centre) - 24 (offset) - 400 = 490
+        expect(parseFloat(overlay.commentBox.style.left)).toBe(490);
+      });
+    });
+  });
+
   describe("comment box screenshots", () => {
     it("attach button click delegates to the hidden file input", () => {
       overlay = makeOverlay();
@@ -530,7 +598,6 @@ describe("CommentOverlay", () => {
 
     it("resets the classification row between comments", async () => {
       const overlay = makeOverlay({ autoScreenshot: false });
-      overlay.commentBox.classify.getTags(); // row is mounted
 
       const pick = (value) =>
         [...overlay.commentBox.querySelectorAll("[data-picker-option]")]
@@ -615,6 +682,252 @@ describe("CommentOverlay", () => {
         new KeyboardEvent("keydown", { key: " ", bubbles: true })
       );
       expect(overlay.activeThreadPopover).toBeTruthy();
+    });
+
+    it("marks the circle whose thread is open, and unmarks it on close", () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      expect(circle.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(false);
+
+      overlay.showThreadPopover(circle, comment);
+      expect(circle.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(true);
+
+      overlay.closeThreadPopover();
+      expect(circle.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(false);
+    });
+
+    it("moves the active marker when a different comment's thread is opened", () => {
+      const other = {
+        id: 8,
+        text: "second",
+        replies: [],
+        author: "Author",
+        createdAt: new Date().toISOString(),
+        container: document.body,
+      };
+      overlay.comments.push(other);
+      overlay.renderCommentCircle(other);
+
+      const first = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      const second = overlay.shadowRoot.querySelector('[data-comment-id="8"]');
+
+      overlay.showThreadPopover(first, comment);
+      overlay.showThreadPopover(second, other);
+
+      expect(first.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(false);
+      expect(second.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(true);
+    });
+
+    it("renders the context capture in the popover as a disclosure collapsed by default", () => {
+      comment.context = { url: "https://example.test/checkout" };
+      comment.contextScreenshot = "data:image/png;base64,ctx";
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      overlay.showThreadPopover(circle, comment);
+
+      const block = overlay.activeThreadPopover.querySelector(
+        `.${CLASSES.CONTEXT_BLOCK}`
+      );
+      expect(block).toBeTruthy();
+
+      const toggle = block.querySelector(`.${CLASSES.CONTEXT_TOGGLE}`);
+      const body = block.querySelector(`.${CLASSES.CONTEXT_BODY}`);
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(body.style.display).toBe("none");
+
+      toggle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(body.style.display).toBe("");
+      expect(body.textContent).toContain("https://example.test/checkout");
+    });
+
+    it("omits the context disclosure for comments saved before it was captured", () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      overlay.showThreadPopover(circle, comment);
+      expect(
+        overlay.activeThreadPopover.querySelector(`.${CLASSES.CONTEXT_BLOCK}`)
+      ).toBeNull();
+    });
+
+    it("keeps the popover pinned beside its marker as the page scrolls", () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      overlay.showThreadPopover(circle, comment);
+      const popover = overlay.activeThreadPopover;
+
+      const rectAt = (top, left) =>
+        /** @type {any} */ ({
+          top,
+          left,
+          bottom: top + 28,
+          right: left + 28,
+          width: 28,
+          height: 28,
+        });
+      const rect = vi.spyOn(circle, "getBoundingClientRect");
+
+      rect.mockReturnValue(rectAt(100, 200));
+      overlay.syncThreadPopoverToMarker();
+      expect(popover.style.top).toBe("100px");
+
+      // The marker moved up 300px with the page; the popover follows it.
+      rect.mockReturnValue(rectAt(400, 200));
+      overlay.syncThreadPopoverToMarker();
+      expect(popover.style.top).toBe("400px");
+    });
+
+    it("hides the popover while its marker is off-screen and brings it back with the marker", () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      overlay.showThreadPopover(circle, comment);
+      const popover = overlay.activeThreadPopover;
+      const rect = vi.spyOn(circle, "getBoundingClientRect");
+
+      rect.mockReturnValue(
+        /** @type {any} */ ({
+          top: -200,
+          bottom: -172,
+          left: 200,
+          right: 228,
+          width: 28,
+          height: 28,
+        })
+      );
+      overlay.syncThreadPopoverToMarker();
+      expect(popover.style.display).toBe("none");
+
+      rect.mockReturnValue(
+        /** @type {any} */ ({
+          top: 120,
+          bottom: 148,
+          left: 200,
+          right: 228,
+          width: 28,
+          height: 28,
+        })
+      );
+      overlay.syncThreadPopoverToMarker();
+      expect(popover.style.display).toBe("");
+      expect(overlay.activeThreadPopover).toBe(popover);
+    });
+
+    it("hides rather than closes, so a half-typed reply survives scrolling out of view", () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      overlay.showThreadPopover(circle, comment);
+      const popover = overlay.activeThreadPopover;
+      const input = popover.querySelector(`.${CLASSES.THREAD_INPUT}`);
+      input.value = "half-typed";
+
+      vi.spyOn(circle, "getBoundingClientRect").mockReturnValue(
+        /** @type {any} */ ({
+          top: -500,
+          bottom: -472,
+          left: 0,
+          right: 28,
+          width: 28,
+          height: 28,
+        })
+      );
+      overlay.syncThreadPopoverToMarker();
+
+      expect(overlay.shadowRoot.contains(popover)).toBe(true);
+      expect(popover.querySelector(`.${CLASSES.THREAD_INPUT}`).value).toBe(
+        "half-typed"
+      );
+    });
+
+    it("leaves a centered popover alone — an orphaned comment has no marker to track", () => {
+      overlay.showThreadPopover(null, comment);
+      const popover = overlay.activeThreadPopover;
+      popover.style.top = "42px";
+      overlay.syncThreadPopoverToMarker();
+      expect(popover.style.top).toBe("42px");
+      expect(popover.style.display).toBe("");
+    });
+
+    it("follows the marker on a window scroll event", async () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      overlay.showThreadPopover(circle, comment);
+      const spy = vi.spyOn(overlay, "syncThreadPopoverToMarker");
+
+      window.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      expect(spy).toHaveBeenCalled();
+    });
+
+    it("scrolls its body internally instead of growing past the viewport", () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      overlay.showThreadPopover(circle, comment);
+      const popover = overlay.activeThreadPopover;
+
+      const scroll = popover.querySelector(`.${CLASSES.THREAD_SCROLL}`);
+      expect(scroll).toBeTruthy();
+      // The body and the replies scroll; the header, the action strip and
+      // the reply box stay pinned outside the scrolling area.
+      expect(scroll.querySelector(`.${CLASSES.THREAD_BODY}`)).toBeTruthy();
+      expect(scroll.querySelector(`.${CLASSES.THREAD_REPLIES}`)).toBeTruthy();
+      expect(scroll.querySelector(`.${CLASSES.THREAD_HEADER}`)).toBeNull();
+      expect(scroll.querySelector(`.${CLASSES.THREAD_ACTIONS_ROW}`)).toBeNull();
+      expect(scroll.querySelector(`.${CLASSES.THREAD_INPUT_AREA}`)).toBeNull();
+    });
+
+    it("puts the context disclosure inside the scrolling area", () => {
+      comment.context = { url: "https://example.test/x" };
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      overlay.showThreadPopover(circle, comment);
+      const scroll = overlay.activeThreadPopover.querySelector(
+        `.${CLASSES.THREAD_SCROLL}`
+      );
+      expect(scroll.querySelector(`.${CLASSES.CONTEXT_BLOCK}`)).toBeTruthy();
+    });
+
+    it("clicking the active marker again closes its thread and clears the active state", () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+
+      circle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(overlay.activeThreadPopover).toBeTruthy();
+      expect(circle.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(true);
+
+      circle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(overlay.activeThreadPopover).toBeNull();
+      expect(circle.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(false);
+
+      // Still opens again on a third click — the toggle has no sticky state.
+      circle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(overlay.activeThreadPopover).toBeTruthy();
+    });
+
+    it("Enter on the active marker toggles it closed too", () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      circle.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+      );
+      expect(overlay.activeThreadPopover).toBeTruthy();
+
+      circle.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+      );
+      expect(overlay.activeThreadPopover).toBeNull();
+    });
+
+    it("clicking a different marker switches threads instead of closing", () => {
+      const other = {
+        id: 8,
+        text: "second",
+        replies: [],
+        author: "Author",
+        createdAt: new Date().toISOString(),
+        container: document.body,
+      };
+      overlay.comments.push(other);
+      overlay.renderCommentCircle(other);
+
+      const first = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      const second = overlay.shadowRoot.querySelector('[data-comment-id="8"]');
+
+      first.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      second.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      expect(overlay.activeThreadPopover?.dataset.for).toBe("8");
+      expect(first.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(false);
+      expect(second.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(true);
     });
 
     it("opening a second thread popover closes the first", () => {
@@ -768,8 +1081,8 @@ describe("CommentOverlay", () => {
       overlay.showThreadPopover(circle, screenshotComment);
       const popover = overlay.activeThreadPopover;
 
-      const mainScreenshotsContainer = Array.from(popover.children).find(
-        (child) => child.classList.contains(CLASSES.SCREENSHOTS_CONTAINER)
+      const mainScreenshotsContainer = popover.querySelector(
+        `.${CLASSES.THREAD_SCROLL} > .${CLASSES.SCREENSHOTS_CONTAINER}`
       );
       const img = mainScreenshotsContainer.querySelector(
         `.${CLASSES.SCREENSHOT_IMG}`

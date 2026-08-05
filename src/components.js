@@ -5,11 +5,13 @@ import {
   TYPE_COLORS,
   PRIORITIES,
   PRIORITY_COLORS,
+  STATUS_COLORS,
 } from "./constants.js";
-import { formatTemplate } from "./i18n.js";
+import { formatDuration, formatTemplate } from "./i18n.js";
 import defaultStrings from "./locales/en.js";
 import {
   createPicker,
+  statusLabelOf,
   typeLabelOf,
   priorityLabelOf,
 } from "./comment-actions.js";
@@ -219,8 +221,82 @@ export const createToolbar = (options = {}, strings = defaultStrings) => {
 };
 
 /**
- * RF3 + RF4 — the classification strip inside the new-comment box: type,
- * priority and free-form tags, all starting neutral.
+ * RF3/RF4/RF5 — the classification and resolution-time badge strip. Every
+ * badge carries text: colour alone must never be the only signal
+ * (WCAG 1.4.1), so the colour only ever tints the border.
+ *
+ * Status is opt-in because most surfaces already expose it through the
+ * status picker's coloured dot; the tooltip, which has no picker, is the
+ * one place that needs it spelled out.
+ *
+ * @param {any} comment
+ * @param {object} strings
+ * @param {{ includeStatus?: boolean }} [options]
+ * @returns {HTMLElement | null} null when there's nothing to show
+ */
+export const createBadgeRow = (comment, strings, { includeStatus } = {}) => {
+  const row = document.createElement("div");
+  row.className = CLASSES.INBOX_BADGES;
+
+  const addBadge = (text, modifier, color) => {
+    const badge = document.createElement("span");
+    badge.className = `${CLASSES.BADGE} ${modifier}`;
+    badge.textContent = text;
+    if (color) badge.style.borderColor = color;
+    row.appendChild(badge);
+  };
+
+  if (includeStatus) {
+    const status = comment.status || "open";
+    addBadge(
+      statusLabelOf(status, strings),
+      CLASSES.BADGE_STATUS,
+      STATUS_COLORS[status]
+    );
+  }
+  if (comment.type) {
+    addBadge(
+      typeLabelOf(comment.type, strings),
+      CLASSES.BADGE_TYPE,
+      TYPE_COLORS[comment.type]
+    );
+  }
+  if (comment.priority) {
+    addBadge(
+      priorityLabelOf(comment.priority, strings),
+      CLASSES.BADGE_PRIORITY,
+      PRIORITY_COLORS[comment.priority]
+    );
+  }
+  // Tags are no longer authored in the widget, but comments saved before
+  // that (or set through setCommentTags) still carry them.
+  for (const tag of comment.tags || []) {
+    addBadge(tag, CLASSES.BADGE_TAG, null);
+  }
+
+  if (comment.status === "resolved") {
+    // Comments resolved before RF5 shipped have no timestamp — show a
+    // dash rather than a duration computed from data we don't have.
+    const elapsed = comment.resolvedAt
+      ? formatDuration(
+          new Date(comment.resolvedAt).getTime() -
+            new Date(comment.createdAt).getTime(),
+          strings
+        )
+      : "";
+    addBadge(
+      formatTemplate(strings.resolvedInTemplate, elapsed || "—"),
+      CLASSES.BADGE_DURATION,
+      null
+    );
+  }
+
+  return row.children.length ? row : null;
+};
+
+/**
+ * RF3 + RF4 — the classification strip inside the new-comment box: type and
+ * priority, both starting neutral.
  *
  * The comment box is built once and reused for every comment, so this
  * exposes reset(): without it the previous comment's selections would leak
@@ -228,8 +304,7 @@ export const createToolbar = (options = {}, strings = defaultStrings) => {
  *
  * @param {object} strings
  * @returns {{ container: HTMLElement, getType: () => string|null,
- *   getPriority: () => string|null, getTags: () => string[],
- *   reset: () => void }}
+ *   getPriority: () => string|null, reset: () => void }}
  */
 export const createClassifyRow = (strings) => {
   const container = document.createElement("div");
@@ -237,59 +312,6 @@ export const createClassifyRow = (strings) => {
 
   let type = null;
   let priority = null;
-  /** @type {string[]} */
-  const tags = [];
-
-  const chips = document.createElement("div");
-  chips.className = CLASSES.INBOX_BADGES;
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.className = CLASSES.TAGS_INPUT;
-  input.placeholder = strings.tagsPlaceholder;
-  input.setAttribute("aria-label", strings.tagsPlaceholder);
-
-  const renderChips = () => {
-    chips.innerHTML = "";
-    tags.forEach((tag, index) => {
-      const chip = document.createElement("span");
-      chip.className = CLASSES.TAG_CHIP;
-      chip.appendChild(document.createTextNode(tag));
-
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = CLASSES.TAG_CHIP_REMOVE;
-      remove.setAttribute("aria-label", `${strings.removeTag}: ${tag}`);
-      remove.innerHTML = "&times;";
-      remove.addEventListener("click", (e) => {
-        e.stopPropagation();
-        tags.splice(index, 1);
-        renderChips();
-      });
-
-      chip.appendChild(remove);
-      chips.appendChild(chip);
-    });
-  };
-
-  // Commits whatever is currently typed (if anything) as a tag. Shared by
-  // the Enter/comma keydown handler and getTags(), so text left in the
-  // input when the user clicks Send isn't silently discarded.
-  const commitPendingTag = () => {
-    const tag = input.value.trim().toLowerCase();
-    // Blanks and duplicates are silently ignored — nothing to tell the user.
-    if (tag && !tags.includes(tag)) {
-      tags.push(tag);
-      renderChips();
-    }
-    input.value = "";
-  };
-
-  input.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" && e.key !== ",") return;
-    e.preventDefault();
-    commitPendingTag();
-  });
 
   // Pickers keep their selection internally, so returning them to neutral
   // means rebuilding them — hence mount() rather than a one-shot append.
@@ -319,8 +341,6 @@ export const createClassifyRow = (strings) => {
         showLabel: true,
       })
     );
-    container.appendChild(input);
-    container.appendChild(chips);
   };
 
   mount();
@@ -329,16 +349,9 @@ export const createClassifyRow = (strings) => {
     container,
     getType: () => type,
     getPriority: () => priority,
-    getTags: () => {
-      commitPendingTag();
-      return [...tags];
-    },
     reset: () => {
       type = null;
       priority = null;
-      tags.length = 0;
-      input.value = "";
-      renderChips();
       mount();
     },
   };
@@ -446,6 +459,10 @@ export const createTooltip = (comment, strings = defaultStrings, locale) => {
 
   tooltip.appendChild(header);
   tooltip.appendChild(body);
+  // The tooltip is a read-only preview with no pickers, so the badges are
+  // the only place its status/type/priority can be read at all.
+  const badges = createBadgeRow(comment, strings, { includeStatus: true });
+  if (badges) tooltip.appendChild(badges);
   const tooltipScreenshots =
     comment.screenshots || (comment.screenshot ? [comment.screenshot] : []);
   if (tooltipScreenshots.length > 0) {
@@ -529,14 +546,23 @@ export const createThreadPopover = (
     strings
   );
 
+  // The header (and the action row the overlay inserts after it) and the
+  // reply box stay put; everything between them scrolls. Without this the
+  // popover just grew past the viewport — expanding the context block or
+  // adding replies made content unreachable, because the wheel event fell
+  // through to the page.
+  const scroll = document.createElement("div");
+  scroll.className = CLASSES.THREAD_SCROLL;
+
   popover.appendChild(header);
-  popover.appendChild(body);
+  scroll.appendChild(body);
   const popoverScreenshots =
     comment.screenshots || (comment.screenshot ? [comment.screenshot] : []);
   if (popoverScreenshots.length > 0) {
-    popover.appendChild(createScreenshotsDisplay(popoverScreenshots, strings));
+    scroll.appendChild(createScreenshotsDisplay(popoverScreenshots, strings));
   }
-  popover.appendChild(replies);
+  scroll.appendChild(replies);
+  popover.appendChild(scroll);
   popover.appendChild(inputArea);
 
   return popover;

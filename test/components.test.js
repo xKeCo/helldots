@@ -7,6 +7,7 @@ import {
   createThreadPopover,
   createReplyElement,
   createClassifyRow,
+  createBadgeRow,
 } from "../src/components.js";
 import { getStrings } from "../src/i18n.js";
 import { CLASSES, IDS } from "../src/constants.js";
@@ -119,6 +120,33 @@ describe("components", () => {
       ).toBe("Anonymous");
     });
 
+    it("summarises status, type and priority as badges", () => {
+      const tooltip = createTooltip({
+        id: 4,
+        text: "x",
+        createdAt: new Date().toISOString(),
+        status: "in_progress",
+        type: "bug",
+        priority: "high",
+      });
+      const badges = tooltip.querySelector(`.${CLASSES.INBOX_BADGES}`);
+      expect([...badges.children].map((b) => b.textContent)).toEqual([
+        "In progress",
+        "Bug",
+        "High",
+      ]);
+    });
+
+    it("still shows the status badge on an unclassified comment — the tooltip has no status control of its own", () => {
+      const tooltip = createTooltip({
+        id: 5,
+        text: "x",
+        createdAt: new Date().toISOString(),
+      });
+      const badges = tooltip.querySelector(`.${CLASSES.INBOX_BADGES}`);
+      expect([...badges.children].map((b) => b.textContent)).toEqual(["Open"]);
+    });
+
     it("renders a screenshots gallery when the comment has screenshots", () => {
       const tooltip = createTooltip({
         id: 3,
@@ -223,10 +251,57 @@ describe("components", () => {
         screenshots: ["data:image/png;base64,ddd"],
       });
       const gallery = popover.querySelector(
-        `:scope > .${CLASSES.SCREENSHOTS_CONTAINER}`
+        `.${CLASSES.THREAD_SCROLL} > .${CLASSES.SCREENSHOTS_CONTAINER}`
       );
       expect(gallery).toBeTruthy();
     });
+  });
+});
+
+describe("createBadgeRow", () => {
+  const strings = getStrings("en");
+
+  it("returns null when there is nothing to show", () => {
+    expect(createBadgeRow({ status: "open" }, strings)).toBeNull();
+  });
+
+  it("omits the status badge unless asked for it", () => {
+    const row = createBadgeRow({ status: "in_progress", type: "bug" }, strings);
+    expect([...row.children].map((b) => b.textContent)).toEqual(["Bug"]);
+  });
+
+  it("includes status, type and priority when status is requested", () => {
+    const row = createBadgeRow(
+      { status: "in_progress", type: "bug", priority: "high" },
+      strings,
+      { includeStatus: true }
+    );
+    expect([...row.children].map((b) => b.textContent)).toEqual([
+      "In progress",
+      "Bug",
+      "High",
+    ]);
+  });
+
+  it("treats a missing status as open", () => {
+    const row = createBadgeRow({}, strings, { includeStatus: true });
+    expect(row.children[0].textContent).toBe("Open");
+  });
+
+  it("carries colour on the border only, never as the sole signal", () => {
+    const row = createBadgeRow({ type: "bug" }, strings);
+    const badge = row.children[0];
+    expect(badge.textContent).toBe("Bug");
+    expect(badge.style.borderColor).toBeTruthy();
+    expect(badge.style.backgroundColor).toBe("");
+  });
+
+  it("still renders tags stored on older comments", () => {
+    const row = createBadgeRow({ tags: ["checkout", "ios"] }, strings);
+    expect([...row.children].map((b) => b.textContent)).toEqual([
+      "checkout",
+      "ios",
+    ]);
   });
 });
 
@@ -237,7 +312,12 @@ describe("createClassifyRow", () => {
     const row = createClassifyRow(strings);
     expect(row.getType()).toBeNull();
     expect(row.getPriority()).toBeNull();
-    expect(row.getTags()).toEqual([]);
+  });
+
+  it("has no tags input: tags are no longer authored in the widget", () => {
+    const row = createClassifyRow(strings);
+    expect(row.getTags).toBeUndefined();
+    expect(row.container.querySelector("input")).toBeNull();
   });
 
   it("records a type and a priority selection", () => {
@@ -252,87 +332,6 @@ describe("createClassifyRow", () => {
 
     expect(row.getType()).toBe("bug");
     expect(row.getPriority()).toBe("high");
-  });
-
-  it("adds a tag on Enter and renders it as a chip", () => {
-    const row = createClassifyRow(strings);
-    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
-
-    input.value = "Checkout";
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
-
-    expect(row.getTags()).toEqual(["checkout"]);
-    expect(row.container.querySelectorAll(`.${CLASSES.TAG_CHIP}`)).toHaveLength(
-      1
-    );
-    expect(input.value).toBe("");
-  });
-
-  it("adds a tag on comma", () => {
-    const row = createClassifyRow(strings);
-    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
-    input.value = "ios";
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "," }));
-    expect(row.getTags()).toEqual(["ios"]);
-  });
-
-  it("ignores blanks and duplicates", () => {
-    const row = createClassifyRow(strings);
-    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
-    const add = (value) => {
-      input.value = value;
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
-    };
-
-    add("checkout");
-    add("  CHECKOUT  ");
-    add("   ");
-
-    expect(row.getTags()).toEqual(["checkout"]);
-  });
-
-  it("removes a tag through its chip button", () => {
-    const row = createClassifyRow(strings);
-    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
-    input.value = "checkout";
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
-
-    row.container
-      .querySelector(`.${CLASSES.TAG_CHIP_REMOVE}`)
-      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
-
-    expect(row.getTags()).toEqual([]);
-    expect(row.container.querySelectorAll(`.${CLASSES.TAG_CHIP}`)).toHaveLength(
-      0
-    );
-  });
-
-  it("flushes an uncommitted tag typed into the input when getTags() is called (e.g. clicking Send without pressing Enter/comma)", () => {
-    const row = createClassifyRow(strings);
-    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
-    input.value = "checkout";
-
-    // No keydown dispatched — text is only committed via getTags() itself.
-    expect(row.getTags()).toEqual(["checkout"]);
-    expect(input.value).toBe("");
-  });
-
-  it("does not flush a blank or whitespace-only uncommitted value", () => {
-    const row = createClassifyRow(strings);
-    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
-    input.value = "   ";
-
-    expect(row.getTags()).toEqual([]);
-  });
-
-  it("flushing an uncommitted value that duplicates an existing tag does not add it twice", () => {
-    const row = createClassifyRow(strings);
-    const input = row.container.querySelector(`.${CLASSES.TAGS_INPUT}`);
-    input.value = "checkout";
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
-    input.value = "Checkout";
-
-    expect(row.getTags()).toEqual(["checkout"]);
   });
 
   it("reset() rebuilds the type picker's DOM back to neutral, not just its accessor", () => {

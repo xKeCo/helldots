@@ -495,3 +495,124 @@ grouped by feature.
   detach one while it is open, would otherwise leave a stale entry stuck
   "open" and refusing to reopen. A detached menu is never in a click path, so
   the next outside mousedown evicts it and releases the document listener.
+
+## Card density, chip filters and viewport-relative panels
+
+- **The per-comment action strip moved out of the header, onto its own row.**
+  Copy, status, type, priority and ⋯ shared the header with the author and the
+  timestamp. Inside a 380px inbox panel that left the name roughly 90px, so
+  "Kevin Collazos" wrapped onto two lines; in the 400px thread popover it
+  truncated mid-name instead. The inbox card grew an `.inbox-card-footer`
+  shared with the reply link, and the popover an `.thread-actions-row` under
+  its header. Two alternatives were rejected: dropping the type/priority
+  labels back to bare dots (undoes the WCAG 1.4.1 reasoning recorded under
+  "Automatic context, classification and resolution time" — colour alone
+  cannot separate `bug` from `high`, they are the same hex), and folding both
+  pickers into the ⋯ menu (two clicks to classify, and classification is the
+  most-used action there). The cost accepted is one more row of card height.
+- **`.thread-meta` is `flex: 1; min-width: 0` and the author truncates.** The
+  `min-width: 0` is the load-bearing half: a flex item's default minimum is
+  its content width, so without it the author pushes the row wider instead of
+  shrinking, and the ellipsis never engages.
+- **The inbox filter is a chip panel, not a list of radio rows.** Four
+  dimensions × their values made a tall scrolling menu where the shape of the
+  filter was invisible. Chips show every dimension and every option at once in
+  300px. Status, type and priority chips toggle — activating the active chip
+  clears that group — which is why they carry no explicit "All" option; the
+  page group keeps two chips because it has no neutral state. Selection is
+  still one value per group: multi-select would turn `filteredComments()` and
+  the collapsed label into list handling for a filter set that is already
+  small enough to re-pick.
+- **`statusFilter` now matches the data model.** It was `all | unresolved |
+resolved` while comments carried `open | in_progress | resolved`, so
+  `in_progress` was unreachable as a filter and invisible as a distinct state.
+  It now takes the `STATUSES` values directly, treating a missing status as
+  `open` so pre-RF09 comments still match. `filterUnresolved`,
+  `filterResolved` and `filterStatusAll` were dropped from both locales.
+- **The tags input was removed; the `tags` field was not.** It was the only
+  way to author a tag, it rendered near-black inside the dark comment box, and
+  it was the weakest third of the classification strip. Removing the whole
+  feature would have broken `setCommentTags()`, the `tags` entry in
+  `index.d.ts` and the display of comments that already carry tags — so only
+  the authoring affordance went away. `createClassifyRow` no longer exposes
+  `getTags()`, and `saveComment` stores an empty array. Re-introducing tag
+  authoring is a future decision, not a reversal of this one.
+- **The automatic context is a collapsed disclosure in the thread popover.**
+  It was reachable only from the inbox detail, which meant leaving the thread
+  to read the environment a bug was reported from. `_buildContextBlock` moved
+  out of `InboxView` into `src/context-block.js` and takes a `collapsible`
+  flag: the inbox detail renders it expanded (that view exists to show
+  everything), the popover collapsed (it is a conversation first). The
+  rejected alternative — a ⋯ menu item that opens the inbox detail — was
+  cheaper but pushes the user out of the thread they are reading.
+- **`_buildBadges` became `createBadgeRow` in `components.js`, with an
+  opt-in status badge.** The tooltip needed the same strip. Status is opt-in
+  rather than always-on because every other surface already exposes it through
+  the status picker's coloured dot; the tooltip has no picker, so it is the
+  one place the value has to be spelled out — and there it shows even when the
+  status is `open`.
+- **Panel widths are `min(400px, calc(100vw - 24px))`, and positioning
+  measures instead of assuming.** `showCommentBox()` clamped against a
+  `boxWidth = 300` constant while the CSS said `400px`, and
+  `positionPopoverAtCircle()` hardcoded `400` — which is why both ran off the
+  right edge on a phone. Both now read the element's real width and clamp
+  against both viewport edges, since on a viewport narrower than the panel
+  plus its margins, flipping to the other side of the marker is not enough on
+  its own. The inbox panel's full-width media query moved from 420px to 480px:
+  380px of panel plus two 16px gutters needs 412px before it can sit flush
+  right.
+
+## Thread popover: tracking its marker and scrolling its own body
+
+- **The popover follows its marker on scroll instead of staying put.** It is
+  `position: fixed` and was positioned exactly once, in the `setTimeout` that
+  opens it. The markers are already recomputed into viewport coordinates on
+  every scroll (`scheduleUpdatePositions`), so the popover simply was not
+  part of that pass — it stayed nailed to the screen while the comment it
+  belonged to slid away. `syncThreadPopoverToMarker()` now runs in the same
+  rAF, after the markers move.
+- **It runs even when `positionValidationEnabled` is false.** That flag gates
+  re-anchoring, not coordinate space: the markers are placed in viewport
+  coordinates either way, so a popover that did not follow would drift apart
+  from its marker regardless of the flag.
+- **Off-screen hides the popover; it does not close it.** The marker leaving
+  the viewport is a transient state — scrolling back must restore the thread,
+  including a half-typed reply. Closing would also collide with the
+  outside-click handler, which is the one thing that should genuinely dismiss
+  it. The visibility test is a plain rect intersection with the viewport, so
+  a partly-visible marker still keeps its popover.
+- **Hiding is `display: none`, and the popover is un-hidden before being
+  measured.** `positionPopoverAtCircle()` sizes itself from
+  `getBoundingClientRect()`, which reports zeros for a `display: none`
+  element; positioning first and revealing after would place it using the
+  400px fallback width and a height of zero.
+- **A centered popover is left alone.** Orphaned comments opened from the
+  inbox have no marker, so there is nothing to track — `_activePopoverCircle`
+  is null and the sync is a no-op rather than a fallback re-centering, which
+  would fight the user on every scroll.
+- **The popover became a flex column with an inner scroll container.** It had
+  no `max-height`, so expanding the context block or loading a long thread
+  grew it past the viewport with no way to reach the rest: the wheel fell
+  through to the page. It is now `max-height: calc(100vh - 20px)` with the
+  header, its action row and the reply box pinned (`flex: none`) and
+  `.thread-scroll` taking the remainder. The `min-height: 0` on that
+  container is load-bearing — a flex item's default minimum is its content
+  height, so without it the popover grows past `max-height` instead of
+  scrolling, which is the original bug wearing a `max-height`.
+- **`overscroll-behavior: contain` on the scroll area.** Reaching the end of
+  the thread otherwise chains the wheel to the page and scrolls the comment's
+  own marker out from under it.
+- **The tooltip got `max-height` and `overflow-y` too, but no inner
+  container.** It has nothing to pin — no reply box, no action row — so
+  scrolling the whole element is the correct, smaller answer there.
+
+- **The marker toggles its own thread.** Clicking the active marker used to
+  run `showThreadPopover()` again, which tore the popover down and rebuilt an
+  identical one — visually a no-op, so the marker looked like it could not be
+  deselected. It now closes instead. The check is on the popover's own
+  `data-for`, not merely "is a popover open", so clicking a _different_ marker
+  still switches threads rather than closing. `showThreadPopover()` itself
+  stays a plain "show" — the toggle belongs to the click handler, so
+  programmatic callers (saving a comment, the inbox handoff) keep opening
+  unconditionally. Keyboard activation inherits this for free: the
+  Enter/Space handler goes through `circle.click()`.

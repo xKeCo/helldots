@@ -138,56 +138,40 @@ export const getStyles = () => `
         box-shadow: 0 4px 20px rgba(0,0,0,0.4);
         padding: 16px;
         z-index: ${Z_INDEX.COMMENT_BOX};
-        width: 400px;
+        width: min(400px, calc(100vw - 24px));
         display: none;
         box-sizing: border-box;
     }
-    
+
     #${IDS.COMMENT_BOX} .${CLASSES.COMMENT_INPUT_AREA} {
         display: flex;
         flex-direction: column;
         gap: 0;
     }
 
+    /* Shares the comment box's own 16px inset instead of adding its own, so
+       the pickers line up with the textarea below them. The hairline is the
+       mirror of the one .thread-input-area carries on top. */
     .${CLASSES.CLASSIFY_ROW} {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 6px;
-        padding: 8px 10px 0;
+        gap: 8px;
+        padding: 0 0 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
-    .${CLASSES.TAGS_INPUT} {
-        flex: 1 1 90px;
-        min-width: 90px;
-        background: transparent;
-        border: none;
-        outline: none;
-        color: inherit;
-        font-size: 12px;
-        padding: 2px 0;
+
+    /* In the inbox the pickers sit in a strip of other icon buttons and read
+       as controls on their own. Alone at the top of an empty comment box
+       they need an outline to do the same. */
+    .${CLASSES.CLASSIFY_ROW} .${CLASSES.INBOX_ACTION_BTN} {
+        height: 26px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
     }
-    .${CLASSES.TAG_CHIP} {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 2px 6px;
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.1);
-        font-size: 11px;
-        line-height: 1.4;
-    }
-    .${CLASSES.TAG_CHIP_REMOVE} {
-        background: none;
-        border: none;
-        color: inherit;
-        cursor: pointer;
-        padding: 0;
-        font-size: 13px;
-        line-height: 1;
-        opacity: 0.6;
-    }
-    .${CLASSES.TAG_CHIP_REMOVE}:hover {
-        opacity: 1;
+
+    .${CLASSES.CLASSIFY_ROW} .${CLASSES.INBOX_ACTION_BTN}:hover {
+        border-color: rgba(255, 255, 255, 0.28);
     }
 
     #${IDS.COMMENT_INPUT} {
@@ -202,8 +186,7 @@ export const getStyles = () => `
         line-height: 1.4;
         box-sizing: border-box;
         field-sizing: content;
-        padding-top: 4px;
-        padding-bottom: 8px;
+        padding: 8px 0;
     }
 
     #${IDS.COMMENT_INPUT}::placeholder {
@@ -264,6 +247,16 @@ export const getStyles = () => `
         box-shadow: 0 0 0 4px rgba(46, 144, 250, 0.35), 0 1px 5px rgba(0,0,0,0.2);
     }
 
+    /* The marker whose thread is open. Grows like hover does — the pointer
+       has to leave the circle to reach the popover, so hover alone can't
+       carry the selected state — and adds a heavier ring. Size and ring,
+       not colour alone (WCAG 1.4.1). */
+    .${CLASSES.CIRCLE}.${CLASSES.CIRCLE_ACTIVE} {
+        transform: translate(-50%, -50%) scale(1.2) !important;
+        background: rgb(0, 123, 255);
+        box-shadow: 0 0 0 5px rgba(46, 144, 250, 0.5), 0 1px 5px rgba(0,0,0,0.2);
+    }
+
     .${CLASSES.CIRCLE_WRAPPER} {
         position: absolute;
         left: 0;
@@ -280,7 +273,10 @@ export const getStyles = () => `
         border-radius: 12px;
         padding: 16px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        width: 400px;
+        width: min(400px, calc(100vw - 24px));
+        max-height: calc(100vh - 20px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
         z-index: ${Z_INDEX.TOOLTIP};
         color: white;
         font-size: 14px;
@@ -302,12 +298,46 @@ export const getStyles = () => `
         border-radius: 12px;
         padding: 16px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        width: 400px;
+        width: min(400px, calc(100vw - 24px));
+        max-height: calc(100vh - 20px);
+        display: flex;
+        flex-direction: column;
         z-index: ${Z_INDEX.TOOLTIP};
         color: white;
         font-size: 14px;
         line-height: 1.5;
         box-sizing: border-box;
+    }
+
+    /* The header, its action row and the reply box are pinned; the comment
+       body, context block and replies scroll between them. The min-height: 0
+       is required — a flex item's default minimum is its content height, so
+       without it the popover grows past max-height instead of scrolling. */
+    .${CLASSES.THREAD_POPOVER} > .${CLASSES.THREAD_HEADER},
+    .${CLASSES.THREAD_POPOVER} > .${CLASSES.THREAD_ACTIONS_ROW},
+    .${CLASSES.THREAD_POPOVER} > .${CLASSES.THREAD_INPUT_AREA} {
+        flex: none;
+    }
+
+    .${CLASSES.THREAD_SCROLL} {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+    }
+
+    .${CLASSES.THREAD_SCROLL}::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .${CLASSES.THREAD_SCROLL}::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.18);
+        border-radius: 3px;
+    }
+
+    .${CLASSES.THREAD_SCROLL}::-webkit-scrollbar-thumb:hover {
+        background: rgba(255,255,255,0.3);
     }
 
     .${CLASSES.INBOX_PANEL} {
@@ -330,7 +360,9 @@ export const getStyles = () => `
         overflow: hidden;
     }
 
-    @media (max-width: 420px) {
+    /* 380px panel + 16px of gutter each side needs 412px to sit flush on
+       the right; below that it spans the viewport instead. */
+    @media (max-width: 480px) {
         .${CLASSES.INBOX_PANEL} {
             left: 16px;
             width: auto;
@@ -372,39 +404,90 @@ export const getStyles = () => `
 
     .${CLASSES.INBOX_FILTER_MENU} {
         position: absolute;
-        top: calc(100% + 4px);
+        top: calc(100% + 6px);
         left: 0;
         background: #2C2C2E;
         border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 8px;
-        padding: 4px;
-        min-width: 190px;
+        border-radius: 12px;
+        padding: 14px;
+        width: 300px;
+        max-width: calc(100vw - 40px);
         z-index: 1;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+    }
+
+    .${CLASSES.INBOX_FILTER_MENU_HEADER} {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 12px;
+    }
+
+    .${CLASSES.INBOX_FILTER_CLEAR} {
+        background: transparent;
+        border: none;
+        color: rgba(255,255,255,0.55);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .${CLASSES.INBOX_FILTER_CLEAR}:hover:not(:disabled) {
+        color: white;
+    }
+
+    .${CLASSES.INBOX_FILTER_CLEAR}:disabled {
+        opacity: 0.35;
+        cursor: default;
+    }
+
+    .${CLASSES.INBOX_FILTER_GROUP} + .${CLASSES.INBOX_FILTER_GROUP} {
+        margin-top: 14px;
     }
 
     .${CLASSES.INBOX_FILTER_SECTION} {
-        padding: 8px 10px 4px;
         font-size: 11px;
         font-weight: 600;
         color: rgba(255,255,255,0.45);
-        text-transform: none;
+        margin-bottom: 8px;
     }
 
-    .${CLASSES.INBOX_FILTER_SECTION}:not(:first-child) {
-        margin-top: 4px;
-        border-top: 1px solid rgba(255,255,255,0.1);
-        padding-top: 10px;
-    }
-
-    .${CLASSES.INBOX_FILTER_OPTION} {
+    .${CLASSES.INBOX_FILTER_CHIPS} {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
+        flex-wrap: wrap;
+        gap: 6px;
     }
 
-    .${CLASSES.INBOX_FILTER_OPTION},
+    .${CLASSES.INBOX_FILTER_CHIP} {
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.18);
+        border-radius: 999px;
+        color: rgba(255,255,255,0.75);
+        font-size: 12px;
+        line-height: 1;
+        padding: 7px 12px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    .${CLASSES.INBOX_FILTER_CHIP}:hover {
+        border-color: rgba(255,255,255,0.4);
+        color: white;
+    }
+
+    /* Selected chips are filled *and* carry aria-checked — the fill is a
+       convenience, never the only way to tell them apart. */
+    .${CLASSES.INBOX_FILTER_CHIP}[aria-checked="true"] {
+        background: rgba(255,255,255,0.92);
+        border-color: rgba(255,255,255,0.92);
+        color: #1C1C1E;
+        font-weight: 600;
+    }
+
     .${CLASSES.INBOX_MENU_ITEM} {
         display: block;
         width: 100%;
@@ -418,7 +501,6 @@ export const getStyles = () => `
         cursor: pointer;
     }
 
-    .${CLASSES.INBOX_FILTER_OPTION}:hover,
     .${CLASSES.INBOX_MENU_ITEM}:hover {
         background: rgba(255,255,255,0.08);
     }
@@ -499,6 +581,22 @@ export const getStyles = () => `
         gap: 8px;
     }
 
+    /* Reply on the left, the action strip on the right, both with the card's
+       full width. Sharing the header row with five controls left the author
+       about 90px and wrapped it onto two lines. */
+    .${CLASSES.INBOX_CARD_FOOTER} {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 2px;
+    }
+
+    /* No reply link in the detail view — the strip stays right-aligned. */
+    .${CLASSES.INBOX_CARD_FOOTER} > .${CLASSES.INBOX_CARD_ACTIONS}:only-child {
+        margin-left: auto;
+    }
+
     .${CLASSES.INBOX_CARD_ACTIONS} {
         display: flex;
         align-items: center;
@@ -564,9 +662,12 @@ export const getStyles = () => `
         background: rgba(255,255,255,0.08);
     }
 
-    .${CLASSES.THREAD_HEADER} .${CLASSES.INBOX_CARD_ACTIONS} {
-        margin-left: auto;
-        margin-right: 8px;
+    /* The popover's action strip, on its own row under the author — the
+       same split the inbox card makes, for the same reason. */
+    .${CLASSES.THREAD_ACTIONS_ROW} {
+        display: flex;
+        justify-content: flex-end;
+        padding-top: 8px;
     }
 
     /* Generic hover tooltip, same look as .thread-time[data-full-date] */
@@ -638,6 +739,9 @@ export const getStyles = () => `
     .${CLASSES.INBOX_CARD} .${CLASSES.INBOX_BADGES} {
         margin-top: 6px;
     }
+    .${CLASSES.TOOLTIP} .${CLASSES.INBOX_BADGES} {
+        margin-bottom: 4px;
+    }
     .${CLASSES.BADGE} {
         display: inline-flex;
         align-items: center;
@@ -649,6 +753,7 @@ export const getStyles = () => `
         letter-spacing: 0.01em;
         white-space: nowrap;
     }
+    .${CLASSES.BADGE_STATUS},
     .${CLASSES.BADGE_TYPE},
     .${CLASSES.BADGE_PRIORITY} {
         font-weight: 600;
@@ -664,10 +769,48 @@ export const getStyles = () => `
     .${CLASSES.CONTEXT_BLOCK} {
         display: flex;
         flex-direction: column;
-        gap: 4px;
         padding: 10px 12px;
         border-top: 1px solid rgba(255, 255, 255, 0.08);
         font-size: 11px;
+    }
+    .${CLASSES.CONTEXT_BODY} {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .${CLASSES.CONTEXT_TITLE} {
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.45);
+        padding-bottom: 4px;
+    }
+    /* The popover's collapsed variant. Same weight and colour as the inbox
+       title so the two surfaces read as the same block. */
+    .${CLASSES.CONTEXT_TOGGLE} {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        background: transparent;
+        border: none;
+        color: rgba(255,255,255,0.45);
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 2px 0;
+    }
+    .${CLASSES.CONTEXT_TOGGLE}:hover {
+        color: rgba(255,255,255,0.75);
+    }
+    .${CLASSES.CONTEXT_TOGGLE} svg {
+        flex: none;
+        transition: transform 0.15s ease;
+    }
+    .${CLASSES.CONTEXT_TOGGLE}[aria-expanded="true"] svg {
+        transform: rotate(180deg);
+    }
+    .${CLASSES.CONTEXT_TOGGLE}[aria-expanded="true"] + .${CLASSES.CONTEXT_BODY} {
+        padding-top: 8px;
     }
     .${CLASSES.CONTEXT_BLOCK} img {
         width: 100%;
@@ -725,15 +868,23 @@ export const getStyles = () => `
         padding: 0 0 0;
     }
 
+    /* min-width:0 is what lets the author actually shrink: a flex item
+       defaults to min-content, so without it the name pushes the row wider
+       instead of truncating. */
     .${CLASSES.THREAD_META} {
         display: flex;
         align-items: center;
         gap: 6px;
+        flex: 1;
+        min-width: 0;
     }
 
     .${CLASSES.THREAD_AUTHOR} {
         font-weight: 600;
         font-size: 13px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .${CLASSES.THREAD_TIME} {
@@ -741,6 +892,7 @@ export const getStyles = () => `
         color: rgba(255,255,255,0.5);
         cursor: default;
         position: relative;
+        flex: none;
     }
 
     .${CLASSES.THREAD_TIME}::after {
@@ -903,7 +1055,7 @@ export const getStyles = () => `
         padding: 4px 0;
         scrollbar-width: none;
         -ms-overflow-style: none;
-        margin-bottom: 16px;
+        margin-bottom: 8px;
     }
 
     .${CLASSES.SCREENSHOTS_CONTAINER}::-webkit-scrollbar {
@@ -963,7 +1115,7 @@ export const getStyles = () => `
     .${CLASSES.TOOLTIP} > .${CLASSES.SCREENSHOTS_CONTAINER} .${
       CLASSES.SCREENSHOT_ITEM
     } .${CLASSES.SCREENSHOT_IMG},
-    .${CLASSES.THREAD_POPOVER} > .${CLASSES.SCREENSHOTS_CONTAINER} .${
+    .${CLASSES.THREAD_SCROLL} > .${CLASSES.SCREENSHOTS_CONTAINER} .${
       CLASSES.SCREENSHOT_ITEM
     } .${CLASSES.SCREENSHOT_IMG},
     .${CLASSES.THREAD_REPLY} .${CLASSES.SCREENSHOT_ITEM} .${

@@ -37,6 +37,7 @@ import {
   createReplyElement,
 } from "./components.js";
 import { InboxView } from "./inbox.js";
+import { createContextBlock } from "./context-block.js";
 import { createCommentActions, copyToClipboard } from "./comment-actions.js";
 import { buildAgentContext } from "./agent-context.js";
 import { closeOpenMenus } from "./menus.js";
@@ -480,12 +481,17 @@ class CommentOverlay {
   showCommentBox(x, y) {
     this.commentBox.style.display = "block";
 
-    const boxWidth = 300;
     const circleBaseSize = 28;
     const circleRadius = circleBaseSize / 2;
     const offset = circleRadius + 10;
     const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;
+
+    // Measured, not assumed: the box is 400px wide on a roomy viewport but
+    // narrows to `100vw - 24px` on a phone. A hardcoded width here is what
+    // used to push it off the right edge on mobile.
+    const boxRect = this.commentBox.getBoundingClientRect();
+    const boxWidth = boxRect.width || 400;
 
     const centerX = x + circleRadius;
     const centerY = y + circleRadius;
@@ -496,9 +502,11 @@ class CommentOverlay {
     if (adjustedX + boxWidth > windowWidth) {
       adjustedX = centerX - offset - boxWidth;
     }
+    // Clamp both edges: on a viewport narrower than the box plus its
+    // margins, flipping to the other side isn't enough on its own.
+    adjustedX = Math.min(adjustedX, windowWidth - boxWidth - 10);
     adjustedX = Math.max(10, adjustedX);
 
-    const boxRect = this.commentBox.getBoundingClientRect();
     if (adjustedY + boxRect.height > windowHeight) {
       adjustedY = windowHeight - boxRect.height - 10;
     }
@@ -561,7 +569,9 @@ class CommentOverlay {
       type: /** @type {any} */ (this.commentBox).classify?.getType() ?? null,
       priority:
         /** @type {any} */ (this.commentBox).classify?.getPriority() ?? null,
-      tags: /** @type {any} */ (this.commentBox).classify?.getTags() ?? [],
+      // No longer authored in the widget — kept on the model for
+      // setCommentTags() and for comments imported through loadComments().
+      tags: [],
       resolvedAt: null,
       context: captureContext(),
       contextScreenshot: this._pendingContextScreenshot,
@@ -605,6 +615,14 @@ class CommentOverlay {
         `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
       );
       if (tooltip) tooltip.remove();
+      // The marker toggles its own thread: clicking the active marker
+      // closes it rather than tearing the popover down and rebuilding an
+      // identical one. Only its own — clicking a different marker still
+      // switches to that thread.
+      if (this.activeThreadPopover?.dataset.for === String(comment.id)) {
+        this.closeThreadPopover();
+        return;
+      }
       this.showThreadPopover(circle, comment);
     });
 
@@ -735,6 +753,15 @@ class CommentOverlay {
     );
     if (existingTooltip) existingTooltip.remove();
 
+    // Keeps the selected marker visibly picked out while its thread is open
+    // — same growth as hover, plus a ring, so it survives the pointer
+    // leaving the circle to reach the popover.
+    circle?.classList.add(CLASSES.CIRCLE_ACTIVE);
+    // Remembered so scrolling can keep the popover pinned to it. Null for
+    // orphaned comments opened from the inbox — those get centered instead
+    // and have no marker to follow.
+    this._activePopoverCircle = circle || null;
+
     const popover = createThreadPopover(comment, this.strings, this.locale);
     this.shadowRoot.appendChild(popover);
 
@@ -760,13 +787,17 @@ class CommentOverlay {
         if (this.inboxView?.isOpen()) this.inboxView.refresh();
       },
     });
-    headerEl.insertBefore(
-      actionsEl,
-      headerEl.querySelector(`.${CLASSES.CLOSE_TOOLTIP}`)
-    );
+    // Its own row under the header, for the same reason the inbox card has
+    // a footer: five controls sharing the header left the author ~90px and
+    // truncated it mid-name.
+    const actionsRow = document.createElement("div");
+    actionsRow.className = CLASSES.THREAD_ACTIONS_ROW;
+    actionsRow.appendChild(actionsEl);
+    headerEl.insertAdjacentElement("afterend", actionsRow);
 
-    const mainScreenshotsContainer = Array.from(popover.children).find(
-      (child) => child.classList.contains(CLASSES.SCREENSHOTS_CONTAINER)
+    // The root comment's gallery, not the reply box's pending previews.
+    const mainScreenshotsContainer = popover.querySelector(
+      `.${CLASSES.THREAD_SCROLL} > .${CLASSES.SCREENSHOTS_CONTAINER}`
     );
     if (mainScreenshotsContainer) {
       mainScreenshotsContainer
@@ -777,6 +808,20 @@ class CommentOverlay {
             this.showLightbox(img.src);
           });
         });
+    }
+
+    // RF2 — the automatic capture used to be reachable only from the inbox
+    // detail. Collapsed by default so the popover stays a conversation
+    // first; built here because it needs the lightbox callback.
+    const contextBlock = createContextBlock(comment, {
+      strings: this.strings,
+      onShowLightbox: (src) => this.showLightbox(src),
+      collapsible: true,
+    });
+    if (contextBlock) {
+      // `.before()` rather than popover.insertBefore(): the replies live
+      // inside the scroll container, not directly under the popover.
+      popover.querySelector(`.${CLASSES.THREAD_REPLIES}`).before(contextBlock);
     }
 
     setTimeout(() => {
@@ -921,10 +966,20 @@ class CommentOverlay {
   }
 
   closeThreadPopover() {
+    // Queried rather than remembered: the marker can be re-rendered while
+    // its popover is open, and the stale reference would keep the class.
+    // cleanup() reaches here before initOverlay() has run when the document
+    // was still loading, so there may be no shadow root yet.
+    this.shadowRoot
+      ?.querySelectorAll(`.${CLASSES.CIRCLE_ACTIVE}`)
+      .forEach((/** @type {HTMLElement} */ el) =>
+        el.classList.remove(CLASSES.CIRCLE_ACTIVE)
+      );
     if (this.activeThreadPopover) {
       this.activeThreadPopover.remove();
       this.activeThreadPopover = null;
     }
+    this._activePopoverCircle = null;
     if (this._threadClickHandler) {
       document.removeEventListener("mousedown", this._threadClickHandler);
       this._threadClickHandler = null;
@@ -1249,6 +1304,41 @@ class CommentOverlay {
     el.style.top = `${y}px`;
   }
 
+  /**
+   * Keeps the open thread popover pinned beside its marker while the page
+   * scrolls, and hides it while the marker is off-screen.
+   *
+   * Hidden, not closed: a half-typed reply must survive scrolling the marker
+   * out of view and back. Closing here would also fight the outside-click
+   * handler, which is the thing that legitimately dismisses the popover.
+   */
+  syncThreadPopoverToMarker() {
+    const popover = this.activeThreadPopover;
+    const circle = this._activePopoverCircle;
+    // A popover with no marker is the centered variant (orphaned comment
+    // opened from the inbox); it has nothing to track.
+    if (!popover || !circle) return;
+
+    const rect = circle.getBoundingClientRect();
+    const onScreen =
+      circle.isConnected &&
+      circle.style.display !== "none" &&
+      rect.bottom > 0 &&
+      rect.right > 0 &&
+      rect.top < window.innerHeight &&
+      rect.left < window.innerWidth;
+
+    if (!onScreen) {
+      popover.style.display = "none";
+      return;
+    }
+
+    // Un-hide before measuring: a `display: none` element reports a zero
+    // rect, and positionPopoverAtCircle sizes itself from that measurement.
+    popover.style.display = "";
+    this.positionPopoverAtCircle(popover, circle);
+  }
+
   positionPopoverAtCircle(el, circle) {
     const circleRect = circle.getBoundingClientRect();
     const centerX = circleRect.left + circleRect.width / 2;
@@ -1256,15 +1346,20 @@ class CommentOverlay {
     const circleBaseSize = 28;
     const offset = circleBaseSize / 2 + 10;
 
+    // Same reasoning as showCommentBox(): the tooltip and popover are
+    // `min(400px, 100vw - 24px)` wide, so their real width has to be read.
+    const elRect = el.getBoundingClientRect();
+    const elWidth = elRect.width || 400;
+
     let x = centerX + offset;
     let y = centerY - circleBaseSize / 2;
 
-    if (x + 400 > window.innerWidth) {
-      x = centerX - offset - 400;
+    if (x + elWidth > window.innerWidth) {
+      x = centerX - offset - elWidth;
     }
+    x = Math.min(x, window.innerWidth - elWidth - 10);
     x = Math.max(10, x);
 
-    const elRect = el.getBoundingClientRect();
     if (y + elRect.height > window.innerHeight) {
       y = window.innerHeight - elRect.height - 10;
     }
@@ -1527,14 +1622,18 @@ class CommentOverlay {
       if (this._pendingRaf) return;
       this._pendingRaf = requestAnimationFrame(() => {
         this._pendingRaf = null;
-        if (!this.positionValidationEnabled) return;
-        this.comments.forEach((comment) => {
-          /** @type {HTMLElement} */
-          const circle = /** @type {any} */ (
-            this.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`)
-          );
-          if (circle) this.updateCommentPosition(comment, circle);
-        });
+        if (this.positionValidationEnabled) {
+          this.comments.forEach((comment) => {
+            /** @type {HTMLElement} */
+            const circle = /** @type {any} */ (
+              this.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`)
+            );
+            if (circle) this.updateCommentPosition(comment, circle);
+          });
+        }
+        // Runs even with position validation off: the markers are placed in
+        // viewport coordinates either way, so the popover has to follow.
+        this.syncThreadPopoverToMarker();
       });
     };
 

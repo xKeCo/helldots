@@ -104,23 +104,64 @@ describe("inbox sidebar", () => {
       expect(tags.some((t) => t.textContent === "/otra-pagina")).toBe(true);
     });
 
-    it("the filter menu has page and status sections with checkmarks on the active options", () => {
+    it("the filter menu has a chip group per dimension, with the active chip checked", () => {
       overlay = makeOverlay({ locale: "en" });
       const panel = openInbox(overlay);
       click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
 
       const menu = panel.querySelector(`.${CLASSES.INBOX_FILTER_MENU}`);
-      expect(menu.textContent).toContain("Filter by Page");
-      expect(menu.textContent).toContain("Filter by Status");
+      expect(menu.textContent).toContain("Page");
+      expect(menu.textContent).toContain("Status");
+      expect(menu.textContent).toContain("Type");
+      expect(menu.textContent).toContain("Priority");
 
       const checkedPage = menu.querySelector(
         `[data-filter-page][aria-checked="true"]`
       );
-      const checkedStatus = menu.querySelector(
-        `[data-filter-status][aria-checked="true"]`
-      );
       expect(checkedPage.dataset.filterPage).toBe("page");
-      expect(checkedStatus.dataset.filterStatus).toBe("all");
+      // Status/type/priority have no "all" chip: nothing checked *is* "all".
+      expect(
+        menu.querySelector(`[data-filter-status][aria-checked="true"]`)
+      ).toBeNull();
+    });
+
+    it("toggling the active status chip clears that group back to all", () => {
+      overlay = makeOverlay({ locale: "en" });
+      const panel = openInbox(overlay);
+
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-status="open"]`));
+      expect(overlay.inboxView.statusFilter).toBe("open");
+
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-status="open"]`));
+      expect(overlay.inboxView.statusFilter).toBe("all");
+    });
+
+    it("the clear button resets every group and is disabled while nothing is filtered", () => {
+      overlay = makeOverlay({ locale: "en" });
+      const panel = openInbox(overlay);
+
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      expect(
+        panel.querySelector(`.${CLASSES.INBOX_FILTER_CLEAR}`).disabled
+      ).toBe(true);
+
+      click(panel.querySelector(`[data-filter-status="resolved"]`));
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-type="bug"]`));
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-page="all"]`));
+
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      const clear = panel.querySelector(`.${CLASSES.INBOX_FILTER_CLEAR}`);
+      expect(clear.disabled).toBe(false);
+      click(clear);
+
+      expect(overlay.inboxView.statusFilter).toBe("all");
+      expect(overlay.inboxView.typeFilter).toBe("all");
+      expect(overlay.inboxView.priorityFilter).toBe("all");
+      expect(overlay.inboxView.pageFilter).toBe("page");
     });
 
     it("combines the status filter with the page filter", async () => {
@@ -137,9 +178,9 @@ describe("inbox sidebar", () => {
 
       const panel = openInbox(overlay);
 
-      // current page + unresolved
+      // current page + open
       click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
-      click(panel.querySelector(`[data-filter-status="unresolved"]`));
+      click(panel.querySelector(`[data-filter-status="open"]`));
       let cards = [...panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`)];
       expect(cards.map((c) => c.dataset.commentId)).toEqual([String(open1.id)]);
 
@@ -162,8 +203,8 @@ describe("inbox sidebar", () => {
       expect(label()).toBe("Página actual");
 
       click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
-      click(panel.querySelector(`[data-filter-status="unresolved"]`));
-      expect(label()).toBe("Página actual · Sin resolver");
+      click(panel.querySelector(`[data-filter-status="open"]`));
+      expect(label()).toBe("Página actual · Abierto");
     });
 
     it("includes the type filter in the collapsed label", () => {
@@ -195,12 +236,34 @@ describe("inbox sidebar", () => {
         panel.querySelector(`.${CLASSES.INBOX_FILTER} span`).textContent;
 
       click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
-      click(panel.querySelector(`[data-filter-status="unresolved"]`));
+      click(panel.querySelector(`[data-filter-status="open"]`));
       click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
       click(panel.querySelector(`[data-filter-type="bug"]`));
       click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
       click(panel.querySelector(`[data-filter-priority="high"]`));
-      expect(label()).toBe("Current page · Unresolved · Bug · High");
+      expect(label()).toBe("Current page · Open · Bug · High");
+    });
+
+    it("keeps the author on its own row and the action strip in the footer", async () => {
+      overlay = makeOverlay();
+      const target = document.getElementById("target");
+      await createCommentOn(overlay, target, "spacing");
+      const panel = openInbox(overlay);
+
+      const card = panel.querySelector(`.${CLASSES.INBOX_CARD}`);
+      const header = card.querySelector(`.${CLASSES.INBOX_CARD_HEADER}`);
+      const footer = card.querySelector(`.${CLASSES.INBOX_CARD_FOOTER}`);
+
+      // The five controls used to share the header row with the author,
+      // which left the name ~90px and wrapped it onto two lines.
+      expect(header.querySelector(`.${CLASSES.INBOX_CARD_ACTIONS}`)).toBeNull();
+      expect(header.querySelector(`.${CLASSES.THREAD_AUTHOR}`)).toBeTruthy();
+      expect(
+        footer.querySelector(`.${CLASSES.INBOX_CARD_ACTIONS}`)
+      ).toBeTruthy();
+      expect(
+        footer.querySelector(`.${CLASSES.INBOX_CARD_REPLY_LINK}`)
+      ).toBeTruthy();
     });
 
     it("sorts resolved comments to the bottom and styles their card", async () => {
@@ -698,11 +761,12 @@ describe("inbox sidebar", () => {
   });
 
   describe("thread popover actions", () => {
+    // Saving a comment already opens its thread, and the marker toggles —
+    // clicking it here would close what we came to inspect.
     const openPopover = (ov, comment) => {
-      const circle = ov.shadowRoot.querySelector(
-        `[data-comment-id="${comment.id}"]`
-      );
-      click(circle);
+      const open = ov.shadowRoot.querySelector(`.${CLASSES.THREAD_POPOVER}`);
+      if (open?.dataset.for === String(comment.id)) return open;
+      click(ov.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`));
       return ov.shadowRoot.querySelector(`.${CLASSES.THREAD_POPOVER}`);
     };
 
@@ -924,19 +988,20 @@ describe("inbox sidebar", () => {
       overlay.loadComments([...comments, resolved]);
       openInbox(overlay);
       overlay.inboxView.typeFilter = "bug";
-      overlay.inboxView.statusFilter = "unresolved";
+      overlay.inboxView.statusFilter = "open";
       expect(overlay.inboxView.filteredComments().map((c) => c.id)).toEqual([
         1,
       ]);
     });
 
-    it("renders a menu option per type and per priority", () => {
+    it("renders a chip per type and per priority", () => {
       overlay = makeOverlay();
       overlay.loadComments(comments);
       const panel = openInbox(overlay);
       overlay.inboxView.render();
-      expect(panel.querySelectorAll("[data-filter-type]")).toHaveLength(5);
-      expect(panel.querySelectorAll("[data-filter-priority]")).toHaveLength(4);
+      // One chip per value and no "all" chip — clearing is the toggle.
+      expect(panel.querySelectorAll("[data-filter-type]")).toHaveLength(4);
+      expect(panel.querySelectorAll("[data-filter-priority]")).toHaveLength(3);
     });
 
     it("selecting a type option applies the filter", () => {
