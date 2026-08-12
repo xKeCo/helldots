@@ -15,6 +15,7 @@ export const CLASSES = {
   THREAD_BODY: "thread-body",
   THREAD_REPLIES: "thread-replies",
   THREAD_REPLY: "thread-reply",
+  THREAD_REPLY_ACTIONS: "thread-reply-actions",
   THREAD_INPUT_AREA: "thread-input-area",
   THREAD_INPUT: "thread-input",
   THREAD_SUBMIT: "thread-submit",

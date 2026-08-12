@@ -601,6 +601,37 @@ describe("inbox sidebar", () => {
       expect(detail.querySelector(`.${CLASSES.THREAD_INPUT}`)).toBeTruthy();
     });
 
+    it("deletes a reply from the detail view without discarding the draft below", async () => {
+      overlay = makeOverlay();
+      const comment = await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "detailed"
+      );
+      overlay.addReply(comment, "doomed reply");
+
+      const panel = openInbox(overlay);
+      click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
+
+      const detail = panel.querySelector(`.${CLASSES.INBOX_DETAIL}`);
+      const draft = detail.querySelector(`.${CLASSES.THREAD_INPUT}`);
+      draft.value = "half-typed";
+
+      const replyEl = detail.querySelector(`.${CLASSES.THREAD_REPLY}`);
+      click(
+        replyEl.querySelector(
+          `.${CLASSES.THREAD_REPLY_ACTIONS} [data-action="menu"]`
+        )
+      );
+      click(replyEl.querySelector(`.${CLASSES.INBOX_MENU_ITEM}`));
+
+      expect(comment.replies).toHaveLength(0);
+      expect(detail.querySelector(`.${CLASSES.THREAD_REPLY}`)).toBeNull();
+      expect(detail.querySelector(`.${CLASSES.THREAD_INPUT}`).value).toBe(
+        "half-typed"
+      );
+    });
+
     it("scrolls to the marker, not to the anchor container", async () => {
       overlay = makeOverlay();
       await createCommentOn(

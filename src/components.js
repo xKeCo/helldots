@@ -11,6 +11,7 @@ import { formatDuration, formatTemplate } from "./i18n.js";
 import defaultStrings from "./locales/en.js";
 import {
   createPicker,
+  createMoreMenu,
   statusLabelOf,
   typeLabelOf,
   priorityLabelOf,
@@ -499,7 +500,22 @@ export const createTooltip = (comment, strings = defaultStrings, locale) => {
   return tooltip;
 };
 
-export const createReplyElement = (reply, strings = defaultStrings, locale) => {
+/**
+ * One reply inside a thread. `onDelete` is optional so read-only renderings
+ * (and any host that never wires deletion) keep the plain row: the ⋯ menu is
+ * only built when there is something for it to do.
+ *
+ * @param {any} reply
+ * @param {object} [strings]
+ * @param {string} [locale]
+ * @param {{ onDelete?: (reply: any, replyEl: HTMLElement) => void }} [handlers]
+ */
+export const createReplyElement = (
+  reply,
+  strings = defaultStrings,
+  locale,
+  { onDelete } = {}
+) => {
   const replyEl = document.createElement("div");
   replyEl.className = CLASSES.THREAD_REPLY;
 
@@ -509,6 +525,23 @@ export const createReplyElement = (reply, strings = defaultStrings, locale) => {
     strings,
     locale
   );
+
+  // Same ⋯ builder the comment strip uses, so a reply is deleted through the
+  // control the user already learned one level up.
+  if (onDelete) {
+    const actions = createMoreMenu({
+      label: strings.replyOptions,
+      items: [
+        {
+          label: strings.deleteReply,
+          onSelect: () => onDelete(reply, replyEl),
+        },
+      ],
+    });
+    actions.classList.add(CLASSES.THREAD_REPLY_ACTIONS);
+    meta.appendChild(actions);
+  }
+
   const text = document.createElement("div");
   text.className = CLASSES.THREAD_BODY;
   text.textContent = reply.text;
@@ -523,10 +556,17 @@ export const createReplyElement = (reply, strings = defaultStrings, locale) => {
   return replyEl;
 };
 
+/**
+ * @param {any} comment
+ * @param {object} [strings]
+ * @param {string} [locale]
+ * @param {{ onDeleteReply?: (reply: any, replyEl: HTMLElement) => void }} [handlers]
+ */
 export const createThreadPopover = (
   comment,
   strings = defaultStrings,
-  locale
+  locale,
+  { onDeleteReply } = {}
 ) => {
   const popover = document.createElement("div");
   popover.className = CLASSES.THREAD_POPOVER;
@@ -560,7 +600,9 @@ export const createThreadPopover = (
   replies.className = CLASSES.THREAD_REPLIES;
   if (comment.replies) {
     comment.replies.forEach((reply) => {
-      replies.appendChild(createReplyElement(reply, strings, locale));
+      replies.appendChild(
+        createReplyElement(reply, strings, locale, { onDelete: onDeleteReply })
+      );
     });
   }
 

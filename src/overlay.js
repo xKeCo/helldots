@@ -714,6 +714,8 @@ class CommentOverlay {
           onReply: (comment, text, screenshots) =>
             this.addReply(comment, text, screenshots),
           onDelete: (id) => this.deleteComment(id),
+          onDeleteReply: (commentId, replyId) =>
+            this.deleteReply(commentId, replyId),
           onSetStatus: (id, status) => this.setCommentStatus(id, status),
           onSetType: (id, type) => this.setCommentType(id, type),
           onSetPriority: (id, priority) =>
@@ -773,7 +775,15 @@ class CommentOverlay {
     // and have no marker to follow.
     this._activePopoverCircle = circle || null;
 
-    const popover = createThreadPopover(comment, this.strings, this.locale);
+    const onDeleteReply = (reply, replyEl) => {
+      if (!this.deleteReply(comment.id, reply.id)) return;
+      replyEl.remove();
+      if (this.inboxView?.isOpen()) this.inboxView.refresh();
+    };
+
+    const popover = createThreadPopover(comment, this.strings, this.locale, {
+      onDeleteReply,
+    });
     this.shadowRoot.appendChild(popover);
 
     // Same action strip as the inbox cards: copy agent context, lifecycle
@@ -931,7 +941,9 @@ class CommentOverlay {
       const repliesContainer = popover.querySelector(
         `.${CLASSES.THREAD_REPLIES}`
       );
-      const replyEl = createReplyElement(reply, this.strings, this.locale);
+      const replyEl = createReplyElement(reply, this.strings, this.locale, {
+        onDelete: onDeleteReply,
+      });
       repliesContainer.appendChild(replyEl);
 
       replyEl
@@ -942,6 +954,11 @@ class CommentOverlay {
             this.showLightbox(img.src);
           });
         });
+
+      // Once the thread is taller than the popover the new reply lands below
+      // the fold, so sending would look like nothing happened.
+      const scrollEl = popover.querySelector(`.${CLASSES.THREAD_SCROLL}`);
+      if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
 
       input.value = "";
       pendingReplyScreenshots = [];
@@ -958,6 +975,19 @@ class CommentOverlay {
     });
 
     this.activeThreadPopover = popover;
+
+    // Sending a reply, expanding the context block or a screenshot finishing
+    // its decode all change the popover's height after it was placed. Without
+    // re-running the anchor decision the box keeps the top it was given and
+    // grows straight off the bottom of the viewport. Watching the element is
+    // the one hook that covers every cause; guarded because jsdom has no
+    // ResizeObserver.
+    if (typeof ResizeObserver !== "undefined") {
+      this._popoverResizeObserver = new ResizeObserver(() =>
+        this._repositionThreadPopover()
+      );
+      this._popoverResizeObserver.observe(popover);
+    }
 
     setTimeout(() => input.focus(), 50);
 
@@ -986,6 +1016,8 @@ class CommentOverlay {
       .forEach((/** @type {HTMLElement} */ el) =>
         el.classList.remove(CLASSES.CIRCLE_ACTIVE)
       );
+    this._popoverResizeObserver?.disconnect();
+    this._popoverResizeObserver = null;
     if (this.activeThreadPopover) {
       this.activeThreadPopover.remove();
       this.activeThreadPopover = null;
@@ -1055,6 +1087,29 @@ class CommentOverlay {
       this._serializeReply(reply)
     );
     return reply;
+  }
+
+  /**
+   * Removes one reply from a thread. The root comment is untouched — deleting
+   * the last reply leaves the comment itself standing, which is why this is
+   * separate from deleteComment rather than a special case of it.
+   *
+   * @param {number} commentId
+   * @param {number} replyId
+   * @returns {boolean} false when either id does not resolve
+   */
+  deleteReply(commentId, replyId) {
+    const comment = this.comments.find((c) => c.id === commentId);
+    const index = comment?.replies?.findIndex((r) => r.id === replyId) ?? -1;
+    if (index < 0) return false;
+
+    const [reply] = comment.replies.splice(index, 1);
+    this._syncStorage();
+    this.options.onReplyDeleted?.(
+      this._serializeComment(comment),
+      this._serializeReply(reply)
+    );
+    return true;
   }
 
   _serializeReply({ id, text, author, timestamp, screenshots }) {
@@ -1312,6 +1367,9 @@ class CommentOverlay {
     const x = Math.max(10, (window.innerWidth - (elRect.width || 400)) / 2);
     const y = Math.max(10, (window.innerHeight - elRect.height) / 2);
     el.style.left = `${x}px`;
+    // Explicitly cleared: this element may have been bottom-anchored by
+    // positionPopoverAtCircle, and `top` alone would not win over it.
+    el.style.bottom = "auto";
     el.style.top = `${y}px`;
   }
 
@@ -1370,6 +1428,23 @@ class CommentOverlay {
    * out of view and back. Closing here would also fight the outside-click
    * handler, which is the thing that legitimately dismisses the popover.
    */
+  /**
+   * Re-runs the open popover's placement against its current size. Split from
+   * syncThreadPopoverToMarker because that one also decides visibility from
+   * the marker, which is wrong here: a popover resizing while its marker is
+   * off-screen must stay hidden, not reappear.
+   */
+  _repositionThreadPopover() {
+    const popover = this.activeThreadPopover;
+    if (!popover || popover.style.display === "none") return;
+
+    if (this._activePopoverCircle) {
+      this.positionPopoverAtCircle(popover, this._activePopoverCircle);
+    } else {
+      this.centerPopover(popover);
+    }
+  }
+
   syncThreadPopoverToMarker() {
     const popover = this.activeThreadPopover;
     const circle = this._activePopoverCircle;
@@ -1410,21 +1485,38 @@ class CommentOverlay {
     const elWidth = elRect.width || 400;
 
     let x = centerX + offset;
-    let y = centerY - circleBaseSize / 2;
 
     if (x + elWidth > window.innerWidth) {
       x = centerX - offset - elWidth;
     }
     x = Math.min(x, window.innerWidth - elWidth - 10);
     x = Math.max(10, x);
-
-    if (y + elRect.height > window.innerHeight) {
-      y = window.innerHeight - elRect.height - 10;
-    }
-    y = Math.max(10, y);
-
     el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
+
+    // Vertically the popover is anchored by whichever edge keeps it on
+    // screen, and that choice is what makes it grow in the right direction.
+    //
+    // Pinning `top` alone was not enough: `max-height` caps the height but
+    // says nothing about where the box starts, so a marker low on the page
+    // put the top at, say, 600px and the popover simply ran off the bottom —
+    // taking the reply input with it, so you could not see what you were
+    // typing. Re-clamping `top` on every growth would fight the user, since
+    // each new reply would shift the whole thread upward under the cursor.
+    //
+    // Anchoring `bottom` instead makes the browser do it: the reply box stays
+    // put and the thread extends upward until `max-height` takes over and
+    // `.thread-scroll` starts scrolling.
+    const margin = 10;
+    const preferredTop = centerY - circleBaseSize / 2;
+    const spaceBelow = window.innerHeight - margin - preferredTop;
+
+    if (elRect.height > spaceBelow) {
+      el.style.top = "auto";
+      el.style.bottom = `${margin}px`;
+    } else {
+      el.style.bottom = "auto";
+      el.style.top = `${Math.max(margin, preferredTop)}px`;
+    }
   }
 
   createPreviewCircle(x, y) {

@@ -36,6 +36,8 @@ export default {
   filterByStatus: "Estado",
   back: "Volver",
   deleteComment: "Eliminar",
+  deleteReply: "Eliminar respuesta",
+  replyOptions: "Opciones de la respuesta",
   copyAgentContext: "Copiar contexto de agente",
   copied: "Copiado",
   statusLabel: "Estado",

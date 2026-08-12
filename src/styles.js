@@ -6,6 +6,45 @@ import {
   CURSOR_HOTSPOT,
 } from "./constants.js";
 
+// Every scrollable surface in the widget sits on a #1C1C1E panel, so the
+// scrollbar has to be dark too. It was not: Chromium >= 121 ignores all
+// ::-webkit-scrollbar-* rules on an element that also declares
+// scrollbar-width or scrollbar-color, so the popover's styled thumb was
+// dropped and the platform default took over — a light thumb on a white
+// track, painted straight over the panel.
+//
+// The standard properties are the ones that win there, so they carry the
+// colour. The webkit block stays for Safari, which only shipped
+// scrollbar-color in 18.2 and still needs the pseudo-elements before that.
+const SCROLLBAR = `
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.22) transparent;`;
+
+const webkitScrollbar = (...selectors) =>
+  selectors
+    .map(
+      (selector) => `
+    ${selector}::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    ${selector}::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ${selector}::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.22);
+        border-radius: 4px;
+    }
+
+    ${selector}::-webkit-scrollbar-thumb:hover {
+        background: rgba(255,255,255,0.35);
+    }
+`
+    )
+    .join("");
+
 export const getStyles = () => `
 
     :host {
@@ -282,7 +321,7 @@ export const getStyles = () => `
         width: min(400px, calc(100vw - 24px));
         max-height: calc(100vh - 20px);
         overflow-y: auto;
-        overscroll-behavior: contain;
+        overscroll-behavior: contain;${SCROLLBAR}
         z-index: ${Z_INDEX.TOOLTIP};
         color: white;
         font-size: 14px;
@@ -329,23 +368,14 @@ export const getStyles = () => `
         flex: 1 1 auto;
         min-height: 0;
         overflow-y: auto;
-        overscroll-behavior: contain;
-        scrollbar-width: thin;
+        overscroll-behavior: contain;${SCROLLBAR}
     }
-
-    .${CLASSES.THREAD_SCROLL}::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    .${CLASSES.THREAD_SCROLL}::-webkit-scrollbar-thumb {
-        background: rgba(255,255,255,0.18);
-        border-radius: 3px;
-    }
-
-    .${CLASSES.THREAD_SCROLL}::-webkit-scrollbar-thumb:hover {
-        background: rgba(255,255,255,0.3);
-    }
-
+${webkitScrollbar(
+  `.${CLASSES.THREAD_SCROLL}`,
+  `.${CLASSES.TOOLTIP}`,
+  `.${CLASSES.INBOX_LIST}`,
+  `.${CLASSES.INBOX_DETAIL}`
+)}
     .${CLASSES.INBOX_PANEL} {
         position: fixed;
         top: 16px;
@@ -546,7 +576,7 @@ export const getStyles = () => `
     .${CLASSES.INBOX_LIST},
     .${CLASSES.INBOX_DETAIL} {
         flex: 1;
-        overflow-y: auto;
+        overflow-y: auto;${SCROLLBAR}
         padding: 12px;
         display: flex;
         flex-direction: column;
@@ -1010,6 +1040,14 @@ export const getStyles = () => `
 
     .${CLASSES.THREAD_REPLY} .${CLASSES.THREAD_META} {
         margin-bottom: 2px;
+    }
+
+    /* Pushed to the far edge of the reply's meta row, where the same ⋯ sits
+       on the comment above it. flex: none keeps it off the author's
+       truncation budget. */
+    .${CLASSES.THREAD_REPLY_ACTIONS} {
+        margin-left: auto;
+        flex: none;
     }
 
     .${CLASSES.THREAD_REPLY} .${CLASSES.SCREENSHOT_IMG} {

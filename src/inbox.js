@@ -37,7 +37,7 @@ export class InboxView {
    * @param {string} deps.currentPage
    * @param {() => Array<Object>} deps.getComments
    * @param {{ shortcutKey?: string, shortcutModifier?: string }} [deps.options]
-   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function }} deps.callbacks
+   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onDeleteReply: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function }} deps.callbacks
    */
   constructor({
     shadowRoot,
@@ -681,7 +681,14 @@ export class InboxView {
     const replies = document.createElement("div");
     replies.className = CLASSES.INBOX_REPLIES;
     for (const reply of comment.replies || []) {
-      const replyEl = createReplyElement(reply, this.strings, this.locale);
+      const replyEl = createReplyElement(reply, this.strings, this.locale, {
+        // Drops the row instead of re-rendering the detail: a full render
+        // would also throw away whatever the user has half-typed in the
+        // reply box below.
+        onDelete: (r, el) => {
+          if (this.callbacks.onDeleteReply(comment.id, r.id)) el.remove();
+        },
+      });
       replyEl
         .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
         .forEach((/** @type {HTMLImageElement} */ img) => {

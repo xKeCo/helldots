@@ -769,3 +769,58 @@ resolved` while comments carried `open | in_progress | resolved`, so
   Same position the thread popover uses, so the two views read alike. The
   footer placement was only ever a way to give the strip a full row — which
   the new position does equally well, closer to the meta it qualifies.
+
+## Thread chrome, round three: scrollbars, growth direction, reply deletion
+
+- **Scrollbar colour moved to the standard properties.** `.thread-scroll`
+  already styled its bar through `::-webkit-scrollbar-*`, and none of it was
+  applied: Chromium >= 121 drops every one of those pseudo-elements as soon
+  as the same element declares `scrollbar-width` or `scrollbar-color`, and
+  the element declared `scrollbar-width: thin`. What rendered was the
+  platform default — a light thumb on a white track — over a `#1C1C1E`
+  panel. `scrollbar-color` now carries it. The webkit block stayed for
+  Safari, which only shipped `scrollbar-color` in 18.2.
+- **Every scrollable surface got the same treatment, not just the one that
+  was reported.** The popover, the read-only tooltip and both inbox panes are
+  all dark panels; only the popover had ever tried to style its bar. Left as
+  it was, fixing the reported case would have left three surfaces disagreeing
+  with it.
+- **`:host { color-scheme: light }` was left alone.** Switching it to `dark`
+  would have fixed the scrollbars as a side effect, and would also have
+  changed how every native control inside the widget renders. Colouring the
+  scrollbars directly is the narrower change and does not depend on a
+  browser's idea of a dark theme.
+- **The popover anchors by whichever edge keeps it on screen.** `max-height`
+  caps how tall it gets but says nothing about where it starts, so a marker
+  low on the page pinned `top` at ~600px and the box ran off the bottom,
+  taking the reply input with it. Once the content no longer fits below the
+  marker the popover anchors `bottom` instead: the reply box holds still and
+  the thread grows upward until `max-height` takes over and `.thread-scroll`
+  starts scrolling.
+- **Re-clamping `top` on every growth was the alternative, and it is worse.**
+  It keeps the box on screen too, but each new reply shifts the whole thread
+  upward under the cursor. Anchoring the other edge lets the browser do it,
+  and nothing moves that the user was reading.
+- **A ResizeObserver re-runs the placement, rather than a call at each site
+  that changes the content.** Sending a reply, expanding the context
+  disclosure and a screenshot finishing its decode all resize the popover
+  after it was placed, and the last one has no call site at all. Guarded on
+  `typeof ResizeObserver` because jsdom does not implement it; the three
+  positioning cases are unit-tested directly instead.
+- **Replies are deleted through the same ⋯ menu as their comment.** The
+  builder is shared (`createMoreMenu`) rather than copied, so the button, the
+  dropdown chrome and the single-open rule cannot drift between the two.
+- **The reply ⋯ has no hover tooltip, though the comment's does.** The
+  tooltip is an absolutely positioned `::after`, and on a button flush
+  against the right edge of `.thread-scroll` it stuck ~9px past it — enough
+  to give every thread a horizontal scrollbar. `aria-label` still names the
+  control and the menu it opens says the rest, which is a better trade than
+  clipping the bubble or reserving a gutter for it.
+- **Deleting a reply drops its row instead of re-rendering.** In the inbox
+  detail a full render would also discard whatever is half-typed in the reply
+  box below it. The reply count is not shown anywhere in that view, so
+  nothing else needs to be recomputed.
+- **`deleteReply` is its own method, not a case of `deleteComment`.**
+  Removing the last reply leaves the comment standing; the two operations
+  only look alike. Hosts get `onReplyDeleted` to mirror it, matching the
+  `onReplyAdded` they already have.

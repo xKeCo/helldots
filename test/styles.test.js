@@ -31,6 +31,25 @@ describe("styles", () => {
     });
   });
 
+  it("gives every scrollable surface a dark scrollbar", () => {
+    const css = getStyles();
+    // Regression guard for the light platform scrollbar that showed through:
+    // scrollbar-color is what Chromium honours once the standard properties
+    // are in play, so a surface declaring scrollbar-width without it falls
+    // back to the default light bar.
+    [
+      CLASSES.THREAD_SCROLL,
+      CLASSES.TOOLTIP,
+      CLASSES.INBOX_LIST,
+      CLASSES.INBOX_DETAIL,
+    ].forEach((className) => {
+      expect(css).toContain(`.${className}::-webkit-scrollbar-thumb`);
+    });
+    const widthCount = css.match(/scrollbar-width: thin/g)?.length ?? 0;
+    const colorCount = css.match(/scrollbar-color:/g)?.length ?? 0;
+    expect(colorCount).toBe(widthCount);
+  });
+
   it("is regenerated fresh on every call (function, not a cached constant)", () => {
     expect(getStyles()).toBe(getStyles());
     expect(typeof getStyles).toBe("function");

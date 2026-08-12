@@ -98,6 +98,8 @@ export interface CommentOverlayOptions {
   onCommentCreated?: (comment: SerializedComment) => void;
   /** Fired after a reply is added to any comment. */
   onReplyAdded?: (comment: SerializedComment, reply: CommentReply) => void;
+  /** Fired after deleteReply removes a reply. */
+  onReplyDeleted?: (comment: SerializedComment, reply: CommentReply) => void;
   /** Fired for each comment that could not be re-anchored by loadComments. */
   onAnchorLost?: (comment: SerializedComment) => void;
   /** Fired after deleteComment removes a comment. */
@@ -167,6 +169,7 @@ export declare class CommentOverlay {
 
   toggleCommentMode(): void;
   addReply(comment: Comment, text: string): CommentReply;
+  deleteReply(commentId: number, replyId: number): boolean;
   serializeComments(): SerializedComment[];
   loadComments(data: SerializedComment[]): {
     anchored: number;

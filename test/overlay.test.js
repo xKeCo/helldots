@@ -728,6 +728,68 @@ describe("CommentOverlay", () => {
       expect(second.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(true);
     });
 
+    it("deletes a reply from the popover through its ⋯ menu", () => {
+      const reply = overlay.addReply(comment, "first reply");
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      overlay.showThreadPopover(circle, comment);
+
+      const replyEl = overlay.activeThreadPopover.querySelector(
+        `.${CLASSES.THREAD_REPLY}`
+      );
+      const menuBtn = replyEl.querySelector(
+        `.${CLASSES.THREAD_REPLY_ACTIONS} [data-action="menu"]`
+      );
+      menuBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      replyEl
+        .querySelector(`.${CLASSES.INBOX_MENU_ITEM}`)
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      expect(comment.replies.map((r) => r.id)).not.toContain(reply.id);
+      expect(
+        overlay.activeThreadPopover.querySelector(`.${CLASSES.THREAD_REPLY}`)
+      ).toBeNull();
+    });
+
+    it("offers the ⋯ menu on a reply added during the session", () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      overlay.showThreadPopover(circle, comment);
+
+      const input = overlay.activeThreadPopover.querySelector(
+        `.${CLASSES.THREAD_INPUT}`
+      );
+      input.value = "sent now";
+      overlay.activeThreadPopover
+        .querySelector(`.${CLASSES.THREAD_SUBMIT}`)
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      expect(
+        overlay.activeThreadPopover.querySelector(
+          `.${CLASSES.THREAD_REPLY} .${CLASSES.THREAD_REPLY_ACTIONS}`
+        )
+      ).toBeTruthy();
+    });
+
+    it("deleteReply reports failure for ids that do not resolve", () => {
+      overlay.addReply(comment, "only reply");
+      expect(overlay.deleteReply(comment.id, 999)).toBe(false);
+      expect(overlay.deleteReply(999, comment.replies[0].id)).toBe(false);
+      expect(comment.replies).toHaveLength(1);
+    });
+
+    it("deleteReply notifies the host and leaves the comment standing", () => {
+      const onReplyDeleted = vi.fn();
+      overlay.options.onReplyDeleted = onReplyDeleted;
+      const reply = overlay.addReply(comment, "bye");
+
+      expect(overlay.deleteReply(comment.id, reply.id)).toBe(true);
+      expect(comment.replies).toHaveLength(0);
+      expect(overlay.comments).toContain(comment);
+      expect(onReplyDeleted).toHaveBeenCalledWith(
+        expect.objectContaining({ id: comment.id }),
+        expect.objectContaining({ id: reply.id, text: "bye" })
+      );
+    });
+
     it("renders the context capture in the popover as a disclosure collapsed by default", () => {
       comment.context = { url: "https://example.test/checkout" };
       comment.contextScreenshot = "data:image/png;base64,ctx";
@@ -1325,7 +1387,7 @@ describe("CommentOverlay", () => {
       expect(parseFloat(el.style.top)).toBeGreaterThanOrEqual(10);
     });
 
-    it("positionPopoverAtCircle clamps the vertical position near the bottom of the viewport", () => {
+    it("positionPopoverAtCircle anchors to the bottom edge when the popover does not fit below the marker", () => {
       overlay = makeOverlay();
       const circle = document.createElement("div");
       circle.getBoundingClientRect = () => ({
@@ -1337,7 +1399,46 @@ describe("CommentOverlay", () => {
       const el = document.createElement("div");
       el.getBoundingClientRect = () => ({ height: 400 });
       overlay.positionPopoverAtCircle(el, circle);
-      expect(parseFloat(el.style.top)).toBe(window.innerHeight - 400 - 10);
+      // Bottom-anchored rather than top-clamped: further growth has to push
+      // the popover upward so the reply box stays on screen.
+      expect(el.style.top).toBe("auto");
+      expect(el.style.bottom).toBe("10px");
+    });
+
+    it("positionPopoverAtCircle keeps the marker-aligned top when the popover fits below it", () => {
+      overlay = makeOverlay();
+      const circle = document.createElement("div");
+      circle.getBoundingClientRect = () => ({
+        left: 10,
+        top: 100,
+        width: 28,
+        height: 28,
+      });
+      const el = document.createElement("div");
+      el.getBoundingClientRect = () => ({ height: 120 });
+      overlay.positionPopoverAtCircle(el, circle);
+      expect(el.style.bottom).toBe("auto");
+      expect(parseFloat(el.style.top)).toBe(100);
+    });
+
+    it("a bottom-anchored popover returns to top anchoring once it fits again", () => {
+      overlay = makeOverlay();
+      const circle = document.createElement("div");
+      circle.getBoundingClientRect = () => ({
+        left: 10,
+        top: 200,
+        width: 28,
+        height: 28,
+      });
+      const el = document.createElement("div");
+      el.getBoundingClientRect = () => ({ height: window.innerHeight });
+      overlay.positionPopoverAtCircle(el, circle);
+      expect(el.style.top).toBe("auto");
+
+      el.getBoundingClientRect = () => ({ height: 80 });
+      overlay.positionPopoverAtCircle(el, circle);
+      expect(el.style.bottom).toBe("auto");
+      expect(parseFloat(el.style.top)).toBe(200);
     });
 
     it("cleanupResizeObserver disconnects and removes a tracked circle", () => {

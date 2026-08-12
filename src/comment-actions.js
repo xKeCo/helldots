@@ -166,6 +166,61 @@ export const createPicker = ({
 };
 
 /**
+ * The ⋯ dropdown, shared by the comment action strip and by each reply row.
+ * One builder so both stay identical — same button, same menu chrome, same
+ * single-open rule from menus.js — instead of two copies drifting apart.
+ *
+ * `tooltip` is optional, and the reply rows deliberately go without one: the
+ * hover bubble is an absolutely positioned ::after on a button flush against
+ * the right edge of `.thread-scroll`, and it stuck ~9px past it — enough to
+ * give the thread a horizontal scrollbar it had no other reason to have. The
+ * aria-label still names the control, and the menu it opens says the rest.
+ *
+ * @param {{
+ *   label: string,
+ *   tooltip?: string,
+ *   items: Array<{ label: string, onSelect: () => void }>,
+ * }} config
+ * @returns {HTMLElement}
+ */
+export const createMoreMenu = ({ label, tooltip, items }) => {
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "relative";
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = CLASSES.INBOX_ACTION_BTN;
+  btn.dataset.action = "menu";
+  if (tooltip) btn.dataset.hdTooltip = tooltip;
+  btn.setAttribute("aria-label", label);
+  btn.innerHTML = DOTS_ICON_SVG;
+
+  const menu = document.createElement("div");
+  menu.className = CLASSES.INBOX_MENU;
+  menu.setAttribute("role", "menu");
+
+  const toggle = attachMenuToggle(btn, menu);
+
+  for (const entry of items) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = CLASSES.INBOX_MENU_ITEM;
+    item.setAttribute("role", "menuitem");
+    item.textContent = entry.label;
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggle.close();
+      entry.onSelect();
+    });
+    menu.appendChild(item);
+  }
+
+  wrapper.appendChild(btn);
+  wrapper.appendChild(menu);
+  return wrapper;
+};
+
+/**
  * @param {Object} comment
  * @param {{ strings: Object, onCopy: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onDelete: Function }} deps
  * @returns {HTMLElement}
@@ -244,36 +299,15 @@ export const createCommentActions = (
   );
 
   // --- more (⋯) menu ---
-  const menuWrapper = document.createElement("div");
-  menuWrapper.style.position = "relative";
-
-  const menuBtn = document.createElement("button");
-  menuBtn.type = "button";
-  menuBtn.className = CLASSES.INBOX_ACTION_BTN;
-  menuBtn.dataset.action = "menu";
-  menuBtn.dataset.hdTooltip = strings.moreOptions;
-  menuBtn.setAttribute("aria-label", strings.commentOptions);
-  menuBtn.innerHTML = DOTS_ICON_SVG;
-
-  const menu = document.createElement("div");
-  menu.className = CLASSES.INBOX_MENU;
-
-  const menuToggle = attachMenuToggle(menuBtn, menu);
-
-  const deleteItem = document.createElement("button");
-  deleteItem.type = "button";
-  deleteItem.className = CLASSES.INBOX_MENU_ITEM;
-  deleteItem.textContent = strings.deleteComment;
-  deleteItem.addEventListener("click", (e) => {
-    e.stopPropagation();
-    menuToggle.close();
-    onDelete(comment);
-  });
-  menu.appendChild(deleteItem);
-
-  menuWrapper.appendChild(menuBtn);
-  menuWrapper.appendChild(menu);
-  actions.appendChild(menuWrapper);
+  actions.appendChild(
+    createMoreMenu({
+      label: strings.commentOptions,
+      tooltip: strings.moreOptions,
+      items: [
+        { label: strings.deleteComment, onSelect: () => onDelete(comment) },
+      ],
+    })
+  );
 
   return actions;
 };
