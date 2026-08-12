@@ -698,8 +698,7 @@ class CommentOverlay {
         currentPage: location.pathname,
         getComments: () => this.comments,
         callbacks: {
-          onOpenDetailScroll: (comment) =>
-            comment.container?.scrollIntoView?.({ block: "center" }),
+          onOpenDetailScroll: (comment) => this.scrollMarkerIntoView(comment),
           onReply: (comment, text, screenshots) =>
             this.addReply(comment, text, screenshots),
           onDelete: (id) => this.deleteComment(id),
@@ -1302,6 +1301,53 @@ class CommentOverlay {
     const y = Math.max(10, (window.innerHeight - elRect.height) / 2);
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
+  }
+
+  /**
+   * Brings a comment's marker into view, centred vertically.
+   *
+   * Deliberately not `comment.container.scrollIntoView()`: the container is
+   * the coarse anchor box (`section, div[class*=container|content]`), which
+   * falls back to `<body>` whenever the commented element has no such
+   * ancestor. Centring `<body>` lands halfway down the document — nowhere
+   * near the marker, which is what made opening a comment from the inbox
+   * jump to an unrelated section.
+   *
+   * @param {any} comment
+   */
+  scrollMarkerIntoView(comment) {
+    const y = this._markerViewportY(comment);
+    if (y == null) return;
+    window.scrollTo({
+      top: Math.max(0, window.scrollY + y - window.innerHeight / 2),
+    });
+  }
+
+  /**
+   * The marker's centre in viewport coordinates, derived from the anchor the
+   * same way `updateCommentPosition` derives it — including the clamp that
+   * keeps the circle inside its container.
+   *
+   * Deliberately not read off the rendered circle: the circle's coordinates
+   * are only refreshed inside a rAF on scroll, so they are stale for any
+   * caller that runs in the same tick as a scroll. The container's rect is
+   * live, which makes this correct whenever it is asked.
+   *
+   * @param {any} comment
+   * @returns {number | null} null when there is no anchor to resolve
+   */
+  _markerViewportY(comment) {
+    const container = comment.container;
+    if (!container?.isConnected) return null;
+    const rect = container.getBoundingClientRect();
+    if (rect.height <= 0) return null;
+
+    const circleSize = 28;
+    const offsetY = Math.max(
+      0,
+      Math.min(comment.relativeY * rect.height, rect.height - circleSize)
+    );
+    return rect.top + offsetY + circleSize / 2;
   }
 
   /**

@@ -88,6 +88,15 @@ export const CLASSES = {
   HIGHLIGHT: "helldots-highlight",
 };
 
+// The only classes HellDots puts on elements of the host page — everything
+// else it owns lives inside the shadow root. Anchors must never bake these
+// into a selector: they are transient widget state, so `body.comment-cursor`
+// stops matching the instant comment mode ends, killing the anchor's fast
+// path. Deliberately an explicit list rather than every value of CLASSES:
+// generic names like `active` belong to host pages too, and filtering those
+// would weaken anchors instead of protecting them.
+export const HOST_PAGE_CLASSES = [CLASSES.COMMENT_CURSOR];
+
 export const IDS = {
   TOOLBAR: "comment-toolbar",
   COMMENT_BOX: "comment-box",

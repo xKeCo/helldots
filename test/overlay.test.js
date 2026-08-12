@@ -29,6 +29,18 @@ const cleanupDom = () => {
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Polls instead of betting on a fixed delay. FileReader resolves on its own
+// schedule, so a flat `wait(10)` passes or fails depending on how loaded the
+// machine is — which is exactly how it started failing intermittently once
+// the suite grew.
+const waitFor = async (predicate, timeout = 2000) => {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeout) throw new Error("waitFor: timed out");
+    await wait(5);
+  }
+};
+
 // The constructor already calls initOverlay() synchronously whenever
 // document.readyState isn't "loading" (true in jsdom by default) — autoInit
 // is only consumed by the createCommentOverlay() factory in index.js, not by
@@ -492,8 +504,7 @@ describe("CommentOverlay", () => {
       overlay.attachImageInput.dispatchEvent(
         new Event("change", { bubbles: true })
       );
-      await wait(10);
-      expect(overlay._pendingScreenshots.length).toBe(1);
+      await waitFor(() => overlay._pendingScreenshots.length === 1);
       expect(overlay.attachImageInput.value).toBe("");
     });
 

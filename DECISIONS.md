@@ -616,3 +616,59 @@ resolved` while comments carried `open | in_progress | resolved`, so
   programmatic callers (saving a comment, the inbox handoff) keep opening
   unconditionally. Keyboard activation inherits this for free: the
   Enter/Space handler goes through `circle.click()`.
+
+- **Opening a comment's detail in the inbox marks its marker active too.**
+  Selecting a comment is the same act whichever surface it happens on, so the
+  inbox reuses `comment-circle--active` rather than inventing a second
+  "selected" look. The two never collide: `showInbox()` closes the thread
+  popover before rendering, and the inbox's outside-click handler closes the
+  panel before a marker click can open one. The existing hover spotlight
+  (`helldots-highlight`) is unchanged and still answers a different question —
+  "which marker is this card?" versus "which comment am I in?".
+- **`_markerFor()` extracted from `_highlight()`.** Both the hover spotlight
+  and the active state need the same precondition: resolved, orphaned and
+  hidden comments render no circle, so there is nothing to decorate. Having
+  that rule in one place is what keeps the active state from being applied to
+  a marker the user cannot see — which would strand the class until the next
+  render.
+
+## Scrolling to a comment from the inbox
+
+- **Opening a comment's detail scrolls to the marker, not to
+  `comment.container`.** The container is the coarse anchor box —
+  `section, div[class*=container|content]`, falling back to `<body>` when the
+  commented element has no such ancestor — and the inbox centred _it_.
+  Centring `<body>` lands halfway down the document: on the playground a
+  marker at page 214 sent the viewport to ~620, "some sections further down"
+  with no marker in sight. Even for a real container, centring a tall
+  `<section>` never guaranteed the marker was on screen. The scroll now
+  targets the marker's own point.
+- **The marker's position is derived from the anchor, never read off the
+  rendered circle.** The circle's coordinates are refreshed inside the
+  `requestAnimationFrame` that `scheduleUpdatePositions` schedules on scroll,
+  so any caller running in the same tick as a scroll reads a stale position —
+  measured live, that produced a scroll ~1000px away from the marker. The
+  container's rect is current whenever it is asked, so `_markerViewportY()`
+  repeats the arithmetic (including the in-container clamp) that
+  `updateCommentPosition` uses rather than trusting the rendered result of it.
+- **`window.scrollTo` rather than `Element.scrollIntoView`.** There is no
+  element at the marker's position to scroll into view: the circle lives in
+  the shadow root inside a `position: fixed` overlay, so the browser
+  considers it already in view and `scrollIntoView` on it does nothing.
+
+- **Anchors never capture HellDots' own host-page classes.** `comment-cursor`
+  sits on `<body>` for exactly as long as comment mode is on — which is
+  precisely when anchors are created — so a comment anchored on `<body>` was
+  stored as `body.comment-cursor` and stopped matching the moment the mode
+  ended. The comment survived through the fingerprint rescue path, but that
+  path is fuzzy by design (0.7 threshold, no structural signal) and is meant
+  for pages that changed, not for a selector we broke ourselves.
+  `HOST_PAGE_CLASSES` in `constants.js` names the offenders and
+  `isStableClass()` filters them, so `<body>` now falls through to the
+  structural strategy and stores a plain `body`.
+- **That list is explicit, not "every value of `CLASSES`".** Filtering all of
+  them would strip generic names the widget happens to reuse — `CLASSES.ACTIVE`
+  is `"active"`, which host pages use constantly — and weaken anchors on
+  elements HellDots never touched. Only classes actually applied to host-page
+  elements belong in the list; everything else the widget owns lives inside
+  the shadow root, where anchors cannot reach it anyway.

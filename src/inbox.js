@@ -58,6 +58,10 @@ export class InboxView {
     this.detailId = null;
     /** @type {HTMLElement | null} */
     this.el = null;
+    /** @type {HTMLElement | null} */
+    this._highlightedEl = null;
+    /** @type {HTMLElement | null} */
+    this._activeMarkerEl = null;
   }
 
   isOpen() {
@@ -76,6 +80,7 @@ export class InboxView {
 
   close() {
     this._clearHighlight();
+    this._setActiveMarker(null);
     this.el?.remove();
     this.el = null;
     this.detailId = null;
@@ -85,18 +90,28 @@ export class InboxView {
     if (this.el) this.render();
   }
 
-  _highlight(comment) {
-    this._clearHighlight();
+  /**
+   * The on-page marker for a comment, when there is one to decorate.
+   * Resolved, orphaned and hidden comments render no circle at all.
+   * @param {any} comment
+   * @returns {HTMLElement | null}
+   */
+  _markerFor(comment) {
     if (
       comment.anchorState !== "anchored" ||
       comment.hidden ||
       comment.status === "resolved"
     ) {
-      return;
+      return null;
     }
-    const circle = this.shadowRoot.querySelector(
-      `[data-comment-id="${comment.id}"]`
+    return /** @type {any} */ (
+      this.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`)
     );
+  }
+
+  _highlight(comment) {
+    this._clearHighlight();
+    const circle = this._markerFor(comment);
     if (!circle) return;
     circle.classList.add(CLASSES.HIGHLIGHT);
     this._highlightedEl = circle;
@@ -105,6 +120,22 @@ export class InboxView {
   _clearHighlight() {
     this._highlightedEl?.classList.remove(CLASSES.HIGHLIGHT);
     this._highlightedEl = null;
+  }
+
+  /**
+   * Opening a comment's detail selects it just as clicking its marker does,
+   * so the marker gets the same active state the thread popover gives it.
+   * Passing null clears it — the list view has nothing selected.
+   * @param {any} comment
+   */
+  _setActiveMarker(comment) {
+    this._activeMarkerEl?.classList.remove(CLASSES.CIRCLE_ACTIVE);
+    this._activeMarkerEl = null;
+    if (!comment) return;
+    const circle = this._markerFor(comment);
+    if (!circle) return;
+    circle.classList.add(CLASSES.CIRCLE_ACTIVE);
+    this._activeMarkerEl = circle;
   }
 
   filteredComments() {
@@ -145,6 +176,9 @@ export class InboxView {
       this.detailId != null
         ? comments.find((comment) => comment.id === this.detailId)
         : null;
+    // Set before rendering so a detail reached by any route — a card click,
+    // the prev/next nav, the cross-page handoff — marks its marker.
+    this._setActiveMarker(detail);
     if (detail) {
       this._renderDetail(detail, comments);
     } else {

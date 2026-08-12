@@ -449,16 +449,82 @@ describe("inbox sidebar", () => {
       expect(detail.querySelector(`.${CLASSES.THREAD_INPUT}`)).toBeTruthy();
     });
 
-    it("scrolls the anchored element into view when opening the detail", async () => {
+    it("scrolls to the marker, not to the anchor container", async () => {
       overlay = makeOverlay();
-      const target = document.getElementById("target");
-      target.scrollIntoView = vi.fn();
-      await createCommentOn(overlay, target, "scroll to me");
+      await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "far below the fold"
+      );
+      // The anchor container now sits 1500px down the viewport, so the
+      // marker derived from it is below the fold.
+      document.getElementById("target").getBoundingClientRect = () =>
+        /** @type {any} */ ({ top: 1500, left: 0, width: 300, height: 200 });
+      const scrollTo = vi
+        .spyOn(window, "scrollTo")
+        .mockImplementation(() => {});
 
       const panel = openInbox(overlay);
       click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
 
-      expect(target.scrollIntoView).toHaveBeenCalled();
+      // relativeY is 0.05 (placed at y=10 in a 200px container), so the
+      // marker centre is 1500 + 10 + 14 and gets centred in the viewport.
+      expect(scrollTo).toHaveBeenCalledWith({
+        top: 1524 - window.innerHeight / 2,
+      });
+    });
+
+    it("does not centre the anchor container, which falls back to <body>", async () => {
+      overlay = makeOverlay();
+      // No section/container ancestor — exactly the case that used to scroll
+      // to the middle of the whole document.
+      document.elementFromPoint = () => document.body;
+      giveSize(document.body);
+      const comment = await createCommentOn(
+        overlay,
+        document.body,
+        "anchored on bare body"
+      );
+      expect(comment.container).toBe(document.body);
+
+      const bodyScroll = vi.fn();
+      document.body.scrollIntoView = bodyScroll;
+      vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+
+      const panel = openInbox(overlay);
+      click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
+
+      expect(bodyScroll).not.toHaveBeenCalled();
+    });
+
+    it("reads the anchor's live rect rather than the marker's rendered position", async () => {
+      overlay = makeOverlay();
+      const target = document.getElementById("target");
+      const comment = await createCommentOn(overlay, target, "scroll to me");
+
+      // The circle's coordinates are only refreshed in a rAF on scroll, so a
+      // click landing in the same tick as a scroll sees a stale position.
+      // Anything reading the circle would compute the wrong offset here.
+      const circle = overlay.shadowRoot.querySelector(
+        `[data-comment-id="${comment.id}"]`
+      );
+      vi.spyOn(circle, "getBoundingClientRect").mockReturnValue(
+        /** @type {any} */ ({ top: -9999, height: 28, width: 28 })
+      );
+      target.getBoundingClientRect = () =>
+        /** @type {any} */ ({ top: 800, left: 0, width: 300, height: 400 });
+
+      const scrollTo = vi
+        .spyOn(window, "scrollTo")
+        .mockImplementation(() => {});
+
+      const panel = openInbox(overlay);
+      click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
+
+      // 800 + clamp(0.05 * 400) + 14 = 834 — from the container, not the circle.
+      expect(scrollTo).toHaveBeenCalledWith({
+        top: 834 - window.innerHeight / 2,
+      });
     });
 
     it("submitting a reply appends it to the thread and the comment", async () => {
@@ -481,6 +547,90 @@ describe("inbox sidebar", () => {
       expect(
         panel.querySelector(`.${CLASSES.INBOX_DETAIL}`).textContent
       ).toContain("a fresh reply");
+    });
+
+    it("marks the comment's marker active while its detail is open", async () => {
+      overlay = makeOverlay();
+      const comment = await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "select me"
+      );
+      const circle = overlay.shadowRoot.querySelector(
+        `[data-comment-id="${comment.id}"]`
+      );
+
+      const panel = openInbox(overlay);
+      expect(circle.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(false);
+
+      click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
+      expect(circle.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(true);
+
+      click(panel.querySelector(`.${CLASSES.INBOX_BACK}`));
+      expect(circle.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(false);
+    });
+
+    it("moves the active marker when navigating to the next comment", async () => {
+      overlay = makeOverlay();
+      const target = document.getElementById("target");
+      const first = await createCommentOn(overlay, target, "first");
+      const second = await createCommentOn(overlay, target, "second");
+
+      const marker = (comment) =>
+        overlay.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`);
+
+      const panel = openInbox(overlay);
+      click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
+      expect(marker(first).classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(
+        true
+      );
+
+      // Second nav button is "next" — the first one is "previous".
+      click(panel.querySelectorAll(`.${CLASSES.INBOX_NAV_BTN}`)[1]);
+      expect(marker(first).classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(
+        false
+      );
+      expect(marker(second).classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(
+        true
+      );
+    });
+
+    it("clears the active marker when the inbox is closed from the detail", async () => {
+      overlay = makeOverlay();
+      const comment = await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "close me"
+      );
+      const circle = overlay.shadowRoot.querySelector(
+        `[data-comment-id="${comment.id}"]`
+      );
+
+      const panel = openInbox(overlay);
+      click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
+      expect(circle.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(true);
+
+      click(panel.querySelector(`.${CLASSES.INBOX_CLOSE}`));
+      expect(circle.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(false);
+    });
+
+    it("marks nothing for a comment that has no marker on the page", async () => {
+      overlay = makeOverlay();
+      const comment = await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "resolved has no marker"
+      );
+      const circle = overlay.shadowRoot.querySelector(
+        `[data-comment-id="${comment.id}"]`
+      );
+      overlay.setCommentStatus(comment.id, "resolved");
+
+      const panel = openInbox(overlay);
+      click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
+
+      expect(panel.querySelector(`.${CLASSES.INBOX_DETAIL}`)).toBeTruthy();
+      expect(circle.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(false);
     });
 
     it("Back returns to the list", async () => {

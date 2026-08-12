@@ -3,6 +3,8 @@
 // comment can be re-attached to its element after a page reload. Design:
 // docs/superpowers/specs/2026-07-02-comment-anchoring-design.md
 
+import { HOST_PAGE_CLASSES } from "./constants.js";
+
 const TEXT_SNIPPET_MAX = 64;
 const MAX_CLASS_PATH_DEPTH = 3;
 const MAX_STRUCTURAL_DEPTH = 5;
@@ -37,7 +39,11 @@ const normalizeText = (text) =>
 
 // Heuristic: tooling-generated class names (CSS-in-JS, scoped-CSS hashes)
 // either carry a known prefix or contain a long token with digits in it.
+// HellDots' own host-page classes are excluded outright — they are our
+// transient state, not the page's structure, and anchoring to them produces
+// a selector that stops matching as soon as the state clears.
 const isStableClass = (cls) => {
+  if (HOST_PAGE_CLASSES.includes(cls)) return false;
   if (GENERATED_CLASS_PREFIX_RE.test(cls)) return false;
   return !cls.split(/[-_]/).some((part) => part.length >= 5 && /\d/.test(part));
 };

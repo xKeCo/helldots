@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createAnchor, resolveAnchor } from "../src/anchor.js";
+import { CLASSES } from "../src/constants.js";
 
 const setBody = (html) => {
   document.body.innerHTML = html;
@@ -11,6 +12,28 @@ afterEach(() => {
 
 describe("createAnchor", () => {
   describe("selector cascade", () => {
+    it("never anchors to a class HellDots itself put on the page", () => {
+      // The comment cursor class is on <body> for exactly as long as comment
+      // mode is on — which is precisely while anchors are being created. A
+      // selector built from it stops matching the moment the mode ends.
+      document.body.classList.add(CLASSES.COMMENT_CURSOR);
+      const anchor = createAnchor(document.body, 0.5, 0.5);
+      document.body.classList.remove(CLASSES.COMMENT_CURSOR);
+
+      expect(anchor.selector).not.toContain(CLASSES.COMMENT_CURSOR);
+      expect(document.querySelector(anchor.selector)).toBe(document.body);
+    });
+
+    it("still uses the host page's own classes", () => {
+      // The exclusion is a named list, not "anything HellDots calls a class":
+      // generic names like `active` belong to host pages too.
+      setBody(`<div class="active promo-banner"><p>x</p></div>`);
+      const el = document.querySelector("div");
+      const anchor = createAnchor(el, 0.5, 0.5);
+      expect(anchor.selector).toContain("promo-banner");
+      expect(document.querySelector(anchor.selector)).toBe(el);
+    });
+
     it("uses the element id when it is unique", () => {
       setBody(`<section id="hero"><h1>Welcome</h1></section>`);
       const el = document.getElementById("hero");
