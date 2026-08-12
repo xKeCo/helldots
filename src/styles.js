@@ -1,4 +1,10 @@
-import { CLASSES, IDS, Z_INDEX, CURSOR_SVG } from "./constants.js";
+import {
+  CLASSES,
+  IDS,
+  Z_INDEX,
+  CURSOR_SVG,
+  CURSOR_HOTSPOT,
+} from "./constants.js";
 
 export const getStyles = () => `
 
@@ -1184,6 +1190,6 @@ export const getStyles = () => `
 export const getGlobalStyles = () => `
     .${CLASSES.COMMENT_CURSOR},
     .${CLASSES.COMMENT_CURSOR} * {
-        cursor: url('${CURSOR_SVG}') 6 6, auto !important;
+        cursor: url('${CURSOR_SVG}') ${CURSOR_HOTSPOT}, auto !important;
     }
 `;

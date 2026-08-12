@@ -672,3 +672,32 @@ resolved` while comments carried `open | in_progress | resolved`, so
   elements HellDots never touched. Only classes actually applied to host-page
   elements belong in the list; everything else the widget owns lives inside
   the shadow root, where anchors cannot reach it anyway.
+
+## The comment-mode cursor is capped at 32x32
+
+- **The cursor image is 32x32, and that is a correctness constraint rather
+  than a design choice.** Chromium refuses to paint a custom cursor larger
+  than 32x32 device-independent pixels once it can intersect native UI — the
+  mitigation for cursor-spoofing attacks, where an oversized image with a
+  misleading hotspot makes users click browser chrome while aiming at the
+  page. In practice that means the cursor silently reverts to the default
+  arrow as the pointer nears the edges of the page, which is exactly what was
+  reported. The CSS was never at fault: `getComputedStyle` reports the custom
+  cursor at every edge, because the rule does apply — the compositor just
+  declines to draw it. See
+  https://chromestatus.com/feature/5825971391299584
+- **The canvas shrank; the artwork did not.** The marker is still 28px. It
+  moved from (6,6) on a 48px canvas to (2,2) on a 32px one, so the rendered
+  cursor is pixel-identical and only the transparent padding is gone. The
+  hotspot moved with it, which is why it now lives in `CURSOR_HOTSPOT`
+  next to the SVG: the two are one unit, and a hotspot that does not track a
+  change to the canvas silently misaims every comment placed with it.
+- **The blue drop shadow was dropped, not shrunk.** At `dx=4 dy=4` with
+  `stdDeviation=5` it needed roughly 15px of margin that a 32px canvas does
+  not have. It was a 16%-opacity blue glow; the white 2px stroke is what
+  actually keeps the marker legible against an arbitrary page background, and
+  that is untouched.
+- **A test pins the size.** Nothing about a 48px SVG looks wrong in review —
+  the failure only shows up as a cursor flicker at the screen edge, on one
+  engine. `constants.test.js` asserts the declared width and height stay
+  within 32 so a future redraw cannot quietly reintroduce it.

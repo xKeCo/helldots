@@ -81,6 +81,18 @@ describe("classification constants", () => {
     ]);
   });
 
+  it("keeps the comment cursor within the 32x32 limit browsers enforce", () => {
+    // Chromium refuses to paint a custom cursor larger than 32x32 DIP once it
+    // can intersect native UI — which is what happens as the pointer nears
+    // the page edges. A larger image silently reverts to the default arrow
+    // there, so the size is a correctness constraint, not a style choice.
+    // https://chromestatus.com/feature/5825971391299584
+    const width = Number(CURSOR_SVG.match(/width="(\d+)"/)[1]);
+    const height = Number(CURSOR_SVG.match(/height="(\d+)"/)[1]);
+    expect(width).toBeLessThanOrEqual(32);
+    expect(height).toBeLessThanOrEqual(32);
+  });
+
   it("exposes priorities ordered high to low", () => {
     expect(PRIORITIES).toEqual(["high", "medium", "low"]);
   });
