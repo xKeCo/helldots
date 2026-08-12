@@ -244,7 +244,7 @@ describe("inbox sidebar", () => {
       expect(label()).toBe("Current page · Open · Bug · High");
     });
 
-    it("keeps the author on its own row and the action strip in the footer", async () => {
+    it("keeps the author on its own row, with the action strip on the next", async () => {
       overlay = makeOverlay();
       const target = document.getElementById("target");
       await createCommentOn(overlay, target, "spacing");
@@ -252,18 +252,72 @@ describe("inbox sidebar", () => {
 
       const card = panel.querySelector(`.${CLASSES.INBOX_CARD}`);
       const header = card.querySelector(`.${CLASSES.INBOX_CARD_HEADER}`);
-      const footer = card.querySelector(`.${CLASSES.INBOX_CARD_FOOTER}`);
+      const actionsRow = card.querySelector(`.${CLASSES.THREAD_ACTIONS_ROW}`);
 
-      // The five controls used to share the header row with the author,
-      // which left the name ~90px and wrapped it onto two lines.
+      // The controls used to share the header row with the author, which
+      // left the name ~90px and wrapped it onto two lines.
       expect(header.querySelector(`.${CLASSES.INBOX_CARD_ACTIONS}`)).toBeNull();
       expect(header.querySelector(`.${CLASSES.THREAD_AUTHOR}`)).toBeTruthy();
       expect(
-        footer.querySelector(`.${CLASSES.INBOX_CARD_ACTIONS}`)
+        actionsRow.querySelector(`.${CLASSES.INBOX_CARD_ACTIONS}`)
       ).toBeTruthy();
+      // Same order as the thread popover: meta, then the strip.
+      expect(header.nextElementSibling).toBe(actionsRow);
       expect(
-        footer.querySelector(`.${CLASSES.INBOX_CARD_REPLY_LINK}`)
+        card.querySelector(`.${CLASSES.INBOX_CARD_REPLY_LINK}`)
       ).toBeTruthy();
+    });
+
+    it("labels status alongside type and priority in the action strip", async () => {
+      overlay = makeOverlay({ locale: "en" });
+      const target = document.getElementById("target");
+      const comment = await createCommentOn(overlay, target, "labelled");
+      overlay.setCommentStatus(comment.id, "in_progress");
+
+      const panel = openInbox(overlay);
+      const strip = panel.querySelector(`.${CLASSES.INBOX_CARD_ACTIONS}`);
+      const labelled = [
+        ...strip.querySelectorAll(`.${CLASSES.INBOX_ACTION_BTN_LABELED}`),
+      ];
+
+      expect(labelled.map((b) => b.dataset.action)).toEqual([
+        "status",
+        "type",
+        "priority",
+      ]);
+      // Spelled out, not just a coloured dot — there is no hover on touch.
+      expect(
+        strip.querySelector(
+          `[data-action="status"] .${CLASSES.INBOX_ACTION_LABEL}`
+        ).textContent
+      ).toBe("In progress");
+    });
+
+    it("drops the badges the action strip already states, keeping the ones it does not", async () => {
+      overlay = makeOverlay({ locale: "en" });
+      const target = document.getElementById("target");
+      const comment = await createCommentOn(overlay, target, "no duplication");
+      overlay.setCommentType(comment.id, "bug");
+      overlay.setCommentPriority(comment.id, "high");
+
+      let panel = openInbox(overlay);
+      let card = panel.querySelector(`.${CLASSES.INBOX_CARD}`);
+      // Type and priority are in the strip above; repeating them as badges
+      // was the same fact twice, so the row goes away entirely.
+      expect(card.querySelector(`.${CLASSES.INBOX_BADGES}`)).toBeNull();
+
+      // Tags and the resolution time have no control anywhere, so they stay.
+      overlay.setCommentTags(comment.id, ["checkout"]);
+      overlay.setCommentStatus(comment.id, "resolved");
+      overlay.inboxView.render();
+      card = panel.querySelector(`.${CLASSES.INBOX_CARD}`);
+      const badges = card.querySelector(`.${CLASSES.INBOX_BADGES}`);
+      expect(badges.querySelector(`.${CLASSES.BADGE_TAG}`).textContent).toBe(
+        "checkout"
+      );
+      expect(badges.querySelector(`.${CLASSES.BADGE_DURATION}`)).toBeTruthy();
+      expect(badges.querySelector(`.${CLASSES.BADGE_TYPE}`)).toBeNull();
+      expect(badges.querySelector(`.${CLASSES.BADGE_PRIORITY}`)).toBeNull();
     });
 
     it("sorts resolved comments to the bottom and styles their card", async () => {
@@ -1120,14 +1174,19 @@ describe("inbox sidebar", () => {
       expect(panel.querySelector(`.${CLASSES.INBOX_BADGES}`)).toBeNull();
     });
 
-    it("renders type and priority badges with their labels, not just colour", () => {
+    it("states type and priority once, in the action strip", () => {
       overlay = makeOverlay();
       overlay.loadComments([{ ...base, type: "bug", priority: "high" }]);
       const panel = openInbox(overlay);
-      const badges = panel.querySelectorAll(`.${CLASSES.BADGE}`);
-      const labels = [...badges].map((b) => b.textContent);
+
+      const labels = [
+        ...panel.querySelectorAll(`.${CLASSES.INBOX_ACTION_LABEL}`),
+      ].map((l) => l.textContent);
       expect(labels).toContain("Bug");
       expect(labels).toContain("High");
+      // ...and not a second time as badges underneath.
+      expect(panel.querySelector(`.${CLASSES.BADGE_TYPE}`)).toBeNull();
+      expect(panel.querySelector(`.${CLASSES.BADGE_PRIORITY}`)).toBeNull();
     });
 
     it("renders one badge per tag", () => {

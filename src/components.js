@@ -232,16 +232,22 @@ export const createToolbar = (options = {}, strings = defaultStrings) => {
  * badge carries text: colour alone must never be the only signal
  * (WCAG 1.4.1), so the colour only ever tints the border.
  *
- * Status is opt-in because most surfaces already expose it through the
- * status picker's coloured dot; the tooltip, which has no picker, is the
- * one place that needs it spelled out.
+ * Both flags exist because a badge is only worth showing where nothing else
+ * already says it. The tooltip is a read-only preview and needs all of it.
+ * Inbox cards carry labelled status/type/priority pickers, so repeating
+ * those three as badges is pure duplication — but tags and the resolution
+ * time have no control anywhere, so they stay either way.
  *
  * @param {any} comment
  * @param {object} strings
- * @param {{ includeStatus?: boolean }} [options]
+ * @param {{ includeStatus?: boolean, includeClassification?: boolean }} [options]
  * @returns {HTMLElement | null} null when there's nothing to show
  */
-export const createBadgeRow = (comment, strings, { includeStatus } = {}) => {
+export const createBadgeRow = (
+  comment,
+  strings,
+  { includeStatus = false, includeClassification = true } = {}
+) => {
   const row = document.createElement("div");
   row.className = CLASSES.INBOX_BADGES;
 
@@ -261,14 +267,14 @@ export const createBadgeRow = (comment, strings, { includeStatus } = {}) => {
       STATUS_COLORS[status]
     );
   }
-  if (comment.type) {
+  if (includeClassification && comment.type) {
     addBadge(
       typeLabelOf(comment.type, strings),
       CLASSES.BADGE_TYPE,
       TYPE_COLORS[comment.type]
     );
   }
-  if (comment.priority) {
+  if (includeClassification && comment.priority) {
     addBadge(
       priorityLabelOf(comment.priority, strings),
       CLASSES.BADGE_PRIORITY,
@@ -475,6 +481,21 @@ export const createTooltip = (comment, strings = defaultStrings, locale) => {
   if (tooltipScreenshots.length > 0) {
     tooltip.appendChild(createScreenshotsDisplay(tooltipScreenshots, strings));
   }
+
+  // The preview shows the root comment only, so a thread with replies would
+  // otherwise look like a lone remark. Omitted at zero rather than shown as
+  // "0 replies": absence already says it, and a count of nothing is noise.
+  const replyCount = comment.replies?.length || 0;
+  if (replyCount > 0) {
+    const replies = document.createElement("div");
+    replies.className = CLASSES.TOOLTIP_REPLY_COUNT;
+    replies.textContent =
+      replyCount === 1
+        ? strings.replyCountOne
+        : formatTemplate(strings.replyCountTemplate, replyCount);
+    tooltip.appendChild(replies);
+  }
+
   return tooltip;
 };
 

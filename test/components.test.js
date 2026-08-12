@@ -147,6 +147,40 @@ describe("components", () => {
       expect([...badges.children].map((b) => b.textContent)).toEqual(["Open"]);
     });
 
+    it("counts the thread's replies, pluralised", () => {
+      const withReplies = (n) =>
+        createTooltip({
+          id: 20 + n,
+          text: "x",
+          createdAt: new Date().toISOString(),
+          replies: Array.from({ length: n }, () => ({ text: "r" })),
+        }).querySelector(`.${CLASSES.TOOLTIP_REPLY_COUNT}`);
+
+      expect(withReplies(1).textContent).toBe("1 reply");
+      expect(withReplies(4).textContent).toBe("4 replies");
+    });
+
+    it("omits the reply count when the thread has none", () => {
+      // "0 replies" is noise: the absence of the line already says it.
+      const noReplies = createTooltip({
+        id: 30,
+        text: "x",
+        createdAt: new Date().toISOString(),
+        replies: [],
+      });
+      const undefinedReplies = createTooltip({
+        id: 31,
+        text: "x",
+        createdAt: new Date().toISOString(),
+      });
+      expect(
+        noReplies.querySelector(`.${CLASSES.TOOLTIP_REPLY_COUNT}`)
+      ).toBeNull();
+      expect(
+        undefinedReplies.querySelector(`.${CLASSES.TOOLTIP_REPLY_COUNT}`)
+      ).toBeNull();
+    });
+
     it("renders a screenshots gallery when the comment has screenshots", () => {
       const tooltip = createTooltip({
         id: 3,

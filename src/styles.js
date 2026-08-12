@@ -587,25 +587,14 @@ export const getStyles = () => `
         gap: 8px;
     }
 
-    /* Reply on the left, the action strip on the right, both with the card's
-       full width. Sharing the header row with five controls left the author
-       about 90px and wrapped it onto two lines. */
-    .${CLASSES.INBOX_CARD_FOOTER} {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        margin-top: 2px;
-    }
-
-    /* No reply link in the detail view — the strip stays right-aligned. */
-    .${CLASSES.INBOX_CARD_FOOTER} > .${CLASSES.INBOX_CARD_ACTIONS}:only-child {
-        margin-left: auto;
-    }
-
+    /* Labels made the strip wide enough to overflow a narrow card in the
+       worst case ("In progress" + "Improvement" + "Medium"), so it wraps to
+       a second line rather than pushing the card sideways. */
     .${CLASSES.INBOX_CARD_ACTIONS} {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
         gap: 6px;
     }
 
@@ -627,24 +616,22 @@ export const getStyles = () => `
         color: white;
     }
 
-    /* Type/priority pickers show their current value as text next to the
-       dot (colour alone can't tell bug/high apart — same hex, and there's
-       no hover on touch). Grow from the square icon-button width but stay
-       bounded so the strip doesn't crowd out copy/status/⋯ next to it. */
+    /* Status/type/priority pickers show their current value as text next to
+       the dot (colour alone can't tell bug/high apart — same hex, and
+       there's no hover on touch). The 72px cap they used to carry is gone:
+       the strip has its own row now, so labels show in full. */
     .${CLASSES.INBOX_ACTION_BTN_LABELED} {
         width: auto;
-        max-width: 72px;
         padding: 0 8px 0 6px;
         gap: 5px;
         justify-content: flex-start;
+        flex: none;
     }
 
     .${CLASSES.INBOX_ACTION_LABEL} {
         font-size: 11px;
         line-height: 1;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
 
     .${CLASSES.INBOX_STATUS_DOT} {
@@ -668,11 +655,16 @@ export const getStyles = () => `
         background: rgba(255,255,255,0.08);
     }
 
-    /* The popover's action strip, on its own row under the author — the
-       same split the inbox card makes, for the same reason. */
+    /* The action strip on its own row under the author. Shared by the inbox
+       card and the thread popover so the two read the same; only the
+       popover needs the extra top padding, since the card's column gap
+       already spaces it. */
     .${CLASSES.THREAD_ACTIONS_ROW} {
         display: flex;
         justify-content: flex-end;
+    }
+
+    .${CLASSES.THREAD_POPOVER} > .${CLASSES.THREAD_ACTIONS_ROW} {
         padding-top: 8px;
     }
 
@@ -863,6 +855,14 @@ export const getStyles = () => `
 
     /* Centred in whatever height the list has, so the state sits in the
        middle of the panel rather than clinging to the top. */
+    /* Sits under the body as a quiet aside: the preview shows the root
+       comment only, so this says "there is more" without competing with it. */
+    .${CLASSES.TOOLTIP_REPLY_COUNT} {
+        font-size: 12px;
+        color: rgba(255,255,255,0.45);
+        padding-top: 4px;
+    }
+
     .${CLASSES.INBOX_EMPTY} {
         flex: 1;
         display: flex;

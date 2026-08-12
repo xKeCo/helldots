@@ -207,6 +207,10 @@ export const createCommentActions = (
       labelOf: (status) => statusLabelOf(status, strings),
       tooltipLabel: strings.statusLabel,
       onSelect: (status) => onSetStatus(comment, status),
+      // Labelled like type and priority: the strip is on its own row now, so
+      // there is room, and a lone coloured dot needed a hover to be read —
+      // which touch never provides.
+      showLabel: true,
     })
   );
 

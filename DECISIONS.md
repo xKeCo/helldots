@@ -736,3 +736,36 @@ resolved` while comments carried `open | in_progress | resolved`, so
   spacing comes from the shared helper, and matching the mockup here would
   have meant either changing the toolbar tooltip too or forking the format.
   One shortcut, one rendering.
+
+## Card density, round two: one fact, one place
+
+- **The tooltip counts the thread's replies.** It previews the root comment
+  only, so a discussion looked like a lone remark. The line is omitted at
+  zero rather than rendered as "0 replies" — the absence already says it, and
+  a count of nothing is noise on every unanswered comment, which is most of
+  them.
+- **The status picker is labelled, like type and priority.** It was dot-only
+  from when the strip shared the header row and space was scarce. That
+  reasoning expired when the strip moved to its own row, and a lone coloured
+  dot still needed a hover to read — which touch never provides. Same WCAG
+  1.4.1 argument that put labels on type and priority in the first place.
+- **The 72px cap on those labels is gone.** It existed to stop the strip
+  crowding out copy and ⋯ on a shared row. With a row of its own the labels
+  fit, and truncating "In progress" to "In progr…" was never good.
+- **The strip wraps instead of overflowing.** Removing the cap has a worst
+  case: "In progress" + "Improvement" + "Medium" measures ~335px against a
+  330px card. `flex-wrap` lets it fall to a second line there, and
+  `justify-content: flex-end` keeps the overflowing control aligned under the
+  others rather than orphaned at the far left. Only that combination wraps;
+  everything shorter stays on one line.
+- **Type and priority badges are gone from inbox cards.** The labelled
+  pickers state them a few pixels above; the badge row was the same fact
+  twice. **Tags and the resolution time stayed** — no control anywhere shows
+  either, so dropping the whole row would have silently lost information
+  rather than removed duplication. `createBadgeRow` grew an
+  `includeClassification` flag for this; the tooltip, which has no pickers at
+  all, still asks for everything.
+- **The action strip moved from the card's footer to just under the author.**
+  Same position the thread popover uses, so the two views read alike. The
+  footer placement was only ever a way to give the strip a full row — which
+  the new position does equally well, closer to the meta it qualifies.

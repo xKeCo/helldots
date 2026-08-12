@@ -41,6 +41,8 @@ export default {
   prevComment: "Previous comment",
   nextComment: "Next comment",
   replyLink: "Reply",
+  replyCountOne: "1 reply",
+  replyCountTemplate: "{n} replies",
   commentOptions: "Comment options",
   moreOptions: "More",
   statusOpen: "Open",

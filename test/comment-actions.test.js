@@ -367,12 +367,15 @@ describe("type and priority pickers in the actions bar", () => {
     expect(label.textContent).toBe("Unset");
   });
 
-  it("keeps the status picker dot-only (pre-existing, unambiguous)", () => {
+  it("labels the status picker too, not just type and priority", () => {
+    // It was dot-only while the strip shared the header row and space was
+    // scarce. The strip has its own row now, and a lone coloured dot still
+    // needed a hover to read — which touch never provides.
     const actions = build({});
     const statusBtn = actions.querySelector('[data-action="status"]');
     expect(
-      statusBtn.querySelector(`.${CLASSES.INBOX_ACTION_LABEL}`)
-    ).toBeNull();
+      statusBtn.querySelector(`.${CLASSES.INBOX_ACTION_LABEL}`).textContent
+    ).toBe("Open");
   });
 });
 

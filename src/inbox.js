@@ -498,8 +498,9 @@ export class InboxView {
     }
     card.dataset.commentId = comment.id;
 
-    // The action strip lives in the footer, not up here: five controls and
-    // the author on one row squeezed the name into ~90px and wrapped it.
+    // Meta alone on its row, action strip on the next one — the same split
+    // the thread popover makes. Sharing a row squeezed the author into
+    // ~90px and wrapped the name onto two lines.
     const header = document.createElement("div");
     header.className = CLASSES.INBOX_CARD_HEADER;
     header.appendChild(
@@ -511,6 +512,11 @@ export class InboxView {
       )
     );
     card.appendChild(header);
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = CLASSES.THREAD_ACTIONS_ROW;
+    actionsRow.appendChild(this._buildCardActions(comment));
+    card.appendChild(actionsRow);
 
     const text = document.createElement("div");
     text.className = CLASSES.INBOX_CARD_TEXT;
@@ -530,16 +536,17 @@ export class InboxView {
       card.appendChild(shots);
     }
 
-    const badges = createBadgeRow(comment, this.strings);
+    // Status, type and priority already sit in the action strip above as
+    // labelled pickers; repeating them here was the same fact twice. Tags
+    // and the resolution time have no control anywhere, so they remain —
+    // the row simply disappears when there is neither.
+    const badges = createBadgeRow(comment, this.strings, {
+      includeClassification: false,
+    });
     if (badges) card.appendChild(badges);
 
     const tag = this._buildTag(comment);
     if (tag) card.appendChild(tag);
-
-    // Footer: reply on the left, the action strip on the right with the
-    // card's full width to lay out in.
-    const footer = document.createElement("div");
-    footer.className = CLASSES.INBOX_CARD_FOOTER;
 
     if (interactive) {
       card.setAttribute("role", "button");
@@ -560,7 +567,7 @@ export class InboxView {
         e.stopPropagation();
         activate();
       });
-      footer.appendChild(replyLink);
+      card.appendChild(replyLink);
 
       card.addEventListener("click", activate);
       card.addEventListener("keydown", (/** @type {KeyboardEvent} */ e) => {
@@ -575,9 +582,6 @@ export class InboxView {
       card.addEventListener("mouseenter", () => this._highlight(comment));
       card.addEventListener("mouseleave", () => this._clearHighlight());
     }
-
-    footer.appendChild(this._buildCardActions(comment));
-    card.appendChild(footer);
 
     return card;
   }
