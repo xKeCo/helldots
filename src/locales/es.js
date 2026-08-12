@@ -21,7 +21,11 @@ export default {
   screenshotPreview: "Vista previa de la captura",
   removeScreenshot: "Quitar captura de pantalla",
   inboxAriaLabel: "Bandeja de comentarios",
-  inboxEmpty: "Aún no hay comentarios",
+  inboxEmptyTitle: "Todavía no hay comentarios",
+  inboxEmptyHintTemplate:
+    "Pulsa {n} y haz clic en cualquier parte de la página para empezar.",
+  inboxEmptyAction: "Activar modo",
+  inboxNoMatches: "Ningún comentario coincide con estos filtros",
   orphanedBadge: "Desanclado",
   hiddenBadge: "Oculto",
   filterAll: "Todas las páginas",

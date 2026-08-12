@@ -535,6 +535,11 @@ class CommentOverlay {
 
   toggleCommentMode() {
     this.commentMode = !this.commentMode;
+    // The inbox is a full-height panel over the page; leaving it open would
+    // cover the very content the user now has to click on. Clicking the
+    // toolbar button already closed it as an outside click — this is what
+    // covers the keyboard shortcut and the empty state's own button.
+    if (this.commentMode) this.closeInbox();
     this.commentBtn?.classList.toggle(CLASSES.ACTIVE, this.commentMode);
     this.commentBtn?.setAttribute("aria-pressed", String(this.commentMode));
     this.overlay.classList.toggle(CLASSES.ACTIVE, this.commentMode);
@@ -697,7 +702,14 @@ class CommentOverlay {
         locale: this.locale,
         currentPage: location.pathname,
         getComments: () => this.comments,
+        options: this.options,
         callbacks: {
+          onActivateCommentMode: () => {
+            this.closeInbox();
+            // Never a toggle: the button reads "turn on comment mode", so
+            // pressing it while the mode is already on must not turn it off.
+            if (!this.commentMode) this.toggleCommentMode();
+          },
           onOpenDetailScroll: (comment) => this.scrollMarkerIntoView(comment),
           onReply: (comment, text, screenshots) =>
             this.addReply(comment, text, screenshots),

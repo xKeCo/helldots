@@ -861,10 +861,72 @@ export const getStyles = () => `
         padding: 0 4px;
     }
 
+    /* Centred in whatever height the list has, so the state sits in the
+       middle of the panel rather than clinging to the top. */
     .${CLASSES.INBOX_EMPTY} {
-        padding: 24px 12px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 32px 24px;
         color: rgba(255,255,255,0.55);
         text-align: center;
+    }
+
+    /* The marker's own silhouette, drawn as an outline: what the user is
+       about to place, not a generic placeholder. Same border-radius as
+       .comment-circle. */
+    .${CLASSES.INBOX_EMPTY_ICON} {
+        width: 44px;
+        height: 44px;
+        margin-bottom: 6px;
+        border: 2px dashed rgba(255,255,255,0.25);
+        border-radius: 0% 100% 100% 100%;
+        flex: none;
+    }
+
+    .${CLASSES.INBOX_EMPTY_TITLE} {
+        color: white;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .${CLASSES.INBOX_EMPTY_TEXT} {
+        font-size: 13px;
+        line-height: 1.5;
+        max-width: 30ch;
+    }
+
+    .${CLASSES.INBOX_EMPTY_KBD} {
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        color: rgba(255,255,255,0.8);
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.14);
+        border-radius: 5px;
+        padding: 1px 5px;
+        white-space: nowrap;
+    }
+
+    .${CLASSES.INBOX_EMPTY_ACTION} {
+        margin-top: 6px;
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 8px;
+        color: white;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 8px 16px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+    }
+
+    .${CLASSES.INBOX_EMPTY_ACTION}:hover {
+        background: rgba(255,255,255,0.08);
+        border-color: rgba(255,255,255,0.35);
     }
 
     .${CLASSES.THREAD_HEADER} {

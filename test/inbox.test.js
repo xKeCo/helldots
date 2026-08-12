@@ -291,12 +291,110 @@ describe("inbox sidebar", () => {
       ).toBe(false);
     });
 
-    it("shows the localized empty state", () => {
+    it("teaches the shortcut in the localized empty state", () => {
       overlay = makeOverlay({ locale: "es" });
       const panel = openInbox(overlay);
-      expect(panel.querySelector(`.${CLASSES.INBOX_EMPTY}`).textContent).toBe(
-        "Aún no hay comentarios"
+      const empty = panel.querySelector(`.${CLASSES.INBOX_EMPTY}`);
+
+      expect(
+        empty.querySelector(`.${CLASSES.INBOX_EMPTY_TITLE}`).textContent
+      ).toBe("Todavía no hay comentarios");
+      expect(empty.querySelector(`.${CLASSES.INBOX_EMPTY_ICON}`)).toBeTruthy();
+      // The chord is a real <kbd>, and it is the same one the toolbar shows.
+      const kbd = empty.querySelector(`.${CLASSES.INBOX_EMPTY_KBD}`);
+      expect(kbd.tagName).toBe("KBD");
+      expect(
+        overlay.toolbar.querySelector(`.${CLASSES.SHORTCUT_HINT}`).textContent
+      ).toBe(kbd.textContent);
+      expect(empty.textContent).toContain("haz clic en cualquier parte");
+    });
+
+    it("renders the shortcut with the modifier the platform uses", () => {
+      const withUserAgent = (ua, fn) => {
+        const spy = vi.spyOn(navigator, "userAgent", "get").mockReturnValue(ua);
+        try {
+          return fn();
+        } finally {
+          spy.mockRestore();
+        }
+      };
+
+      const chordFor = (ua) =>
+        withUserAgent(ua, () => {
+          const ov = makeOverlay({ locale: "en" });
+          const panel = openInbox(ov);
+          const text = panel.querySelector(
+            `.${CLASSES.INBOX_EMPTY_KBD}`
+          ).textContent;
+          ov.cleanup();
+          return text;
+        });
+
+      expect(chordFor("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")).toBe(
+        "⌥ + C"
       );
+      expect(chordFor("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe(
+        "Alt + C"
+      );
+    });
+
+    it("its button turns comment mode on and closes the inbox", () => {
+      overlay = makeOverlay();
+      const panel = openInbox(overlay);
+      expect(overlay.commentMode).toBe(false);
+
+      click(panel.querySelector(`.${CLASSES.INBOX_EMPTY_ACTION}`));
+
+      expect(overlay.commentMode).toBe(true);
+      expect(overlay.inboxView.isOpen()).toBe(false);
+    });
+
+    it("closes the inbox when comment mode is turned on by the shortcut", () => {
+      overlay = makeOverlay();
+      openInbox(overlay);
+      expect(overlay.inboxView.isOpen()).toBe(true);
+
+      // The panel covers the page it is about to ask the user to click on.
+      overlay.toggleCommentMode();
+
+      expect(overlay.commentMode).toBe(true);
+      expect(overlay.inboxView.isOpen()).toBe(false);
+    });
+
+    it("leaves the inbox alone when comment mode is turned off", () => {
+      overlay = makeOverlay();
+      overlay.toggleCommentMode();
+      openInbox(overlay);
+
+      overlay.toggleCommentMode();
+
+      expect(overlay.commentMode).toBe(false);
+      expect(overlay.inboxView.isOpen()).toBe(true);
+    });
+
+    it("distinguishes an empty inbox from filters that match nothing", async () => {
+      overlay = makeOverlay({ locale: "en" });
+      await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "an open comment"
+      );
+
+      const panel = openInbox(overlay);
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+      click(panel.querySelector(`[data-filter-status="resolved"]`));
+
+      const empty = panel.querySelector(`.${CLASSES.INBOX_EMPTY}`);
+      expect(
+        empty.querySelector(`.${CLASSES.INBOX_EMPTY_TITLE}`).textContent
+      ).toBe("No comments match these filters");
+      // Teaching the shortcut to someone who already has comments is noise;
+      // what they need is a way out of the filter.
+      expect(empty.querySelector(`.${CLASSES.INBOX_EMPTY_KBD}`)).toBeNull();
+
+      click(empty.querySelector(`.${CLASSES.INBOX_EMPTY_ACTION}`));
+      expect(overlay.inboxView.statusFilter).toBe("all");
+      expect(panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`)).toHaveLength(1);
     });
 
     it("tags orphaned comments", () => {

@@ -701,3 +701,38 @@ resolved` while comments carried `open | in_progress | resolved`, so
   the failure only shows up as a cursor flicker at the screen edge, on one
   engine. `constants.test.js` asserts the declared width and height stay
   within 32 so a future redraw cannot quietly reintroduce it.
+
+## The inbox's empty state
+
+- **The empty inbox teaches instead of just reporting.** It used to be one
+  line of grey text. A user who has just installed the widget and opens the
+  inbox first has no way to discover the shortcut from there, so the state now
+  carries the marker's outline, the chord, and a button that turns comment
+  mode on — the same three things a first-run tooltip would say, in the one
+  place a user with no comments is guaranteed to look.
+- **The chord comes from `getShortcutText()`, now exported from
+  `components.js`.** It was private and used only by the toolbar tooltip.
+  Re-deriving the modifier in the inbox would have meant two renderings of one
+  shortcut, free to drift — and the platform branch (⌥ on Apple, Alt
+  elsewhere) is exactly the kind of thing that drifts. A test asserts the two
+  surfaces print the same string.
+- **"No comments at all" and "the filters match nothing" are different
+  states.** Both used to render the same line, which was merely vague; with a
+  call to action it becomes wrong — offering "turn on comment mode" to someone
+  who has twenty comments hidden behind a `Resolved` chip answers a question
+  they did not ask. The filtered variant names the cause and offers Clear
+  instead.
+- **Turning comment mode on closes the inbox.** The panel is full-height and
+  covers the right side of the page the user is now being asked to click on.
+  Clicking the toolbar button already closed it as an outside click, so the
+  gap was the keyboard shortcut — and now the empty state's own button. The
+  close is on activation only: turning the mode _off_ leaves an open inbox
+  alone, since nothing is competing for the page then.
+- **That button turns the mode on; it never turns it off.** It reads as an
+  action, not a toggle, and it is only reachable from a panel that the action
+  itself closes — so a user can never see it in a state where "off" would be
+  the outcome.
+- **The shortcut renders as `⌥ + C`, not the `⌥C` of the mockup.** The
+  spacing comes from the shared helper, and matching the mockup here would
+  have meant either changing the toolbar tooltip too or forking the format.
+  One shortcut, one rendering.

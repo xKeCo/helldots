@@ -20,6 +20,7 @@ import {
   createInputArea,
   createReplyElement,
   createBadgeRow,
+  getShortcutText,
 } from "./components.js";
 
 const CARET_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
@@ -35,7 +36,8 @@ export class InboxView {
    * @param {string} deps.locale
    * @param {string} deps.currentPage
    * @param {() => Array<Object>} deps.getComments
-   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onClose: Function }} deps.callbacks
+   * @param {{ shortcutKey?: string, shortcutModifier?: string }} [deps.options]
+   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function }} deps.callbacks
    */
   constructor({
     shadowRoot,
@@ -44,6 +46,7 @@ export class InboxView {
     currentPage,
     getComments,
     callbacks,
+    options = {},
   }) {
     this.shadowRoot = shadowRoot;
     this.strings = strings;
@@ -51,6 +54,9 @@ export class InboxView {
     this.currentPage = currentPage;
     this.getComments = getComments;
     this.callbacks = callbacks;
+    // Only the shortcut config is read, and only to teach the chord in the
+    // empty state.
+    this.options = options;
     this.pageFilter = "page"; // "all" | "page"
     this.statusFilter = "all"; // "all" | STATUSES
     this.typeFilter = "all"; // "all" | COMMENT_TYPES
@@ -228,16 +234,83 @@ export class InboxView {
     this.el.appendChild(list);
 
     if (comments.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = CLASSES.INBOX_EMPTY;
-      empty.textContent = this.strings.inboxEmpty;
-      list.appendChild(empty);
+      list.appendChild(this._buildEmptyState());
       return;
     }
 
     for (const comment of comments) {
       list.appendChild(this._buildCard(comment, { interactive: true }));
     }
+  }
+
+  /**
+   * Two different nothings, and telling a user the wrong one wastes their
+   * time: an inbox with no comments at all needs teaching (what the shortcut
+   * is, how to place the first one), while an inbox whose filters happen to
+   * exclude everything needs the filters relaxed. Offering "turn on comment
+   * mode" to someone who already has twenty comments would be nonsense.
+   */
+  _buildEmptyState() {
+    const empty = document.createElement("div");
+    empty.className = CLASSES.INBOX_EMPTY;
+
+    // An outline of the marker the user is about to place, not a generic
+    // placeholder — same teardrop silhouette the circles use.
+    const icon = document.createElement("div");
+    icon.className = CLASSES.INBOX_EMPTY_ICON;
+    icon.setAttribute("aria-hidden", "true");
+    empty.appendChild(icon);
+
+    const hasAnyComment = this.getComments().length > 0;
+
+    const title = document.createElement("div");
+    title.className = CLASSES.INBOX_EMPTY_TITLE;
+    title.textContent = hasAnyComment
+      ? this.strings.inboxNoMatches
+      : this.strings.inboxEmptyTitle;
+    empty.appendChild(title);
+
+    if (hasAnyComment) {
+      const clear = document.createElement("button");
+      clear.type = "button";
+      clear.className = CLASSES.INBOX_EMPTY_ACTION;
+      clear.textContent = this.strings.filterClear;
+      clear.addEventListener("click", () => {
+        this.pageFilter = "page";
+        this.statusFilter = "all";
+        this.typeFilter = "all";
+        this.priorityFilter = "all";
+        this.render();
+      });
+      empty.appendChild(clear);
+      return empty;
+    }
+
+    const text = document.createElement("div");
+    text.className = CLASSES.INBOX_EMPTY_TEXT;
+    // Split on the placeholder so the chord can be a real <kbd> rather than
+    // bare text, without taking the sentence apart in the locale files.
+    const [before, after] = String(this.strings.inboxEmptyHintTemplate).split(
+      "{n}"
+    );
+    const kbd = document.createElement("kbd");
+    kbd.className = CLASSES.INBOX_EMPTY_KBD;
+    kbd.textContent = getShortcutText(this.options, this.strings);
+    text.appendChild(document.createTextNode(before ?? ""));
+    text.appendChild(kbd);
+    text.appendChild(document.createTextNode(after ?? ""));
+    empty.appendChild(text);
+
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = CLASSES.INBOX_EMPTY_ACTION;
+    action.textContent = this.strings.inboxEmptyAction;
+    action.addEventListener("click", () =>
+      this.callbacks.onActivateCommentMode()
+    );
+    empty.appendChild(action);
+
+    return empty;
   }
 
   _pageFilterLabel(value) {

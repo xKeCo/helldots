@@ -56,7 +56,14 @@ export const createMetaElement = (author, createdAt, strings, locale) => {
   return meta;
 };
 
-const getShortcutText = (options, strings) => {
+/**
+ * The comment shortcut as the user's platform spells it. Exported so the
+ * inbox's empty state teaches the same chord the toolbar tooltip shows —
+ * two different renderings of one shortcut is how they drift apart.
+ * @param {{ shortcutModifier?: string, shortcutKey?: string }} options
+ * @param {object} strings
+ */
+export const getShortcutText = (options, strings) => {
   const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
   const modifierMap = {
     alt: isMac ? "⌥" : strings.modifierAlt,
