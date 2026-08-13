@@ -1750,6 +1750,42 @@ describe("CommentOverlay", () => {
       overlay.closeLightbox();
       expect(document.activeElement).toBe(outside);
     });
+
+    it("declares aria-modal and traps Tab on its close button", () => {
+      // role="dialog" without a working trap is a broken promise: Tab from
+      // the close button walked straight into the page behind the backdrop.
+      overlay = makeOverlay();
+      overlay.showLightbox("data:image/png;base64,x");
+      const lightbox = overlay._activeLightbox;
+      expect(lightbox.getAttribute("aria-modal")).toBe("true");
+
+      const event = new KeyboardEvent("keydown", {
+        key: "Tab",
+        bubbles: true,
+        cancelable: true,
+      });
+      document.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(overlay.shadowRoot.activeElement).toBe(
+        lightbox.querySelector(`.${CLASSES.LIGHTBOX_CLOSE}`)
+      );
+    });
+
+    it("closing the lightbox releases the Tab trap", () => {
+      overlay = makeOverlay();
+      overlay.showLightbox("data:image/png;base64,x");
+      overlay.closeLightbox();
+
+      const event = new KeyboardEvent("keydown", {
+        key: "Tab",
+        bubbles: true,
+        cancelable: true,
+      });
+      document.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+    });
   });
 
   describe("marker labels", () => {

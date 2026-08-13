@@ -1287,6 +1287,7 @@ class CommentOverlay {
     const lightbox = document.createElement("div");
     lightbox.className = CLASSES.LIGHTBOX;
     lightbox.setAttribute("role", "dialog");
+    lightbox.setAttribute("aria-modal", "true");
     lightbox.setAttribute("aria-label", this.strings.screenshotPreview);
 
     const img = document.createElement("img");
@@ -1310,11 +1311,31 @@ class CommentOverlay {
 
     this.shadowRoot.appendChild(lightbox);
     this._activeLightbox = lightbox;
+
+    // aria-modal is a promise about focus: the page behind the backdrop must
+    // be unreachable. The close button is the only stop, so the trap is a
+    // re-focus rather than a ring walk — same reasoning as confirm-dialog,
+    // and on document in the capture phase for the same reason.
+    this._lightboxKeydownHandler = (e) => {
+      if (e.key !== "Tab") return;
+      e.preventDefault();
+      closeBtn.focus();
+    };
+    document.addEventListener("keydown", this._lightboxKeydownHandler, true);
+
     closeBtn.focus();
   }
 
   closeLightbox() {
     if (!this._activeLightbox) return;
+    if (this._lightboxKeydownHandler) {
+      document.removeEventListener(
+        "keydown",
+        this._lightboxKeydownHandler,
+        true
+      );
+      this._lightboxKeydownHandler = null;
+    }
     this._activeLightbox.remove();
     this._activeLightbox = null;
     const returnFocus = /** @type {HTMLElement | null} */ (
