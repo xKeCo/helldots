@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import CommentOverlay from "../src/overlay.js";
 import { CLASSES, IDS } from "../src/constants.js";
 import { TAG_NAME } from "../src/root-element.js";
+import { positionPopoverAtCircle } from "../src/popover-controller.js";
 import en from "../src/locales/en.js";
 import { domToCanvas } from "modern-screenshot";
 
@@ -521,7 +522,7 @@ describe("CommentOverlay", () => {
       );
 
       withViewport(375, () => {
-        overlay.positionPopoverAtCircle(el, circle);
+        positionPopoverAtCircle(el, circle);
         const left = parseFloat(el.style.left);
         expect(left).toBeGreaterThanOrEqual(0);
         expect(left + 351).toBeLessThanOrEqual(375);
@@ -1455,7 +1456,7 @@ describe("CommentOverlay", () => {
       });
       const el = document.createElement("div");
       el.getBoundingClientRect = () => ({ height: 100 });
-      overlay.positionPopoverAtCircle(el, circle);
+      positionPopoverAtCircle(el, circle);
       expect(parseFloat(el.style.left)).toBeGreaterThanOrEqual(10);
       expect(parseFloat(el.style.top)).toBeGreaterThanOrEqual(10);
     });
@@ -1471,7 +1472,7 @@ describe("CommentOverlay", () => {
       });
       const el = document.createElement("div");
       el.getBoundingClientRect = () => ({ height: 400 });
-      overlay.positionPopoverAtCircle(el, circle);
+      positionPopoverAtCircle(el, circle);
       // Bottom-anchored rather than top-clamped: further growth has to push
       // the popover upward so the reply box stays on screen.
       expect(el.style.top).toBe("auto");
@@ -1489,7 +1490,7 @@ describe("CommentOverlay", () => {
       });
       const el = document.createElement("div");
       el.getBoundingClientRect = () => ({ height: 120 });
-      overlay.positionPopoverAtCircle(el, circle);
+      positionPopoverAtCircle(el, circle);
       expect(el.style.bottom).toBe("auto");
       expect(parseFloat(el.style.top)).toBe(100);
     });
@@ -1505,11 +1506,11 @@ describe("CommentOverlay", () => {
       });
       const el = document.createElement("div");
       el.getBoundingClientRect = () => ({ height: window.innerHeight });
-      overlay.positionPopoverAtCircle(el, circle);
+      positionPopoverAtCircle(el, circle);
       expect(el.style.top).toBe("auto");
 
       el.getBoundingClientRect = () => ({ height: 80 });
-      overlay.positionPopoverAtCircle(el, circle);
+      positionPopoverAtCircle(el, circle);
       expect(el.style.bottom).toBe("auto");
       expect(parseFloat(el.style.top)).toBe(200);
     });
@@ -2735,7 +2736,7 @@ describe("CSS-hostile ids in marker UI lookups", () => {
     const circle = overlay._circles.get(String(comment.id));
     overlay.showThreadPopover(circle, comment);
 
-    await overlay._startPopoverEditing(comment.id, HOSTILE_REPLY_ID);
+    await overlay._popover.startEditing(comment.id, HOSTILE_REPLY_ID);
 
     expect(
       overlay.activeThreadPopover.querySelector(`.${CLASSES.EDITOR}`)
