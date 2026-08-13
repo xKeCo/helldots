@@ -1,5 +1,95 @@
 import { build } from "esbuild";
-import { copyFile, mkdir, rm } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm } from "node:fs/promises";
+
+// esbuild minifies JS but never touches the inside of a template literal, so
+// the stylesheet in src/styles.js used to ship to every consumer with its
+// full indentation, newlines and CSS comments (~15 KB raw / ~2.5 KB gzip).
+// This plugin minifies the CSS inside that file's template literals at build
+// time, leaving ${...} expressions (and the runtime/playground/tests, which
+// load the unbuilt source) untouched.
+//
+// The transform is deliberately conservative: strip CSS comments, collapse
+// whitespace runs, and remove spaces around structural punctuation — never
+// before a ":" (`.a :hover` and `.a:hover` are different selectors).
+const minifyCssChunk = (css) =>
+  css
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\s+/g, " ")
+    .replace(/ ?([{};,>]) ?/g, "$1")
+    .replace(/: /g, ":");
+
+// Walks JS source, minifying only the CSS text between backticks. Handles
+// ${...} expressions, including nested template literals (styles.js builds
+// part of the sheet with a .map() over selectors).
+const minifyTemplateCss = (source) => {
+  let out = "";
+  let i = 0;
+
+  const copyExpression = () => {
+    // At "${": copy verbatim until the matching "}", recursing into any
+    // nested template literal.
+    out += source.slice(i, i + 2);
+    i += 2;
+    let depth = 1;
+    while (i < source.length && depth > 0) {
+      const ch = source[i];
+      if (ch === "`") {
+        copyTemplate();
+        continue;
+      }
+      if (ch === "{") depth++;
+      if (ch === "}") depth--;
+      out += ch;
+      i++;
+    }
+  };
+
+  const copyTemplate = () => {
+    out += source[i]; // opening backtick
+    i++;
+    let chunk = "";
+    while (i < source.length) {
+      if (source[i] === "\\") {
+        chunk += source.slice(i, i + 2);
+        i += 2;
+        continue;
+      }
+      if (source[i] === "`") {
+        out += minifyCssChunk(chunk) + "`";
+        i++;
+        return;
+      }
+      if (source[i] === "$" && source[i + 1] === "{") {
+        out += minifyCssChunk(chunk);
+        chunk = "";
+        copyExpression();
+        continue;
+      }
+      chunk += source[i];
+      i++;
+    }
+  };
+
+  while (i < source.length) {
+    if (source[i] === "`") {
+      copyTemplate();
+    } else {
+      out += source[i];
+      i++;
+    }
+  }
+  return out;
+};
+
+const minifyStylesTemplates = {
+  name: "minify-styles-templates",
+  setup(pluginBuild) {
+    pluginBuild.onLoad({ filter: /[\\/]src[\\/]styles\.js$/ }, async (args) => {
+      const source = await readFile(args.path, "utf8");
+      return { contents: minifyTemplateCss(source), loader: "js" };
+    });
+  },
+};
 
 const outdir = new URL("../dist/", import.meta.url);
 
@@ -31,7 +121,11 @@ await build({
   sourcemap: true,
   format: "esm",
   platform: "browser",
+  // Pinned so a future esbuild syntax feature can't silently raise the
+  // browser floor (default is esnext); matches tsconfig's ES2022.
+  target: "es2022",
   external: ["modern-screenshot"],
+  plugins: [minifyStylesTemplates],
   banner,
 });
 
@@ -50,7 +144,9 @@ await build({
   sourcemap: false,
   format: "iife",
   platform: "browser",
+  target: "es2022",
   globalName: "HellDots",
+  plugins: [minifyStylesTemplates],
   banner: umdBanner,
   footer: {
     js: "if (typeof module !== 'undefined' && module.exports) { module.exports = HellDots.default; }",

@@ -1092,3 +1092,25 @@ match. Synchronous durability won. The stringify itself therefore still
 runs per mutation — the remaining cost is proportional to the current
 page's corpus, and the honest fix for that is a storage schema with
 per-comment keys, which is a breaking change parked for later.
+
+## The stylesheet is minified by the build, not by hand
+
+esbuild minifies JavaScript but deliberately never rewrites the inside of a
+template literal, so the sheet in `src/styles.js` shipped with its full
+indentation and internal comments — the single largest module in the bundle
+(28.8% of it). A build plugin (`scripts/build.mjs`) now minifies the CSS
+between backticks at build time, leaving `${...}` expressions intact.
+
+- **A hand-rolled conservative transform instead of a real CSS minifier**:
+  the sheet is JS-with-holes, which no off-the-shelf CSS minifier parses.
+  Extracting, minifying and re-splicing around the holes with a real
+  minifier is more machinery for marginal bytes. The transform only strips
+  comments, collapses whitespace and trims around structural punctuation —
+  never before a `:` (`.a :hover` and `.a:hover` differ). Verified
+  structurally: the minified sheet keeps rule-for-rule identical counts of
+  braces, declarations and at-rules, and the quoted font name survives.
+- **The runtime, playground and tests keep the readable source** — the
+  plugin runs at build time only, so this costs nothing in dev.
+- Both builds also pin `target: "es2022"` (previously esbuild's default
+  `esnext`), so a future esbuild release can't silently emit syntax newer
+  than the documented browser floor.
