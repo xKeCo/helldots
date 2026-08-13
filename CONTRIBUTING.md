@@ -107,7 +107,14 @@ Workflow:
    It asks for the bump type (`patch`/`minor`/`major`) and a summary of the
    change, then writes a file into `.changeset/`.
 
-2. Commit that file alongside the code change.
+2. Commit that file alongside the code change. CI enforces this on every PR
+   (`changeset status` against the base branch); a PR that genuinely
+   publishes nothing — docs, CI, playground — records that explicitly with an
+   empty changeset:
+
+   ```bash
+   npx changeset --empty
+   ```
 
 3. When cutting a release, run:
 
@@ -125,5 +132,8 @@ Workflow:
 ## Before opening a PR
 
 ```bash
-npm run lint && npm run typecheck && npm test && npm run test:coverage && npm run build && npm run size
+npm run verify
 ```
+
+It chains every gate CI runs: lint → typecheck → format → test → build →
+size.

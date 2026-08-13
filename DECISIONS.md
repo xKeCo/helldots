@@ -1033,3 +1033,20 @@ whole repo. What it flagged, and what was done about it:
   isolation). Removing the exports would force the tests through clumsier
   paths for no bundle win (both are bundled regardless). `AUTO_QUALITY`, which
   not even a test imported, lost its `export`.
+
+## CI: the changeset rule gets its gate
+
+CLAUDE.md claims every working rule is backed by a gate, but "any change that
+affects the published package needs a changeset" had none — it relied on
+review memory. CI now runs `changeset status --since=<base>` on every PR.
+
+- **Empty changesets over a skip label**: a PR that publishes nothing (docs,
+  CI, playground) satisfies the gate with `npx changeset --empty` rather than
+  a `no-changeset` PR label. The empty file is reviewed like any other diff
+  and leaves a record in the branch history; a label lives outside the repo
+  and is invisible to `git log`. The cost accepted: one extra file in
+  trivial PRs.
+- **The same CI pass also stopped running the test suite twice** (a bare
+  `npm test` step before `test:coverage`, which already runs every test) and
+  started running `format:check`, which `npm run verify` always included but
+  CI never did.

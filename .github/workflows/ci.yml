@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: the changeset gate diffs against the PR base ref.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -30,11 +33,20 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
-        run: npm test
+      - name: Format
+        run: npm run format:check
 
-      - name: Test coverage (gate at 80%)
+      # The coverage run executes the whole suite and fails on any failing
+      # test, so a separate `npm test` step would run everything twice.
+      - name: Test + coverage (gate at 80%)
         run: npm run test:coverage
+
+      # CLAUDE.md: any change that affects the published package needs a
+      # changeset. PRs that genuinely publish nothing add an empty one
+      # (`npx changeset --empty`).
+      - name: Changeset present
+        if: github.event_name == 'pull_request'
+        run: npx changeset status --since=origin/${{ github.base_ref }}
 
       - name: Build
         run: npm run build
