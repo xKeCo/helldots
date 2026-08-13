@@ -875,3 +875,42 @@ resolved` while comments carried `open | in_progress | resolved`, so
   through `getRootNode()`, which is the `Document` — not a shadow root — for
   anything mounted in the light DOM, and a `Document` cannot take a second
   element child.
+
+## Comment ids are nanoid strings, not `Date.now()`
+
+`Date.now()` was never an id — it is a timestamp that usually happens not to
+repeat. Two things in this codebase already depended on ids being unique:
+`mergeForStorage` deduplicates by id, and every lookup is a `find()` that
+returns the first match. A collision therefore does not throw; one comment
+silently overwrites another. One millisecond is wide enough to hit that with
+a programmatic import, or with two people commenting from different machines
+into a host's shared back end.
+
+- **nanoid, not `crypto.randomUUID()`.** 21 characters carrying ~126 bits
+  from a 64-symbol URL-safe alphabet, against a UUIDv4's 122 bits in 36
+  characters — stronger and shorter at once. The length matters because these
+  ids now travel in `?helldotsComment=` links. And nanoid reads from
+  `crypto.getRandomValues`, which unlike `crypto.randomUUID` is _not_
+  restricted to secure contexts: a widget dropped into a dev server on plain
+  `http://192.168.x.x` keeps working.
+- **A devDependency bundled into both artifacts, not a runtime dependency.**
+  nanoid 6 declares `engines: node ^22 || ^24 || >=26` and this package
+  promises `>=18`. Taking it as a runtime dependency would propagate that
+  floor to any host importing HellDots under SSR and make our own `engines`
+  a lie. Bundling contains the requirement to our toolchain (CI and local are
+  both on Node 22) and costs ~130 B gzip after tree-shaking. This is
+  deliberately the opposite of the `modern-screenshot` treatment — that one
+  is `external` in ESM because it is large, and 130 B does not earn the same
+  exception.
+- **The MIT notice is added by hand in `scripts/build.mjs`.** nanoid's sources
+  carry no license header, so esbuild has nothing to preserve, and MIT
+  requires the notice when redistributing a substantial portion. A `banner`
+  on both bundles is the only place it can honestly live.
+- **`CommentId` is `string | number`, and the `number` arm is permanent.**
+  Comments created before this change are sitting in hosts' localStorage and
+  back ends right now. Dropping the arm later would strand them. Ids that
+  cross a JSON or URL boundary are compared with `String(a) === String(b)`
+  for the same reason.
+- **No data migration.** Rewriting stored ids would break any host that
+  recorded them elsewhere — issue trackers, its own database — and buys
+  nothing, since old and new ids coexist without ambiguity.

@@ -48,8 +48,19 @@ export interface CommentContext {
   language: string;
 }
 
+/**
+ * Identifier of a comment or a reply.
+ *
+ * New ids are 21-character nanoid strings. The `number` arm is not legacy
+ * cruft to be removed later: comments created before that change are still
+ * sitting in hosts' localStorage and in their own back ends, and they keep
+ * resolving. Compare ids with `String(a) === String(b)` rather than `===`
+ * when either side may have crossed a JSON or URL boundary.
+ */
+export type CommentId = string | number;
+
 export interface SerializedComment {
-  id: number;
+  id: CommentId;
   text: string;
   anchor: CommentAnchor | null;
   /** location.pathname where the comment was created. */
@@ -103,7 +114,7 @@ export interface CommentOverlayOptions {
   /** Fired for each comment that could not be re-anchored by loadComments. */
   onAnchorLost?: (comment: SerializedComment) => void;
   /** Fired after deleteComment removes a comment. */
-  onCommentDeleted?: (id: number) => void;
+  onCommentDeleted?: (id: CommentId) => void;
   /** Fired after setCommentStatus changes a comment's lifecycle state. */
   onCommentStatusChanged?: (comment: SerializedComment) => void;
   /** Fired after type, priority or tags change on any comment. */
@@ -111,7 +122,7 @@ export interface CommentOverlayOptions {
 }
 
 export interface CommentReply {
-  id: number;
+  id: CommentId;
   text: string;
   author: string;
   timestamp: string;
@@ -119,7 +130,7 @@ export interface CommentReply {
 }
 
 export interface Comment {
-  id: number;
+  id: CommentId;
   text: string;
   /** Live anchor element; null while the comment is orphaned or inactive. */
   container: HTMLElement | null;
@@ -169,18 +180,18 @@ export declare class CommentOverlay {
 
   toggleCommentMode(): void;
   addReply(comment: Comment, text: string): CommentReply;
-  deleteReply(commentId: number, replyId: number): boolean;
+  deleteReply(commentId: CommentId, replyId: CommentId): boolean;
   serializeComments(): SerializedComment[];
   loadComments(data: SerializedComment[]): {
     anchored: number;
     orphaned: number;
     inactive: number;
   };
-  deleteComment(id: number): boolean;
-  setCommentStatus(id: number, status: CommentStatus): boolean;
-  setCommentType(id: number, type: CommentType | null): boolean;
-  setCommentPriority(id: number, priority: CommentPriority | null): boolean;
-  setCommentTags(id: number, tags: string[]): boolean;
+  deleteComment(id: CommentId): boolean;
+  setCommentStatus(id: CommentId, status: CommentStatus): boolean;
+  setCommentType(id: CommentId, type: CommentType | null): boolean;
+  setCommentPriority(id: CommentId, priority: CommentPriority | null): boolean;
+  setCommentTags(id: CommentId, tags: string[]): boolean;
   cleanup(): void;
 }
 

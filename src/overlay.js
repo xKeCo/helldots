@@ -28,6 +28,7 @@ import {
   mergeForStorage,
   PENDING_DETAIL_KEY,
 } from "./storage.js";
+import { createId } from "./id.js";
 import {
   createToolbar,
   createCommentBox,
@@ -565,7 +566,7 @@ class CommentOverlay {
       hidden: false,
       status: "open",
       page: location.pathname,
-      id: Date.now(),
+      id: createId(),
       replies: [],
       author: this.options.user?.name || this.strings.anonymous,
       createdAt: new Date().toISOString(),
@@ -1075,7 +1076,7 @@ class CommentOverlay {
   addReply(comment, text, screenshots = []) {
     if (!comment.replies) comment.replies = [];
     const reply = {
-      id: Date.now(),
+      id: createId(),
       text,
       author: this.options.user?.name || this.strings.anonymous,
       timestamp: new Date().toISOString(),

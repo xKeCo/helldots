@@ -3,6 +3,13 @@ import { copyFile, mkdir, rm } from "node:fs/promises";
 
 const outdir = new URL("../dist/", import.meta.url);
 
+// nanoid is bundled into both artifacts (see DECISIONS.md), and its own
+// sources carry no license header for esbuild to preserve — so the notice
+// MIT requires when redistributing has to be added here by hand.
+const banner = {
+  js: `/*! HellDots — MIT. Bundles nanoid (MIT) © 2017 Andrey Sitnik <andrey@sitnik.es> — https://github.com/ai/nanoid */`,
+};
+
 await rm(outdir, { recursive: true, force: true });
 await mkdir(outdir, { recursive: true });
 
@@ -18,6 +25,7 @@ await build({
   format: "esm",
   platform: "browser",
   external: ["modern-screenshot"],
+  banner,
 });
 
 // UMD/IIFE bundle for plain <script> usage with no module system or
@@ -36,6 +44,7 @@ await build({
   format: "iife",
   platform: "browser",
   globalName: "HellDots",
+  banner,
   footer: {
     js: "if (typeof module !== 'undefined' && module.exports) { module.exports = HellDots.default; }",
   },
