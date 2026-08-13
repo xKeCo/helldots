@@ -37,6 +37,16 @@ export default {
   deleteComment: "Delete",
   deleteReply: "Delete reply",
   replyOptions: "Reply options",
+  confirmDelete: "Delete",
+  confirmCancel: "Cancel",
+  confirmDeleteCommentTitle: "Delete this comment?",
+  confirmDeleteCommentMessage:
+    "This comment will be permanently deleted. This action cannot be undone.",
+  confirmDeleteThreadMessage:
+    "This comment and all of its replies will be permanently deleted. This action cannot be undone.",
+  confirmDeleteReplyTitle: "Delete this reply?",
+  confirmDeleteReplyMessage:
+    "This reply will be permanently deleted. This action cannot be undone.",
   copyAgentContext: "Copy agent context",
   copied: "Copied",
   statusLabel: "Status",

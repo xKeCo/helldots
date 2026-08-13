@@ -824,3 +824,54 @@ resolved` while comments carried `open | in_progress | resolved`, so
   Removing the last reply leaves the comment standing; the two operations
   only look alike. Hosts get `onReplyDeleted` to mirror it, matching the
   `onReplyAdded` they already have.
+
+## A confirmation before every delete
+
+- **Deleting is the only irreversible thing in the widget, and it took one
+  click.** There is no trash, no undo and no history: a menu item landed on
+  by accident destroyed a comment and its whole thread, with nothing to
+  recover it from. A modal is the cheap version of an undo stack.
+- **The confirmation lives in `createMoreMenu`, not at each call site.** Four
+  paths reach a delete (inbox card, inbox detail reply, popover header,
+  popover reply) and they would have needed the same wrapper four times. Put
+  where the destructive item is declared, a new one cannot be added without
+  the question being considered.
+- **`confirm` is a factory, not an object.** The wording depends on whether
+  the comment has replies, and the action strip is built once when the
+  popover opens. Read up front it described the thread as it was minutes
+  ago — a comment answered after opening still promised that only the
+  comment would go. Caught in the browser, not by a test.
+- **Two fixed wordings instead of a reply count.** "and all of its replies"
+  says the thing that actually matters, and it avoids pluralising a number
+  in every locale we add.
+- **The promise resolves; it never rejects.** "The user said no" is a normal
+  answer, not an error, so every call site is `if (!(await …)) return;`
+  rather than a try/catch.
+- **Cancel takes focus, not the destructive button.** A dialog that appears
+  under a cursor already moving toward where the menu item was should not
+  have Delete one stray Enter away.
+- **Escape is handled in the capture phase and stops the event.** The
+  overlay's own Escape handler is on `document` and would otherwise close the
+  thread popover behind the dialog while the question was still on screen.
+  The backdrop stops `mousedown` for the same reason: the inbox and the
+  popover both close on any mousedown outside themselves.
+- **The backdrop only dismisses when the press starts _and_ ends on it.** A
+  drag that begins inside the panel and releases outside is a slip, not an
+  answer.
+- **This is the one place with visible focus rings.** The dialog traps Tab
+  between exactly two buttons, one of them destructive, so a keyboard user
+  who cannot see which is focused is being asked to guess. Scoped to these
+  two buttons on purpose — it does not reopen the rings that were reverted
+  elsewhere for visual parity.
+- **`z-index` sits above the lightbox.** A screenshot can be open full-screen
+  when the ⋯ behind it is used, and a confirmation nobody can see is worse
+  than no confirmation at all.
+- **Open dialogs are tracked in a module-level set so `cleanup()` can settle
+  them.** Unmounting mid-question would take the DOM away and leave a
+  capture-phase keydown listener on `document` eating Escape for the whole
+  host page. Same reasoning that already makes `cleanup()` call
+  `closeOpenMenus()`.
+- **The mount point falls back to `document.body`.** Callers reach the dialog
+  through `getRootNode()`, which is the `Document` — not a shadow root — for
+  anything mounted in the light DOM, and a `Document` cannot take a second
+  element child.

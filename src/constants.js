@@ -30,6 +30,13 @@ export const CLASSES = {
   SCREENSHOT_REMOVE: "screenshot-remove",
   SCREENSHOTS_CONTAINER: "screenshots-container",
   SCREENSHOT_ITEM: "screenshot-item",
+  CONFIRM: "helldots-confirm",
+  CONFIRM_PANEL: "helldots-confirm-panel",
+  CONFIRM_TITLE: "helldots-confirm-title",
+  CONFIRM_MESSAGE: "helldots-confirm-message",
+  CONFIRM_ACTIONS: "helldots-confirm-actions",
+  CONFIRM_CANCEL: "helldots-confirm-cancel",
+  CONFIRM_ACCEPT: "helldots-confirm-accept",
   LIGHTBOX: "helldots-lightbox",
   LIGHTBOX_IMG: "helldots-lightbox-img",
   LIGHTBOX_CLOSE: "helldots-lightbox-close",
@@ -156,6 +163,9 @@ export const Z_INDEX = {
   TOOLBAR: 9998,
   COMMENT_BOX: 9999,
   LIGHTBOX: 10001,
+  // Above the lightbox: a screenshot can be open full-screen when the ⋯ menu
+  // behind it is used, and a confirmation nobody can see is worse than none.
+  CONFIRM: 10002,
 };
 
 // 32x32 is a hard ceiling, not a design preference: Chromium drops a custom

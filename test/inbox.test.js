@@ -43,6 +43,15 @@ const createCommentOn = async (overlay, container, text = "A test comment") => {
 const click = (el) =>
   el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
+// Deleting anything opens a confirmation, and the menu item's handler awaits
+// it, so the action lands a microtask after the answer.
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const acceptConfirm = async (ov) => {
+  click(ov.shadowRoot.querySelector(`.${CLASSES.CONFIRM_ACCEPT}`));
+  await flush();
+};
+
 const openInbox = (ov) => {
   click(ov.toolbar.querySelector(`.${CLASSES.TOOLBAR_MENU_BTN}`));
   return ov.shadowRoot.querySelector(`.${CLASSES.INBOX_PANEL}`);
@@ -549,12 +558,38 @@ describe("inbox sidebar", () => {
           `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
         )
       );
+      expect(overlay.comments).toHaveLength(1);
+      await acceptConfirm(overlay);
 
       expect(overlay.comments).toHaveLength(0);
       expect(
         overlay.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`)
       ).toBeNull();
       expect(panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`)).toHaveLength(0);
+    });
+
+    it("keeps the comment when the confirmation is cancelled", async () => {
+      overlay = makeOverlay();
+      await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "spared"
+      );
+
+      const panel = openInbox(overlay);
+      click(
+        panel.querySelector(`.${CLASSES.INBOX_ACTION_BTN}[data-action="menu"]`)
+      );
+      click(
+        panel.querySelector(
+          `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
+        )
+      );
+      click(overlay.shadowRoot.querySelector(`.${CLASSES.CONFIRM_CANCEL}`));
+      await flush();
+
+      expect(overlay.comments).toHaveLength(1);
+      expect(panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`)).toHaveLength(1);
     });
 
     it("closes via X, Escape and toggling the toolbar button", () => {
@@ -624,6 +659,8 @@ describe("inbox sidebar", () => {
         )
       );
       click(replyEl.querySelector(`.${CLASSES.INBOX_MENU_ITEM}`));
+      expect(comment.replies).toHaveLength(1);
+      await acceptConfirm(overlay);
 
       expect(comment.replies).toHaveLength(0);
       expect(detail.querySelector(`.${CLASSES.THREAD_REPLY}`)).toBeNull();
@@ -868,6 +905,7 @@ describe("inbox sidebar", () => {
           `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
         )
       );
+      await acceptConfirm(overlay);
 
       expect(panel.querySelector(`.${CLASSES.INBOX_DETAIL}`)).toBeNull();
       expect(overlay.comments).toHaveLength(0);
@@ -1152,6 +1190,12 @@ describe("inbox sidebar", () => {
           `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
         )
       );
+      // The popover stays put behind the question — the user has not said
+      // yes yet, and tearing it down early would answer for them.
+      expect(
+        overlay.shadowRoot.querySelector(`.${CLASSES.THREAD_POPOVER}`)
+      ).toBeTruthy();
+      await acceptConfirm(overlay);
 
       expect(
         overlay.shadowRoot.querySelector(`.${CLASSES.THREAD_POPOVER}`)

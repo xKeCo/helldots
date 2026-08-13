@@ -31,6 +31,20 @@ const mount = (comment, deps = {}) => {
 const click = (el) =>
   el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
+// The menu item's handler awaits the dialog, so the answer lands a microtask
+// before onSelect runs. Every helper below yields once for that.
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const accept = async () => {
+  click(document.querySelector(`.${CLASSES.CONFIRM_ACCEPT}`));
+  await flush();
+};
+
+const dismiss = async () => {
+  click(document.querySelector(`.${CLASSES.CONFIRM_CANCEL}`));
+  await flush();
+};
+
 describe("createCommentActions", () => {
   it("renders copy, status and more buttons with tooltips", () => {
     const el = mount(makeComment());
@@ -112,7 +126,7 @@ describe("createCommentActions", () => {
     vi.useRealTimers();
   });
 
-  it("the more menu exposes Delete which calls onDelete", () => {
+  it("the more menu exposes Delete, which only calls onDelete once confirmed", async () => {
     const onDelete = vi.fn();
     const comment = makeComment();
     const el = mount(comment, { onDelete });
@@ -122,7 +136,88 @@ describe("createCommentActions", () => {
       el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
     );
 
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(document.querySelector(`.${CLASSES.CONFIRM}`)).toBeTruthy();
+
+    await accept();
     expect(onDelete).toHaveBeenCalledWith(comment);
+    expect(document.querySelector(`.${CLASSES.CONFIRM}`)).toBeNull();
+  });
+
+  it("cancelling the confirmation leaves the comment alone", async () => {
+    const onDelete = vi.fn();
+    const el = mount(makeComment(), { onDelete });
+
+    click(el.querySelector('[data-action="menu"]'));
+    click(
+      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
+    );
+    await dismiss();
+
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(document.querySelector(`.${CLASSES.CONFIRM}`)).toBeNull();
+  });
+
+  it("Escape cancels the confirmation without reaching the page behind it", async () => {
+    const onDelete = vi.fn();
+    const onEscape = vi.fn();
+    document.addEventListener("keydown", onEscape);
+    const el = mount(makeComment(), { onDelete });
+
+    click(el.querySelector('[data-action="menu"]'));
+    click(
+      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
+    );
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    );
+    await flush();
+
+    document.removeEventListener("keydown", onEscape);
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(onEscape).not.toHaveBeenCalled();
+    expect(document.querySelector(`.${CLASSES.CONFIRM}`)).toBeNull();
+  });
+
+  it("warns that the replies go too when the comment has any", () => {
+    const el = mount(makeComment({ replies: [{ id: 2, text: "hi" }] }));
+    click(el.querySelector('[data-action="menu"]'));
+    click(
+      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
+    );
+
+    expect(
+      document.querySelector(`.${CLASSES.CONFIRM_MESSAGE}`).textContent
+    ).toBe(en.confirmDeleteThreadMessage);
+  });
+
+  it("reads the thread as it is at click time, not at build time", () => {
+    // The strip is built once, when the popover opens; replies sent after
+    // that used to leave the warning describing an empty thread.
+    const comment = makeComment({ replies: [] });
+    const el = mount(comment);
+    comment.replies.push({ id: 2, text: "arrived later" });
+
+    click(el.querySelector('[data-action="menu"]'));
+    click(
+      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
+    );
+
+    expect(
+      document.querySelector(`.${CLASSES.CONFIRM_MESSAGE}`).textContent
+    ).toBe(en.confirmDeleteThreadMessage);
+  });
+
+  it("does not mention replies for a comment without any", () => {
+    const el = mount(makeComment());
+    click(el.querySelector('[data-action="menu"]'));
+    click(
+      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
+    );
+
+    expect(
+      document.querySelector(`.${CLASSES.CONFIRM_MESSAGE}`).textContent
+    ).toBe(en.confirmDeleteCommentMessage);
   });
 });
 

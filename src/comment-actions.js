@@ -13,6 +13,7 @@ import {
   PRIORITY_COLORS,
 } from "./constants.js";
 import { attachMenuToggle } from "./menus.js";
+import { confirmDialog } from "./confirm-dialog.js";
 
 const COPY_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const CHECK_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -176,10 +177,22 @@ export const createPicker = ({
  * give the thread a horizontal scrollbar it had no other reason to have. The
  * aria-label still names the control, and the menu it opens says the rest.
  *
+ * An item may carry a `confirm` factory, and then nothing happens until the
+ * user answers the modal. It lives here rather than at each call site so a
+ * destructive item cannot be added without one being considered.
+ *
+ * A factory, not a plain object: the wording depends on the comment's state
+ * ("and all of its replies"), and the menu is built once when the popover
+ * opens. Reading it up front described the thread as it was minutes ago.
+ *
  * @param {{
  *   label: string,
  *   tooltip?: string,
- *   items: Array<{ label: string, onSelect: () => void }>,
+ *   items: Array<{
+ *     label: string,
+ *     onSelect: () => void,
+ *     confirm?: () => import("./confirm-dialog.js").ConfirmStrings,
+ *   }>,
  * }} config
  * @returns {HTMLElement}
  */
@@ -207,9 +220,15 @@ export const createMoreMenu = ({ label, tooltip, items }) => {
     item.className = CLASSES.INBOX_MENU_ITEM;
     item.setAttribute("role", "menuitem");
     item.textContent = entry.label;
-    item.addEventListener("click", (e) => {
+    item.addEventListener("click", async (e) => {
       e.stopPropagation();
       toggle.close();
+      if (entry.confirm) {
+        // Read before awaiting: onSelect may detach the row this button
+        // lives in, and a detached node has no shadow root to mount into.
+        const host = /** @type {any} */ (item.getRootNode());
+        if (!(await confirmDialog(host, entry.confirm()))) return;
+      }
       entry.onSelect();
     });
     menu.appendChild(item);
@@ -304,7 +323,21 @@ export const createCommentActions = (
       label: strings.commentOptions,
       tooltip: strings.moreOptions,
       items: [
-        { label: strings.deleteComment, onSelect: () => onDelete(comment) },
+        {
+          label: strings.deleteComment,
+          onSelect: () => onDelete(comment),
+          confirm: () => ({
+            title: strings.confirmDeleteCommentTitle,
+            // Two wordings rather than a reply count: what matters is that a
+            // discussion is about to go with the comment, and saying so
+            // avoids pluralising a number in every locale.
+            message: comment.replies?.length
+              ? strings.confirmDeleteThreadMessage
+              : strings.confirmDeleteCommentMessage,
+            confirmLabel: strings.confirmDelete,
+            cancelLabel: strings.confirmCancel,
+          }),
+        },
       ],
     })
   );

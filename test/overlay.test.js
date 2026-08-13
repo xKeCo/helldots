@@ -728,7 +728,7 @@ describe("CommentOverlay", () => {
       expect(second.classList.contains(CLASSES.CIRCLE_ACTIVE)).toBe(true);
     });
 
-    it("deletes a reply from the popover through its ⋯ menu", () => {
+    it("deletes a reply from the popover through its ⋯ menu, once confirmed", async () => {
       const reply = overlay.addReply(comment, "first reply");
       const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
       overlay.showThreadPopover(circle, comment);
@@ -743,6 +743,12 @@ describe("CommentOverlay", () => {
       replyEl
         .querySelector(`.${CLASSES.INBOX_MENU_ITEM}`)
         .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      expect(comment.replies.map((r) => r.id)).toContain(reply.id);
+      overlay.shadowRoot
+        .querySelector(`.${CLASSES.CONFIRM_ACCEPT}`)
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(comment.replies.map((r) => r.id)).not.toContain(reply.id);
       expect(

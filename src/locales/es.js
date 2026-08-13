@@ -38,6 +38,16 @@ export default {
   deleteComment: "Eliminar",
   deleteReply: "Eliminar respuesta",
   replyOptions: "Opciones de la respuesta",
+  confirmDelete: "Eliminar",
+  confirmCancel: "Cancelar",
+  confirmDeleteCommentTitle: "¿Eliminar comentario?",
+  confirmDeleteCommentMessage:
+    "Este comentario se eliminará de forma permanente. Esta acción no se puede deshacer.",
+  confirmDeleteThreadMessage:
+    "Este comentario y todas sus respuestas se eliminarán de forma permanente. Esta acción no se puede deshacer.",
+  confirmDeleteReplyTitle: "¿Eliminar respuesta?",
+  confirmDeleteReplyMessage:
+    "Esta respuesta se eliminará de forma permanente. Esta acción no se puede deshacer.",
   copyAgentContext: "Copiar contexto de agente",
   copied: "Copiado",
   statusLabel: "Estado",

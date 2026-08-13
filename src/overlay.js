@@ -41,6 +41,7 @@ import { createContextBlock } from "./context-block.js";
 import { createCommentActions, copyToClipboard } from "./comment-actions.js";
 import { buildAgentContext } from "./agent-context.js";
 import { closeOpenMenus } from "./menus.js";
+import { closeOpenConfirmDialogs } from "./confirm-dialog.js";
 
 // Tags are user-typed, so they arrive with stray case and whitespace.
 // Normalising here (rather than at each entry point) is what makes
@@ -1947,6 +1948,10 @@ class CommentOverlay {
     // would keep the menu registry's document listener alive until the next
     // stray mousedown.
     closeOpenMenus();
+    // Same reasoning: an unanswered confirmation holds a capture-phase
+    // keydown listener on document, which would go on eating Escape for the
+    // whole page after the widget is gone.
+    closeOpenConfirmDialogs();
     this.closeThreadPopover();
     this.closeInbox();
     this.closeLightbox();

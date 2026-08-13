@@ -1231,6 +1231,93 @@ ${webkitScrollbar(
         height: 100px;
     }
 
+    .${CLASSES.CONFIRM} {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        animation: helldots-fade-in 0.15s ease;
+    }
+
+    .${CLASSES.CONFIRM_PANEL} {
+        width: min(360px, 100%);
+        background: #1C1C1E;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 14px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        padding: 20px;
+        color: white;
+        font-size: 14px;
+        line-height: 1.5;
+        box-sizing: border-box;
+    }
+
+    /* :host { all: initial } does not reach descendants, so the heading and
+       paragraph still arrive with UA margins. */
+    .${CLASSES.CONFIRM_TITLE} {
+        margin: 0 0 8px;
+        font-size: 15px;
+        font-weight: 600;
+    }
+
+    .${CLASSES.CONFIRM_MESSAGE} {
+        margin: 0 0 20px;
+        font-size: 13px;
+        color: rgba(255,255,255,0.65);
+    }
+
+    .${CLASSES.CONFIRM_ACTIONS} {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    .${CLASSES.CONFIRM_CANCEL},
+    .${CLASSES.CONFIRM_ACCEPT} {
+        padding: 7px 14px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    /* The one place in the widget with visible focus rings. The dialog traps
+       Tab between exactly two buttons, one of them destructive, so a
+       keyboard user who cannot see which one is focused is being asked to
+       guess. Scoped here on purpose — see DECISIONS.md; it does not reopen
+       the rings that were reverted elsewhere for visual parity. */
+    .${CLASSES.CONFIRM_CANCEL}:focus-visible,
+    .${CLASSES.CONFIRM_ACCEPT}:focus-visible {
+        outline: 2px solid #2E90FA;
+        outline-offset: 2px;
+    }
+
+    .${CLASSES.CONFIRM_CANCEL} {
+        background: rgba(255,255,255,0.08);
+        border-color: rgba(255,255,255,0.12);
+        color: white;
+    }
+
+    .${CLASSES.CONFIRM_CANCEL}:hover {
+        background: rgba(255,255,255,0.14);
+    }
+
+    .${CLASSES.CONFIRM_ACCEPT} {
+        background: #FF453A;
+        color: white;
+    }
+
+    .${CLASSES.CONFIRM_ACCEPT}:hover {
+        background: #FF6961;
+    }
+
     .${CLASSES.LIGHTBOX} {
         position: fixed;
         top: 0;

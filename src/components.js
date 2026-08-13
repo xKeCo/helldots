@@ -535,6 +535,12 @@ export const createReplyElement = (
         {
           label: strings.deleteReply,
           onSelect: () => onDelete(reply, replyEl),
+          confirm: () => ({
+            title: strings.confirmDeleteReplyTitle,
+            message: strings.confirmDeleteReplyMessage,
+            confirmLabel: strings.confirmDelete,
+            cancelLabel: strings.confirmCancel,
+          }),
         },
       ],
     });
