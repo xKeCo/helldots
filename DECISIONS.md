@@ -914,3 +914,92 @@ into a host's shared back end.
 - **No data migration.** Rewriting stored ids would break any host that
   recorded them elsewhere — issue trackers, its own database — and buys
   nothing, since old and new ids coexist without ambiguity.
+
+## Copy link, and editing what was already said
+
+Two additions to the ⋯ menu, and the second one turned out to be mostly a
+question about where a half-typed sentence lives.
+
+### The link has no redirect hop
+
+Hosted tools hand you a link on their own domain that bounces to the app.
+That hop is not a feature — it is the cost of a back end that has to resolve
+which deployment a thread belongs to before it can send you anywhere. The
+page a HellDots comment lives on is recorded on the comment itself, so the
+link points straight at its destination: `<page>?helldotsComment=<id>`.
+
+- **The parameter stays in the URL after the comment opens.** Stripping it
+  with `replaceState` would leave a reader unable to reload or re-copy the
+  link they just followed.
+- **`linkParam` is configurable.** A host may already route on that name,
+  and colliding with it would break their app, not ours.
+- **One pending id, two sources, retried after every `loadComments()`.** The
+  URL and the existing cross-page `sessionStorage` handoff feed the same
+  slot. Resolving only at startup would have failed exactly the setup a
+  shared link is _for_: a host that fetches comments from its own back end
+  has not loaded them yet when the widget boots.
+- **An unresolved link opens the inbox and says so.** Clicking a link and
+  having nothing happen is indistinguishable from a broken widget. The notice
+  clears itself when the comment arrives.
+- **The link cannot cross browsers under `persistence: "localStorage"`.**
+  Accepted, and it is a property of having no server, not of this design:
+  there the comments only exist in one browser. Between tabs and reloads it
+  works; to share with another person the host must persist the comments
+  itself.
+
+### The draft is state, not DOM
+
+The inbox re-renders from ten call sites, and the overlay refreshes it from
+seven more. An editor that lived only in its textarea would be destroyed by
+any of them — changing a comment's priority mid-sentence would eat the
+sentence, silently, which is the exact failure the delete confirmation was
+added to prevent. So the panel owns `editing = { commentId, replyId, draft }`
+the same way it already owns `detailId`, and rebuilds the editor from it.
+
+- **One draft slot per panel.** That makes "open a second editor" just
+  another exit from the first, so it asks the same question the others do,
+  rather than being a special case bolted on.
+- **The popover mounts its editor into the DOM directly**, because it is
+  built once and never re-rendered. It still tracks the draft as state:
+  Escape, the close button and a click on the page all need to know whether
+  there is anything to lose.
+- **The draft does not survive closing the panel**, and does not travel
+  between the popover and the inbox. Persisting it further is scope this
+  does not need.
+
+### What asks, and the one thing that does not
+
+Cancel, Escape, opening another editor, the panel's ×, and the prev/next and
+Back navigation all ask before discarding — but only when the text actually
+changed. An untouched editor closes silently; a dialog nobody needs is how
+people learn to dismiss dialogs without reading them.
+
+**A click outside does not ask. It does not close the panel either.** This is
+the one place the rule bends, and it bends toward doing less. A stray click
+is an ambiguous gesture — the user may have gone to look at the very thing
+they are describing — and answering ambiguity with a modal interrupts them
+for something they did not ask for. Leaving the panel open loses nothing and
+asks nothing: strictly better than a dialog on both counts, in the one
+situation that occurs most often. The textarea still on screen communicates
+everything the dialog would have.
+
+It also happens to be cheaper — a synchronous guard rather than suspending a
+`mousedown` handler on a promise — but that is a consequence of the decision,
+not the reason for it.
+
+### Smaller calls
+
+- **`editedAt` is stamped and shown as a text "edited" mark**, with the exact
+  time on the same `data-full-date` hover the timestamp uses. Someone can
+  answer "the button is blue", watch that text get rewritten, and otherwise
+  have no way to know their reply is now arguing with a sentence that no
+  longer exists.
+- **A blank body is refused.** Blanking is not a back door to deletion — the
+  comment would keep its marker, its replies and its inbox row while saying
+  nothing. Deleting is its own action, and it asks first.
+- **Saving an unchanged body is a no-op**, so opening the editor and closing
+  it does not brand a comment as edited.
+- **The playground's import maps carry a `nanoid` entry.** It imports `src/`
+  through native ES modules, where a bare specifier does not resolve. All
+  three fixtures need it — `lighthouse.html` included, or the CI
+  accessibility gate would score a page with no widget on it.

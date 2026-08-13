@@ -22,6 +22,8 @@ import {
   createBadgeRow,
   getShortcutText,
 } from "./components.js";
+import { createInlineEditor, confirmDiscard } from "./inline-editor.js";
+import { buildCommentLink } from "./link.js";
 
 const CARET_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
 const CHEVRON_LEFT_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`;
@@ -36,8 +38,8 @@ export class InboxView {
    * @param {string} deps.locale
    * @param {string} deps.currentPage
    * @param {() => Array<Object>} deps.getComments
-   * @param {{ shortcutKey?: string, shortcutModifier?: string }} [deps.options]
-   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onDeleteReply: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function }} deps.callbacks
+   * @param {{ shortcutKey?: string, shortcutModifier?: string, linkParam?: string }} [deps.options]
+   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onDeleteReply: Function, onEditComment: Function, onEditReply: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function }} deps.callbacks
    */
   constructor({
     shadowRoot,
@@ -62,6 +64,19 @@ export class InboxView {
     this.typeFilter = "all"; // "all" | COMMENT_TYPES
     this.priorityFilter = "all"; // "all" | PRIORITIES
     this.detailId = null;
+    /**
+     * The one open editor, as state rather than DOM.
+     *
+     * This panel re-renders from ten places, and the overlay refreshes it
+     * from seven more. A draft living only in a textarea would be wiped by
+     * any of them — changing a comment's priority mid-sentence would eat the
+     * sentence. Keeping it here means every one of those rebuilds is
+     * harmless, and leaves only the deliberate exits to ask about.
+     * @type {{ commentId: any, replyId: any | null, draft: string } | null}
+     */
+    this.editing = null;
+    /** @type {string | null} */
+    this.notice = null;
     /** @type {HTMLElement | null} */
     this.el = null;
     /** @type {HTMLElement | null} */
@@ -90,10 +105,113 @@ export class InboxView {
     this.el?.remove();
     this.el = null;
     this.detailId = null;
+    // Every route to here already went through releaseEditor(), so anything
+    // still sitting in the draft has been answered for.
+    this.editing = null;
+    this.notice = null;
   }
 
   refresh() {
     if (this.el) this.render();
+  }
+
+  /**
+   * A line at the top of the list. Exists for one case: someone followed a
+   * "Copy link" URL to a comment this page cannot show them. It stays until
+   * the comment arrives (the overlay retries on every loadComments) or the
+   * user navigates away from it.
+   * @param {string} text
+   */
+  showNotice(text) {
+    this.notice = text;
+    this.refresh();
+  }
+
+  clearNotice() {
+    if (!this.notice) return;
+    this.notice = null;
+    this.refresh();
+  }
+
+  /** True while an editor holds text the user has not saved. */
+  isDirty() {
+    if (!this.editing) return false;
+    return this.editing.draft.trim() !== this._editingOriginalText().trim();
+  }
+
+  _editingOriginalText() {
+    if (!this.editing) return "";
+    const comment = this.getComments().find(
+      (c) => String(c.id) === String(this.editing.commentId)
+    );
+    if (!comment) return "";
+    if (this.editing.replyId == null) return comment.text || "";
+    const reply = (comment.replies || []).find(
+      (r) => String(r.id) === String(this.editing.replyId)
+    );
+    return reply?.text || "";
+  }
+
+  /**
+   * Every path that would take the editor off screen funnels through here,
+   * so the question is asked once and in one place instead of at each of the
+   * exits (Cancel, Escape, the ⋯ of another comment, the close button, the
+   * prev/next arrows, Back).
+   * @returns {Promise<boolean>} true when the caller may proceed
+   */
+  async releaseEditor() {
+    if (!this.editing) return true;
+    if (this.isDirty()) {
+      const host = /** @type {any} */ (this.el || this.shadowRoot);
+      if (!(await confirmDiscard(host, this.strings))) return false;
+    }
+    this.editing = null;
+    return true;
+  }
+
+  /**
+   * The handlers every editor in this panel shares. Split out because the
+   * comment body and a reply body are built by different components but must
+   * behave identically — a draft that saved from one place and discarded
+   * from the other would be two features wearing one look.
+   */
+  _editorHandlers() {
+    return {
+      draft: this.editing.draft,
+      onInput: (text) => {
+        this.editing.draft = text;
+      },
+      onSave: (text) => {
+        const { commentId, replyId } = this.editing;
+        if (replyId == null) this.callbacks.onEditComment(commentId, text);
+        else this.callbacks.onEditReply(commentId, replyId, text);
+        this.editing = null;
+        this.render();
+      },
+      onCancel: async () => {
+        if (await this.releaseEditor()) this.render();
+      },
+    };
+  }
+
+  _buildEditor() {
+    const handlers = this._editorHandlers();
+    return createInlineEditor({
+      value: handlers.draft,
+      strings: this.strings,
+      onInput: handlers.onInput,
+      onSave: handlers.onSave,
+      onCancel: handlers.onCancel,
+    });
+  }
+
+  /** Opens the editor on a comment body, or on one of its replies. */
+  async startEditing(commentId, replyId = null) {
+    if (!(await this.releaseEditor())) return;
+    this.detailId = commentId;
+    this.editing = { commentId, replyId, draft: "" };
+    this.editing.draft = this._editingOriginalText();
+    this.render();
   }
 
   /**
@@ -218,7 +336,13 @@ export class InboxView {
     btn.className = CLASSES.INBOX_CLOSE;
     btn.setAttribute("aria-label", this.strings.close);
     btn.innerHTML = "&times;";
-    btn.addEventListener("click", () => this.callbacks.onClose());
+    // `this.editing &&` short-circuits before the await, so with no editor
+    // open this handler stays synchronous — closing the panel must not
+    // become a microtask later just because editing exists as a feature.
+    btn.addEventListener("click", async () => {
+      if (this.editing && !(await this.releaseEditor())) return;
+      this.callbacks.onClose();
+    });
     return btn;
   }
 
@@ -232,6 +356,14 @@ export class InboxView {
     const list = document.createElement("div");
     list.className = CLASSES.INBOX_LIST;
     this.el.appendChild(list);
+
+    if (this.notice) {
+      const notice = document.createElement("div");
+      notice.className = CLASSES.INBOX_NOTICE;
+      notice.setAttribute("role", "status");
+      notice.textContent = this.notice;
+      list.appendChild(notice);
+    }
 
     if (comments.length === 0) {
       list.appendChild(this._buildEmptyState());
@@ -508,7 +640,8 @@ export class InboxView {
         comment.author,
         comment.createdAt,
         this.strings,
-        this.locale
+        this.locale,
+        comment.editedAt
       )
     );
     card.appendChild(header);
@@ -518,10 +651,23 @@ export class InboxView {
     actionsRow.appendChild(this._buildCardActions(comment));
     card.appendChild(actionsRow);
 
-    const text = document.createElement("div");
-    text.className = CLASSES.INBOX_CARD_TEXT;
-    text.textContent = comment.text;
-    card.appendChild(text);
+    // The editor only ever replaces the body in the detail view. On a list
+    // card it would sit inside a control that navigates on click, so the ⋯
+    // there routes through startEditing(), which opens the detail first.
+    const editingThis =
+      !interactive &&
+      this.editing &&
+      this.editing.replyId == null &&
+      String(this.editing.commentId) === String(comment.id);
+
+    if (editingThis) {
+      card.appendChild(this._buildEditor());
+    } else {
+      const text = document.createElement("div");
+      text.className = CLASSES.INBOX_CARD_TEXT;
+      text.textContent = comment.text;
+      card.appendChild(text);
+    }
 
     if (comment.screenshots?.length) {
       const shots = createScreenshotsDisplay(comment.screenshots, this.strings);
@@ -610,6 +756,12 @@ export class InboxView {
             strings: this.strings,
           })
         ),
+      onCopyLink: (c) =>
+        copyToClipboard(buildCommentLink(c, this.options.linkParam)),
+      // From a list card this opens the detail with the editor already up:
+      // a textarea inside a card that navigates on click, and highlights a
+      // marker on hover, would be fighting three behaviours at once.
+      onEdit: (c) => this.startEditing(c.id),
       onSetStatus: (c, status) => this.callbacks.onSetStatus(c.id, status),
       onSetType: (c, type) => this.callbacks.onSetType(c.id, type),
       onSetPriority: (c, priority) =>
@@ -632,7 +784,8 @@ export class InboxView {
     backBtn.type = "button";
     backBtn.className = CLASSES.INBOX_BACK;
     backBtn.innerHTML = `${CHEVRON_LEFT_SVG}<span>${this.strings.back}</span>`;
-    backBtn.addEventListener("click", () => {
+    backBtn.addEventListener("click", async () => {
+      if (this.editing && !(await this.releaseEditor())) return;
       this.detailId = null;
       this.render();
     });
@@ -651,7 +804,13 @@ export class InboxView {
       const target = comments[targetIndex];
       btn.disabled = !target;
       if (target) {
-        btn.addEventListener("click", () => this._openDetail(target));
+        // Navigating to another comment takes the edited text off screen. A
+        // draft that survived that invisibly and reappeared later would be
+        // worse than being asked about it here.
+        btn.addEventListener("click", async () => {
+          if (this.editing && !(await this.releaseEditor())) return;
+          this._openDetail(target);
+        });
       }
       return btn;
     };
@@ -681,6 +840,11 @@ export class InboxView {
     const replies = document.createElement("div");
     replies.className = CLASSES.INBOX_REPLIES;
     for (const reply of comment.replies || []) {
+      const editingThisReply =
+        this.editing &&
+        String(this.editing.commentId) === String(comment.id) &&
+        String(this.editing.replyId) === String(reply.id);
+
       const replyEl = createReplyElement(reply, this.strings, this.locale, {
         // Drops the row instead of re-rendering the detail: a full render
         // would also throw away whatever the user has half-typed in the
@@ -688,6 +852,8 @@ export class InboxView {
         onDelete: (r, el) => {
           if (this.callbacks.onDeleteReply(comment.id, r.id)) el.remove();
         },
+        onEdit: (r) => this.startEditing(comment.id, r.id),
+        editing: editingThisReply ? this._editorHandlers() : null,
       });
       replyEl
         .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)

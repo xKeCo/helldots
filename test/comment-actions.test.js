@@ -31,6 +31,16 @@ const mount = (comment, deps = {}) => {
 const click = (el) =>
   el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
+// By label, not by position: the ⋯ carries Copy link, Edit and Delete, and
+// a test that reaches for "the first item" silently starts asserting about
+// a different action the next time one is added.
+const menuItem = (root, label) =>
+  [
+    ...root.querySelectorAll(
+      `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
+    ),
+  ].find((el) => el.textContent === label);
+
 // The menu item's handler awaits the dialog, so the answer lands a microtask
 // before onSelect runs. Every helper below yields once for that.
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -132,9 +142,7 @@ describe("createCommentActions", () => {
     const el = mount(comment, { onDelete });
 
     click(el.querySelector('[data-action="menu"]'));
-    click(
-      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
-    );
+    click(menuItem(el, en.deleteComment));
 
     expect(onDelete).not.toHaveBeenCalled();
     expect(document.querySelector(`.${CLASSES.CONFIRM}`)).toBeTruthy();
@@ -149,9 +157,7 @@ describe("createCommentActions", () => {
     const el = mount(makeComment(), { onDelete });
 
     click(el.querySelector('[data-action="menu"]'));
-    click(
-      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
-    );
+    click(menuItem(el, en.deleteComment));
     await dismiss();
 
     expect(onDelete).not.toHaveBeenCalled();
@@ -165,9 +171,7 @@ describe("createCommentActions", () => {
     const el = mount(makeComment(), { onDelete });
 
     click(el.querySelector('[data-action="menu"]'));
-    click(
-      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
-    );
+    click(menuItem(el, en.deleteComment));
     document.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
     );
@@ -182,9 +186,7 @@ describe("createCommentActions", () => {
   it("warns that the replies go too when the comment has any", () => {
     const el = mount(makeComment({ replies: [{ id: 2, text: "hi" }] }));
     click(el.querySelector('[data-action="menu"]'));
-    click(
-      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
-    );
+    click(menuItem(el, en.deleteComment));
 
     expect(
       document.querySelector(`.${CLASSES.CONFIRM_MESSAGE}`).textContent
@@ -199,9 +201,7 @@ describe("createCommentActions", () => {
     comment.replies.push({ id: 2, text: "arrived later" });
 
     click(el.querySelector('[data-action="menu"]'));
-    click(
-      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
-    );
+    click(menuItem(el, en.deleteComment));
 
     expect(
       document.querySelector(`.${CLASSES.CONFIRM_MESSAGE}`).textContent
@@ -211,9 +211,7 @@ describe("createCommentActions", () => {
   it("does not mention replies for a comment without any", () => {
     const el = mount(makeComment());
     click(el.querySelector('[data-action="menu"]'));
-    click(
-      el.querySelector(`.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`)
-    );
+    click(menuItem(el, en.deleteComment));
 
     expect(
       document.querySelector(`.${CLASSES.CONFIRM_MESSAGE}`).textContent

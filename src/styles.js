@@ -374,7 +374,8 @@ ${webkitScrollbar(
   `.${CLASSES.THREAD_SCROLL}`,
   `.${CLASSES.TOOLTIP}`,
   `.${CLASSES.INBOX_LIST}`,
-  `.${CLASSES.INBOX_DETAIL}`
+  `.${CLASSES.INBOX_DETAIL}`,
+  `.${CLASSES.EDITOR_INPUT}`
 )}
     .${CLASSES.INBOX_PANEL} {
         position: fixed;
@@ -1365,6 +1366,125 @@ ${webkitScrollbar(
     .${CLASSES.LIGHTBOX_CLOSE}:hover {
         background: rgba(255,255,255,0.3);
     }
+    /* --- inline editor --- */
+
+    .${CLASSES.EDITOR} {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 4px 0 2px;
+    }
+
+    .${CLASSES.EDITOR_INPUT} {
+        width: 100%;
+        box-sizing: border-box;
+        resize: vertical;
+        min-height: 60px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.14);
+        border-radius: 8px;
+        padding: 8px 10px;
+        color: white;
+        font-size: 14px;
+        font-family: inherit;
+        line-height: 1.45;
+        outline: none;${SCROLLBAR}
+    }
+
+    .${CLASSES.EDITOR_INPUT}:focus {
+        border-color: rgba(46,144,250,0.7);
+    }
+
+    .${CLASSES.EDITOR_ACTIONS} {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    .${CLASSES.EDITOR_CANCEL},
+    .${CLASSES.EDITOR_SAVE} {
+        padding: 5px 12px;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+    }
+
+    .${CLASSES.EDITOR_CANCEL} {
+        background: rgba(255,255,255,0.08);
+        border-color: rgba(255,255,255,0.12);
+        color: white;
+    }
+
+    .${CLASSES.EDITOR_CANCEL}:hover {
+        background: rgba(255,255,255,0.14);
+    }
+
+    .${CLASSES.EDITOR_SAVE} {
+        background: #2E90FA;
+        color: white;
+    }
+
+    .${CLASSES.EDITOR_SAVE}:hover:not(:disabled) {
+        background: #57A6FB;
+    }
+
+    /* Blanking a body is not a way to delete — the comment would keep its
+       marker, its replies and its inbox row while saying nothing. The
+       disabled state is carried by more than colour: the cursor changes and
+       the control stops responding (WCAG 1.4.1). */
+    .${CLASSES.EDITOR_SAVE}:disabled {
+        background: rgba(255,255,255,0.10);
+        color: rgba(255,255,255,0.4);
+        cursor: not-allowed;
+    }
+
+    .${CLASSES.THREAD_EDITED} {
+        font-size: 12px;
+        color: rgba(255,255,255,0.4);
+        cursor: default;
+        position: relative;
+        flex: none;
+    }
+
+    .${CLASSES.THREAD_EDITED}::before {
+        content: "·";
+        margin-right: 4px;
+    }
+
+    .${CLASSES.THREAD_EDITED}::after {
+        content: attr(data-full-date);
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: #000;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+    }
+
+    .${CLASSES.THREAD_EDITED}:hover::after {
+        opacity: 1;
+    }
+
+    .${CLASSES.INBOX_NOTICE} {
+        margin: 0 0 10px;
+        padding: 9px 11px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.12);
+        color: rgba(255,255,255,0.75);
+        font-size: 13px;
+        line-height: 1.4;
+    }
 `;
 
 /**
@@ -1379,4 +1499,5 @@ export const getGlobalStyles = () => `
     .${CLASSES.COMMENT_CURSOR} * {
         cursor: url('${CURSOR_SVG}') ${CURSOR_HOTSPOT}, auto !important;
     }
+
 `;

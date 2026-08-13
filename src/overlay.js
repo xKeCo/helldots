@@ -30,13 +30,20 @@ import {
 } from "./storage.js";
 import { createId } from "./id.js";
 import {
+  buildCommentLink,
+  readCommentLinkParam,
+  DEFAULT_LINK_PARAM,
+} from "./link.js";
+import {
   createToolbar,
   createCommentBox,
   createCommentCircle,
   createTooltip,
   createThreadPopover,
   createReplyElement,
+  createEditedMark,
 } from "./components.js";
+import { createInlineEditor, confirmDiscard } from "./inline-editor.js";
 import { InboxView } from "./inbox.js";
 import { createContextBlock } from "./context-block.js";
 import { createCommentActions, copyToClipboard } from "./comment-actions.js";
@@ -82,6 +89,21 @@ class CommentOverlay {
     // rAF scheduling flag for bulk updates
     this._pendingRaf = null;
     this._pendingContextScreenshot = null;
+
+    /**
+     * The popover's open editor. Tracked as state even though the popover
+     * mounts it straight into the DOM (it is built once and never
+     * re-rendered): Escape, the close button and a click on the page all
+     * need to know whether there is unsaved text before they act.
+     * @type {{ commentId: any, replyId: any | null, draft: string } | null}
+     */
+    this._popoverEditing = null;
+    /**
+     * A comment someone asked to open — from a "Copy link" URL or the
+     * cross-page handoff — that has not been found yet.
+     * @type {string | null}
+     */
+    this._pendingDetailId = null;
 
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => this.initOverlay());
@@ -131,31 +153,248 @@ class CommentOverlay {
     this.setupResizeHandlers();
     this.injectStyles();
 
+    this._pendingDetailId = this._readPendingDetailId();
+
     if (this.options.persistence === "localStorage") {
       this.loadComments(readStoredComments());
-      this._openPendingDetail();
     }
+    // Also outside localStorage mode: a host that persists comments itself
+    // still deserves to have the link honoured, and until its loadComments()
+    // arrives the inbox is what tells the user the link was understood.
+    this._openPendingDetail();
   }
 
   _navigateTo(url) {
     location.assign(url);
   }
 
-  // Cross-page handoff: an inactive card click on the previous page left a
-  // comment id in sessionStorage; open the inbox on its detail here.
-  _openPendingDetail() {
-    let id = null;
+  /**
+   * Where a request to open one comment can come from. Two sources, one
+   * slot: an inactive card clicked on the previous page (sessionStorage), or
+   * a "Copy link" URL someone was sent. The URL wins when both are present —
+   * it is the one the user acted on just now.
+   * @returns {string | null}
+   */
+  _readPendingDetailId() {
+    const fromLink = readCommentLinkParam(this._linkParam());
+    let fromHandoff = null;
     try {
-      id = sessionStorage.getItem(PENDING_DETAIL_KEY);
-      if (id != null) sessionStorage.removeItem(PENDING_DETAIL_KEY);
+      fromHandoff = sessionStorage.getItem(PENDING_DETAIL_KEY);
+      // One-shot: read it and it is spent, whether or not it resolves.
+      if (fromHandoff != null) sessionStorage.removeItem(PENDING_DETAIL_KEY);
     } catch {
+      // A blocked sessionStorage only costs the handoff, not the link.
+    }
+    return fromLink ?? fromHandoff;
+  }
+
+  _linkParam() {
+    return this.options.linkParam || DEFAULT_LINK_PARAM;
+  }
+
+  /**
+   * Opens the inbox on the pending comment, if there is one.
+   *
+   * Deliberately does NOT give up when the id fails to resolve: a host that
+   * fetches its comments from its own back end has not called loadComments()
+   * yet at startup, and that is precisely the setup where a link is worth
+   * sending to another person. The id is kept and this runs again after
+   * every load, so the inbox switches from "not on this page" to the comment
+   * the moment the data lands.
+   */
+  _openPendingDetail() {
+    const id = this._pendingDetailId;
+    if (!id) return;
+
+    const comment = this.comments.find((c) => String(c.id) === String(id));
+    if (!comment) {
+      // Opening the inbox anyway is the point: clicking a link and having
+      // nothing at all happen is indistinguishable from a broken widget.
+      this.showInbox();
+      this.inboxView?.showNotice(this.strings.commentNotFound);
       return;
     }
-    if (!id) return;
-    const comment = this.comments.find((c) => String(c.id) === id);
-    if (!comment) return;
+
+    this._pendingDetailId = null;
     this.showInbox();
+    this.inboxView.clearNotice();
     this.inboxView.openDetail(comment.id);
+  }
+
+  /**
+   * The body element of the root comment, or of one reply, inside the open
+   * popover. Returns whatever is currently there — the text node or the
+   * editor that replaced it.
+   */
+  _popoverBodyEl(replyId = null) {
+    const popover = this.activeThreadPopover;
+    if (!popover) return null;
+    if (replyId == null) {
+      return popover.querySelector(
+        `.${CLASSES.THREAD_SCROLL} > .${CLASSES.THREAD_BODY}, .${CLASSES.THREAD_SCROLL} > .${CLASSES.EDITOR}`
+      );
+    }
+    const row = popover.querySelector(
+      `.${CLASSES.THREAD_REPLY}[data-reply-id="${replyId}"]`
+    );
+    return (
+      row?.querySelector(`.${CLASSES.THREAD_BODY}, .${CLASSES.EDITOR}`) || null
+    );
+  }
+
+  /**
+   * Puts the edited text back on screen where the panels do not rebuild
+   * themselves: the open thread quotes the text that just changed, and the
+   * hover tooltip is thrown away on mouseleave so it needs nothing.
+   */
+  _refreshCommentViews(id, replyId = null) {
+    if (this.activeThreadPopover?.dataset.for !== String(id)) return;
+    const comment = this.comments.find((c) => String(c.id) === String(id));
+    if (!comment) return;
+
+    const source =
+      replyId == null
+        ? comment
+        : (comment.replies || []).find((r) => String(r.id) === String(replyId));
+    if (!source) return;
+
+    const body = document.createElement("div");
+    body.className = CLASSES.THREAD_BODY;
+    body.textContent = source.text;
+    this._popoverBodyEl(replyId)?.replaceWith(body);
+
+    // The "edited" mark belongs to the same meta line the author and time
+    // are on, and it is absent until the first edit.
+    const meta =
+      replyId == null
+        ? this.activeThreadPopover.querySelector(`.${CLASSES.THREAD_META}`)
+        : this.activeThreadPopover
+            .querySelector(
+              `.${CLASSES.THREAD_REPLY}[data-reply-id="${replyId}"]`
+            )
+            ?.querySelector(`.${CLASSES.THREAD_META}`);
+    if (
+      meta &&
+      source.editedAt &&
+      !meta.querySelector(`.${CLASSES.THREAD_EDITED}`)
+    ) {
+      const editedEl = createEditedMark(
+        source.editedAt,
+        this.strings,
+        this.locale
+      );
+      // Before the ⋯, which `margin-left: auto` has pushed to the far right.
+      const actions = meta.querySelector(`.${CLASSES.THREAD_REPLY_ACTIONS}`);
+      if (actions) meta.insertBefore(editedEl, actions);
+      else meta.appendChild(editedEl);
+    }
+  }
+
+  /** True while the popover holds an editor with unsaved text. */
+  _popoverEditorDirty() {
+    if (!this._popoverEditing) return false;
+    const { commentId, replyId, draft } = this._popoverEditing;
+    const comment = this.comments.find(
+      (c) => String(c.id) === String(commentId)
+    );
+    const source =
+      replyId == null
+        ? comment
+        : (comment?.replies || []).find(
+            (r) => String(r.id) === String(replyId)
+          );
+    return draft.trim() !== String(source?.text || "").trim();
+  }
+
+  /**
+   * Single gate in front of everything that would take the popover's editor
+   * off screen. Mirrors InboxView.releaseEditor so the two panels answer the
+   * same question the same way.
+   * @returns {Promise<boolean>} true when the caller may proceed
+   */
+  async _releasePopoverEditor() {
+    if (!this._popoverEditing) return true;
+    if (this._popoverEditorDirty()) {
+      const host = /** @type {any} */ (this.shadowRoot);
+      if (!(await confirmDiscard(host, this.strings))) return false;
+    }
+    const { replyId } = this._popoverEditing;
+    this._popoverEditing = null;
+    this._restorePopoverBody(replyId);
+    return true;
+  }
+
+  _restorePopoverBody(replyId) {
+    const comment = this.comments.find(
+      (c) => String(c.id) === String(this.activeThreadPopover?.dataset.for)
+    );
+    if (!comment) return;
+    const source =
+      replyId == null
+        ? comment
+        : (comment.replies || []).find((r) => String(r.id) === String(replyId));
+    if (!source) return;
+
+    const body = document.createElement("div");
+    body.className = CLASSES.THREAD_BODY;
+    body.textContent = source.text;
+    this._popoverBodyEl(replyId)?.replaceWith(body);
+  }
+
+  /**
+   * Opens the editor inside the popover. Unlike the inbox this mounts into
+   * the DOM directly: the popover is built once and never re-rendered, so
+   * there is nothing to survive. The draft is still tracked as state, because
+   * Escape, the close button and a click outside all have to know whether
+   * there is anything to lose.
+   */
+  async _startPopoverEditing(commentId, replyId = null) {
+    if (!(await this._releasePopoverEditor())) return;
+
+    const comment = this.comments.find(
+      (c) => String(c.id) === String(commentId)
+    );
+    const source =
+      replyId == null
+        ? comment
+        : (comment?.replies || []).find(
+            (r) => String(r.id) === String(replyId)
+          );
+    if (!source) return;
+
+    this._popoverEditing = { commentId, replyId, draft: source.text };
+
+    const editor = createInlineEditor({
+      value: source.text,
+      strings: this.strings,
+      onInput: (text) => {
+        this._popoverEditing.draft = text;
+      },
+      onSave: (text) => {
+        const saved =
+          replyId == null
+            ? this.editComment(commentId, text)
+            : this.editReply(commentId, replyId, text);
+        this._popoverEditing = null;
+        if (saved) {
+          this._refreshCommentViews(commentId, replyId);
+          if (this.inboxView?.isOpen()) this.inboxView.refresh();
+        } else {
+          this._restorePopoverBody(replyId);
+        }
+      },
+      onCancel: () => {
+        this._releasePopoverEditor();
+      },
+    });
+
+    this._popoverBodyEl(replyId)?.replaceWith(editor);
+  }
+
+  /** The shareable URL for a comment, as "Copy link" builds it. */
+  commentLink(id) {
+    const comment = this.comments.find((c) => String(c.id) === String(id));
+    return comment ? buildCommentLink(comment, this._linkParam()) : null;
   }
 
   _syncStorage() {
@@ -216,9 +455,20 @@ class CommentOverlay {
         if (this._activeLightbox) {
           this.closeLightbox();
         } else if (this.activeThreadPopover) {
-          this.closeThreadPopover();
+          // An open editor answers Escape first, and closes only itself. The
+          // editor's own textarea stops the event before it reaches here, so
+          // this branch is for an Escape pressed with focus somewhere else in
+          // the popover — which must not take the panel down either.
+          if (this._popoverEditing) this._releasePopoverEditor();
+          else this.closeThreadPopover();
         } else if (this.inboxView?.isOpen()) {
-          this.closeInbox();
+          if (this.inboxView.editing) {
+            this.inboxView
+              .releaseEditor()
+              .then((released) => released && this.inboxView?.refresh());
+          } else {
+            this.closeInbox();
+          }
         } else if (this.commentBox.style.display !== "none") {
           this.hideCommentBox();
           this.toggleCommentMode();
@@ -718,6 +968,16 @@ class CommentOverlay {
           onDelete: (id) => this.deleteComment(id),
           onDeleteReply: (commentId, replyId) =>
             this.deleteReply(commentId, replyId),
+          onEditComment: (id, text) => {
+            if (!this.editComment(id, text)) return;
+            // The marker's hover tooltip and the open thread both quote the
+            // text that just changed, and neither rebuilds on its own.
+            this._refreshCommentViews(id);
+          },
+          onEditReply: (commentId, replyId, text) => {
+            if (!this.editReply(commentId, replyId, text)) return;
+            this._refreshCommentViews(commentId);
+          },
           onSetStatus: (id, status) => this.setCommentStatus(id, status),
           onSetType: (id, type) => this.setCommentType(id, type),
           onSetPriority: (id, priority) =>
@@ -743,6 +1003,9 @@ class CommentOverlay {
           !this.inboxBtn.contains(target) &&
           !this._isInsideLightbox(target)
         ) {
+          // Same reasoning as the thread popover: an unsaved draft turns a
+          // click outside into "stay open", not into a question.
+          if (this.inboxView.isDirty()) return;
           this.closeInbox();
         }
       };
@@ -785,6 +1048,7 @@ class CommentOverlay {
 
     const popover = createThreadPopover(comment, this.strings, this.locale, {
       onDeleteReply,
+      onEditReply: (reply) => this._startPopoverEditing(comment.id, reply.id),
     });
     this.shadowRoot.appendChild(popover);
 
@@ -801,6 +1065,9 @@ class CommentOverlay {
             strings: this.strings,
           })
         ),
+      onCopyLink: (c) =>
+        copyToClipboard(buildCommentLink(c, this._linkParam())),
+      onEdit: (c) => this._startPopoverEditing(c.id),
       onSetStatus: (c, status) => this.setCommentStatus(c.id, status),
       onSetType: (c, type) => this.setCommentType(c.id, type),
       onSetPriority: (c, priority) => this.setCommentPriority(c.id, priority),
@@ -857,8 +1124,14 @@ class CommentOverlay {
 
     popover
       .querySelector(`.${CLASSES.CLOSE_TOOLTIP}`)
-      .addEventListener("click", (e) => {
+      .addEventListener("click", async (e) => {
         e.stopPropagation();
+        // Unlike a click on the page, pressing × is an unambiguous request
+        // to close, so an unsaved draft is worth one question. The guard
+        // short-circuits before the await, keeping the no-editor path
+        // synchronous.
+        if (this._popoverEditing && !(await this._releasePopoverEditor()))
+          return;
         this.closeThreadPopover();
       });
 
@@ -1001,6 +1274,13 @@ class CommentOverlay {
           !circle?.contains(target) &&
           !this._isInsideLightbox(target)
         ) {
+          // A click on the page while text is unsaved is an ambiguous
+          // gesture — maybe the user went to look at the thing they are
+          // describing. Answering it with a modal would interrupt them, and
+          // interrupting often teaches people to dismiss without reading. So
+          // the panel simply stays put; the textarea still on screen says
+          // everything the dialog would have.
+          if (this._popoverEditorDirty()) return;
           this.closeThreadPopover();
         }
       };
@@ -1020,6 +1300,9 @@ class CommentOverlay {
       );
     this._popoverResizeObserver?.disconnect();
     this._popoverResizeObserver = null;
+    // Every route here has already answered for the draft, and the DOM it
+    // lived in is about to go.
+    this._popoverEditing = null;
     if (this.activeThreadPopover) {
       this.activeThreadPopover.remove();
       this.activeThreadPopover = null;
@@ -1077,6 +1360,7 @@ class CommentOverlay {
     if (!comment.replies) comment.replies = [];
     const reply = {
       id: createId(),
+      editedAt: null,
       text,
       author: this.options.user?.name || this.strings.anonymous,
       timestamp: new Date().toISOString(),
@@ -1114,8 +1398,68 @@ class CommentOverlay {
     return true;
   }
 
-  _serializeReply({ id, text, author, timestamp, screenshots }) {
-    return { id, text, author, timestamp, screenshots: screenshots || [] };
+  /**
+   * Rewrites a comment's text and stamps `editedAt`.
+   *
+   * Refuses an empty body: a comment with no text keeps its marker, its
+   * replies and its inbox row while saying nothing, so blanking is not a
+   * back door to deletion — deleting is its own action and it asks first.
+   * Refuses a no-op too, so opening the editor and saving without typing
+   * does not brand the comment as edited.
+   *
+   * @param {import('./index.d.ts').CommentId} id
+   * @param {string} text
+   * @returns {boolean} false when the id does not resolve, or nothing changed
+   */
+  editComment(id, text) {
+    const comment = this.comments.find((c) => String(c.id) === String(id));
+    const next = String(text ?? "").trim();
+    if (!comment || !next || next === comment.text) return false;
+
+    comment.text = next;
+    comment.editedAt = new Date().toISOString();
+    this._syncStorage();
+    this.options.onCommentEdited?.(this._serializeComment(comment));
+    return true;
+  }
+
+  /**
+   * Same contract as editComment, one level down.
+   *
+   * @param {import('./index.d.ts').CommentId} commentId
+   * @param {import('./index.d.ts').CommentId} replyId
+   * @param {string} text
+   * @returns {boolean} false when either id does not resolve, or nothing changed
+   */
+  editReply(commentId, replyId, text) {
+    const comment = this.comments.find(
+      (c) => String(c.id) === String(commentId)
+    );
+    const reply = comment?.replies?.find(
+      (r) => String(r.id) === String(replyId)
+    );
+    const next = String(text ?? "").trim();
+    if (!reply || !next || next === reply.text) return false;
+
+    reply.text = next;
+    reply.editedAt = new Date().toISOString();
+    this._syncStorage();
+    this.options.onReplyEdited?.(
+      this._serializeComment(comment),
+      this._serializeReply(reply)
+    );
+    return true;
+  }
+
+  _serializeReply({ id, text, author, timestamp, screenshots, editedAt }) {
+    return {
+      id,
+      text,
+      author,
+      timestamp,
+      screenshots: screenshots || [],
+      editedAt: editedAt || null,
+    };
   }
 
   /**
@@ -1127,6 +1471,7 @@ class CommentOverlay {
     return {
       id: comment.id,
       text: comment.text,
+      editedAt: comment.editedAt || null,
       anchor: comment.anchor || null,
       page: comment.page || location.pathname,
       replies: (comment.replies || []).map((reply) =>
@@ -1304,6 +1649,7 @@ class CommentOverlay {
       const comment = {
         id: item.id,
         text: item.text,
+        editedAt: item.editedAt || null,
         anchor: item.anchor || null,
         anchorState: "orphaned",
         target: null,
@@ -1360,6 +1706,10 @@ class CommentOverlay {
         this.options.onAnchorLost?.(this._serializeComment(comment));
       }
     }
+
+    // A link the host's data had not arrived for yet may be waiting on
+    // exactly the comments that just landed.
+    this._openPendingDetail();
 
     return { anchored, orphaned, inactive };
   }

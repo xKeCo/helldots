@@ -16,6 +16,7 @@ import {
   typeLabelOf,
   priorityLabelOf,
 } from "./comment-actions.js";
+import { createInlineEditor } from "./inline-editor.js";
 
 const formatRelativeTime = (date, strings) => {
   const diff = Date.now() - new Date(date).getTime();
@@ -38,7 +39,13 @@ const formatFullDate = (date, locale) => {
   }).format(new Date(date));
 };
 
-export const createMetaElement = (author, createdAt, strings, locale) => {
+export const createMetaElement = (
+  author,
+  createdAt,
+  strings,
+  locale,
+  editedAt = null
+) => {
   const meta = document.createElement("div");
   meta.className = CLASSES.THREAD_META;
 
@@ -54,7 +61,35 @@ export const createMetaElement = (author, createdAt, strings, locale) => {
   meta.appendChild(authorEl);
   meta.appendChild(timeEl);
 
+  if (editedAt) meta.appendChild(createEditedMark(editedAt, strings, locale));
+
   return meta;
+};
+
+/**
+ * The "edited" mark for a meta line.
+ *
+ * Someone can answer "the button is blue", watch the text they answered get
+ * rewritten, and have no way to know it happened — their reply is left
+ * arguing with a sentence that no longer exists. Text rather than a colour,
+ * so it holds up under WCAG 1.4.1 like every other badge here, and the exact
+ * time hangs off the same `data-full-date` hover the timestamp uses.
+ *
+ * Exported because the open thread popover is mutated in place rather than
+ * re-rendered, so the overlay has to build this same mark after a save.
+ *
+ * @param {string} editedAt
+ * @param {object} strings
+ * @param {string} [locale]
+ * @returns {HTMLElement}
+ */
+export const createEditedMark = (editedAt, strings, locale) => {
+  const editedEl = document.createElement("span");
+  editedEl.className = CLASSES.THREAD_EDITED;
+  editedEl.textContent = strings.editedMark;
+  editedEl.dataset.fullDate =
+    strings.editedAtPrefix + formatFullDate(editedAt, locale);
+  return editedEl;
 };
 
 /**
@@ -456,7 +491,8 @@ export const createTooltip = (comment, strings = defaultStrings, locale) => {
     comment.author,
     comment.createdAt,
     strings,
-    locale
+    locale,
+    comment.editedAt
   );
   const closeButton = document.createElement("button");
   closeButton.type = "button";
@@ -501,56 +537,85 @@ export const createTooltip = (comment, strings = defaultStrings, locale) => {
 };
 
 /**
- * One reply inside a thread. `onDelete` is optional so read-only renderings
- * (and any host that never wires deletion) keep the plain row: the ⋯ menu is
- * only built when there is something for it to do.
+ * One reply inside a thread. `onDelete` and `onEdit` are optional so
+ * read-only renderings (and any host that never wires them) keep the plain
+ * row: the ⋯ menu is only built when there is something for it to do.
+ *
+ * `editing`, when present, replaces the body with the inline editor. The
+ * draft it renders belongs to the caller — see `inline-editor.js` for why.
  *
  * @param {any} reply
  * @param {object} [strings]
  * @param {string} [locale]
- * @param {{ onDelete?: (reply: any, replyEl: HTMLElement) => void }} [handlers]
+ * @param {{
+ *   onDelete?: (reply: any, replyEl: HTMLElement) => void,
+ *   onEdit?: (reply: any) => void,
+ *   editing?: {
+ *     draft: string,
+ *     onInput: (text: string) => void,
+ *     onSave: (text: string) => void,
+ *     onCancel: () => void,
+ *   } | null,
+ * }} [handlers]
  */
 export const createReplyElement = (
   reply,
   strings = defaultStrings,
   locale,
-  { onDelete } = {}
+  { onDelete, onEdit, editing = null } = {}
 ) => {
   const replyEl = document.createElement("div");
   replyEl.className = CLASSES.THREAD_REPLY;
+  // The popover is built once and mutated in place, so anything that has to
+  // find one reply again later — the editor, a text refresh — needs a handle.
+  replyEl.dataset.replyId = String(reply.id);
 
   const meta = createMetaElement(
     reply.author,
     reply.timestamp,
     strings,
-    locale
+    locale,
+    reply.editedAt
   );
 
-  // Same ⋯ builder the comment strip uses, so a reply is deleted through the
-  // control the user already learned one level up.
+  // Same ⋯ builder the comment strip uses, so a reply is edited and deleted
+  // through the control the user already learned one level up.
+  const items = [];
+  if (onEdit) {
+    items.push({ label: strings.editReply, onSelect: () => onEdit(reply) });
+  }
   if (onDelete) {
-    const actions = createMoreMenu({
-      label: strings.replyOptions,
-      items: [
-        {
-          label: strings.deleteReply,
-          onSelect: () => onDelete(reply, replyEl),
-          confirm: () => ({
-            title: strings.confirmDeleteReplyTitle,
-            message: strings.confirmDeleteReplyMessage,
-            confirmLabel: strings.confirmDelete,
-            cancelLabel: strings.confirmCancel,
-          }),
-        },
-      ],
+    items.push({
+      label: strings.deleteReply,
+      onSelect: () => onDelete(reply, replyEl),
+      confirm: () => ({
+        title: strings.confirmDeleteReplyTitle,
+        message: strings.confirmDeleteReplyMessage,
+        confirmLabel: strings.confirmDelete,
+        cancelLabel: strings.confirmCancel,
+      }),
     });
+  }
+  if (items.length > 0) {
+    const actions = createMoreMenu({ label: strings.replyOptions, items });
     actions.classList.add(CLASSES.THREAD_REPLY_ACTIONS);
     meta.appendChild(actions);
   }
 
-  const text = document.createElement("div");
-  text.className = CLASSES.THREAD_BODY;
-  text.textContent = reply.text;
+  let text;
+  if (editing) {
+    text = createInlineEditor({
+      value: editing.draft,
+      strings,
+      onInput: editing.onInput,
+      onSave: editing.onSave,
+      onCancel: editing.onCancel,
+    });
+  } else {
+    text = document.createElement("div");
+    text.className = CLASSES.THREAD_BODY;
+    text.textContent = reply.text;
+  }
 
   replyEl.appendChild(meta);
   replyEl.appendChild(text);
@@ -566,13 +631,16 @@ export const createReplyElement = (
  * @param {any} comment
  * @param {object} [strings]
  * @param {string} [locale]
- * @param {{ onDeleteReply?: (reply: any, replyEl: HTMLElement) => void }} [handlers]
+ * @param {{
+ *   onDeleteReply?: (reply: any, replyEl: HTMLElement) => void,
+ *   onEditReply?: (reply: any) => void,
+ * }} [handlers]
  */
 export const createThreadPopover = (
   comment,
   strings = defaultStrings,
   locale,
-  { onDeleteReply } = {}
+  { onDeleteReply, onEditReply } = {}
 ) => {
   const popover = document.createElement("div");
   popover.className = CLASSES.THREAD_POPOVER;
@@ -587,7 +655,8 @@ export const createThreadPopover = (
     comment.author,
     comment.createdAt,
     strings,
-    locale
+    locale,
+    comment.editedAt
   );
   const closeButton = document.createElement("button");
   closeButton.type = "button";
@@ -607,7 +676,10 @@ export const createThreadPopover = (
   if (comment.replies) {
     comment.replies.forEach((reply) => {
       replies.appendChild(
-        createReplyElement(reply, strings, locale, { onDelete: onDeleteReply })
+        createReplyElement(reply, strings, locale, {
+          onDelete: onDeleteReply,
+          onEdit: onEditReply,
+        })
       );
     });
   }

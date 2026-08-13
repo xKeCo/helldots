@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import CommentOverlay from "../src/overlay.js";
 import { CLASSES, IDS } from "../src/constants.js";
 import { TAG_NAME } from "../src/root-element.js";
+import en from "../src/locales/en.js";
 import { domToCanvas } from "modern-screenshot";
 
 vi.mock("modern-screenshot", () => ({ domToCanvas: vi.fn() }));
@@ -740,8 +741,10 @@ describe("CommentOverlay", () => {
         `.${CLASSES.THREAD_REPLY_ACTIONS} [data-action="menu"]`
       );
       menuBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      replyEl
-        .querySelector(`.${CLASSES.INBOX_MENU_ITEM}`)
+      // By label: the reply ⋯ carries Edit and Delete, and "the first item"
+      // would quietly start meaning Edit.
+      [...replyEl.querySelectorAll(`.${CLASSES.INBOX_MENU_ITEM}`)]
+        .find((el) => el.textContent === en.deleteReply)
         .dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
       expect(comment.replies.map((r) => r.id)).toContain(reply.id);
@@ -2173,5 +2176,124 @@ describe("automatic context capture", () => {
 
     overlay.hideCommentBox();
     expect(overlay._pendingContextScreenshot).toBeNull();
+  });
+});
+
+describe("deep links to a single comment", () => {
+  let overlay;
+
+  const remoteComment = (id) => ({
+    id,
+    text: "linked comment",
+    page: location.pathname,
+    anchor: null,
+    replies: [],
+    author: "Remote",
+    createdAt: "2026-07-03T00:00:00.000Z",
+    screenshots: [],
+  });
+
+  const withUrl = (search) =>
+    window.history.replaceState({}, "", `${location.pathname}${search}`);
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    withUrl("");
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it("opens the inbox on the linked comment when the data is already there", () => {
+    withUrl("?helldotsComment=abc123");
+    overlay = makeOverlay();
+    overlay.loadComments([remoteComment("abc123")]);
+
+    expect(
+      overlay.shadowRoot.querySelector(`.${CLASSES.INBOX_DETAIL}`)
+    ).toBeTruthy();
+    expect(overlay.inboxView.detailId).toBe("abc123");
+  });
+
+  it("says so rather than doing nothing when the comment is not here", () => {
+    // Clicking a link and having nothing at all happen is indistinguishable
+    // from a broken widget.
+    withUrl("?helldotsComment=missing");
+    overlay = makeOverlay();
+
+    const panel = overlay.shadowRoot.querySelector(`.${CLASSES.INBOX_PANEL}`);
+    expect(panel).toBeTruthy();
+    expect(panel.querySelector(`.${CLASSES.INBOX_NOTICE}`).textContent).toBe(
+      overlay.strings.commentNotFound
+    );
+  });
+
+  it("keeps waiting and opens the comment when the host's data lands later", () => {
+    // The setup a shared link is actually for: a host that fetches its
+    // comments from its own back end has not called loadComments() yet at
+    // startup.
+    withUrl("?helldotsComment=late");
+    overlay = makeOverlay();
+    expect(
+      overlay.shadowRoot.querySelector(`.${CLASSES.INBOX_NOTICE}`)
+    ).toBeTruthy();
+
+    overlay.loadComments([remoteComment("late")]);
+
+    expect(
+      overlay.shadowRoot.querySelector(`.${CLASSES.INBOX_NOTICE}`)
+    ).toBeNull();
+    expect(overlay.inboxView.detailId).toBe("late");
+  });
+
+  it("leaves the parameter in the URL so the link can be reloaded or re-copied", () => {
+    withUrl("?helldotsComment=abc123");
+    overlay = makeOverlay();
+    overlay.loadComments([remoteComment("abc123")]);
+
+    expect(location.search).toContain("helldotsComment=abc123");
+  });
+
+  it("honours a host-supplied parameter name", () => {
+    withUrl("?thread=abc123");
+    overlay = makeOverlay({ linkParam: "thread" });
+    overlay.loadComments([remoteComment("abc123")]);
+
+    expect(overlay.inboxView.detailId).toBe("abc123");
+    expect(overlay.commentLink("abc123")).toContain("thread=abc123");
+  });
+
+  it("commentLink returns null for an id it does not know", () => {
+    overlay = makeOverlay();
+    expect(overlay.commentLink("nope")).toBeNull();
+  });
+
+  it("copies the link from the ⋯ menu and says so before closing", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    overlay = makeOverlay();
+    overlay.loadComments([remoteComment("abc123")]);
+    overlay.showInbox();
+    const panel = overlay.shadowRoot.querySelector(`.${CLASSES.INBOX_PANEL}`);
+
+    panel
+      .querySelector(`[data-action="menu"]`)
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const item = [
+      ...panel.querySelectorAll(
+        `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
+      ),
+    ].find((el) => el.textContent === en.copyLink);
+    item.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText.mock.calls[0][0]).toContain("helldotsComment=abc123");
+    // Copying succeeds invisibly, so the item has to say it happened before
+    // the menu goes away.
+    expect(item.textContent).toBe(en.linkCopied);
   });
 });

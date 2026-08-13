@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import CommentOverlay from "../src/overlay.js";
 import { CLASSES } from "../src/constants.js";
+import en from "../src/locales/en.js";
 import { TAG_NAME } from "../src/root-element.js";
 
 vi.mock("../src/capture.js", () => ({
@@ -42,6 +43,16 @@ const createCommentOn = async (overlay, container, text = "A test comment") => {
 
 const click = (el) =>
   el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+// By label, not by position: the ⋯ carries Copy link, Edit and Delete, and a
+// test that reaches for "the first item" silently starts asserting about a
+// different action the next time one is added.
+const menuItem = (root, label) =>
+  [
+    ...root.querySelectorAll(
+      `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
+    ),
+  ].find((el) => el.textContent === label);
 
 // Deleting anything opens a confirmation, and the menu item's handler awaits
 // it, so the action lands a microtask after the answer.
@@ -553,11 +564,7 @@ describe("inbox sidebar", () => {
       click(
         panel.querySelector(`.${CLASSES.INBOX_ACTION_BTN}[data-action="menu"]`)
       );
-      click(
-        panel.querySelector(
-          `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
-        )
-      );
+      click(menuItem(panel, en.deleteComment));
       expect(overlay.comments).toHaveLength(1);
       await acceptConfirm(overlay);
 
@@ -580,11 +587,7 @@ describe("inbox sidebar", () => {
       click(
         panel.querySelector(`.${CLASSES.INBOX_ACTION_BTN}[data-action="menu"]`)
       );
-      click(
-        panel.querySelector(
-          `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
-        )
-      );
+      click(menuItem(panel, en.deleteComment));
       click(overlay.shadowRoot.querySelector(`.${CLASSES.CONFIRM_CANCEL}`));
       await flush();
 
@@ -658,7 +661,7 @@ describe("inbox sidebar", () => {
           `.${CLASSES.THREAD_REPLY_ACTIONS} [data-action="menu"]`
         )
       );
-      click(replyEl.querySelector(`.${CLASSES.INBOX_MENU_ITEM}`));
+      click(menuItem(replyEl, en.deleteReply));
       expect(comment.replies).toHaveLength(1);
       await acceptConfirm(overlay);
 
@@ -900,11 +903,7 @@ describe("inbox sidebar", () => {
       click(
         panel.querySelector(`.${CLASSES.INBOX_ACTION_BTN}[data-action="menu"]`)
       );
-      click(
-        panel.querySelector(
-          `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
-        )
-      );
+      click(menuItem(panel, en.deleteComment));
       await acceptConfirm(overlay);
 
       expect(panel.querySelector(`.${CLASSES.INBOX_DETAIL}`)).toBeNull();
@@ -1185,11 +1184,7 @@ describe("inbox sidebar", () => {
 
       const popover = openPopover(overlay, comment);
       click(popover.querySelector(`[data-action="menu"]`));
-      click(
-        popover.querySelector(
-          `.${CLASSES.INBOX_MENU_ITEM}:not([data-picker-option])`
-        )
-      );
+      click(menuItem(popover, en.deleteComment));
       // The popover stays put behind the question — the user has not said
       // yes yet, and tearing it down early would answer for them.
       expect(
@@ -1515,5 +1510,208 @@ describe("context block in the detail view", () => {
     expect(
       block.querySelectorAll(`.${CLASSES.CONTEXT_ROW}`).length
     ).toBeGreaterThan(0);
+  });
+});
+
+describe("editing a comment or a reply", () => {
+  let overlay;
+
+  beforeEach(() => {
+    document.elementFromPoint = () => null;
+    document.body.innerHTML = `<section id="target">Compare our plans and pick one today</section>`;
+    giveSize(document.getElementById("target"));
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  const openDetail = (panel) => {
+    click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
+    return panel.querySelector(`.${CLASSES.INBOX_DETAIL}`);
+  };
+
+  const openEditor = async (panel, root, label) => {
+    click(root.querySelector(`[data-action="menu"]`));
+    click(menuItem(root, label));
+    await flush();
+    return panel.querySelector(`.${CLASSES.EDITOR_INPUT}`);
+  };
+
+  const typeInto = (el, text) => {
+    el.value = text;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  it("rewrites the comment, stamps editedAt and shows the edited mark", async () => {
+    overlay = makeOverlay();
+    const comment = await createCommentOn(
+      overlay,
+      document.getElementById("target"),
+      "original"
+    );
+
+    const panel = openInbox(overlay);
+    const detail = openDetail(panel);
+    const input = await openEditor(panel, detail, en.editComment);
+
+    typeInto(input, "rewritten");
+    click(panel.querySelector(`.${CLASSES.EDITOR_SAVE}`));
+
+    expect(comment.text).toBe("rewritten");
+    expect(comment.editedAt).toBeTruthy();
+    expect(panel.querySelector(`.${CLASSES.THREAD_EDITED}`)).toBeTruthy();
+    expect(panel.querySelector(`.${CLASSES.EDITOR_INPUT}`)).toBeNull();
+  });
+
+  it("rewrites a reply the same way", async () => {
+    overlay = makeOverlay();
+    const comment = await createCommentOn(
+      overlay,
+      document.getElementById("target"),
+      "root"
+    );
+    const reply = overlay.addReply(comment, "first take");
+
+    const panel = openInbox(overlay);
+    const detail = openDetail(panel);
+    const replyEl = detail.querySelector(`.${CLASSES.THREAD_REPLY}`);
+    const input = await openEditor(panel, replyEl, en.editReply);
+
+    typeInto(input, "second take");
+    click(panel.querySelector(`.${CLASSES.EDITOR_SAVE}`));
+
+    expect(reply.text).toBe("second take");
+    expect(reply.editedAt).toBeTruthy();
+  });
+
+  it("keeps the draft across a re-render that leaves the text on screen", async () => {
+    // The whole reason the draft is state and not DOM: this panel re-renders
+    // from ten places. Changing a comment's priority mid-sentence used to be
+    // enough to eat the sentence.
+    overlay = makeOverlay();
+    const comment = await createCommentOn(
+      overlay,
+      document.getElementById("target"),
+      "original"
+    );
+
+    const panel = openInbox(overlay);
+    const detail = openDetail(panel);
+    const input = await openEditor(panel, detail, en.editComment);
+    typeInto(input, "half-typed thought");
+
+    overlay.setCommentPriority(comment.id, "high");
+    overlay.inboxView.refresh();
+
+    expect(panel.querySelector(`.${CLASSES.EDITOR_INPUT}`).value).toBe(
+      "half-typed thought"
+    );
+    expect(comment.text).toBe("original");
+  });
+
+  it("asks before a second editor takes the first one's place", async () => {
+    overlay = makeOverlay();
+    const comment = await createCommentOn(
+      overlay,
+      document.getElementById("target"),
+      "root"
+    );
+    overlay.addReply(comment, "a reply");
+
+    const panel = openInbox(overlay);
+    const detail = openDetail(panel);
+    const input = await openEditor(panel, detail, en.editComment);
+    typeInto(input, "unsaved");
+
+    const replyEl = detail.querySelector(`.${CLASSES.THREAD_REPLY}`);
+    click(replyEl.querySelector(`[data-action="menu"]`));
+    click(menuItem(replyEl, en.editReply));
+    await flush();
+
+    expect(
+      overlay.shadowRoot.querySelector(`.${CLASSES.CONFIRM_TITLE}`).textContent
+    ).toBe(en.confirmDiscardTitle);
+  });
+
+  it("does not ask when the editor was opened and left untouched", async () => {
+    // A dialog nobody needs teaches people to dismiss dialogs without
+    // reading them.
+    overlay = makeOverlay();
+    await createCommentOn(overlay, document.getElementById("target"), "root");
+
+    const panel = openInbox(overlay);
+    const detail = openDetail(panel);
+    await openEditor(panel, detail, en.editComment);
+
+    click(panel.querySelector(`.${CLASSES.EDITOR_CANCEL}`));
+    await flush();
+
+    expect(overlay.shadowRoot.querySelector(`.${CLASSES.CONFIRM}`)).toBeNull();
+    expect(panel.querySelector(`.${CLASSES.EDITOR_INPUT}`)).toBeNull();
+  });
+
+  it("stays open instead of asking when the click lands on the page", async () => {
+    // An ambiguous gesture — maybe the user went to look at the thing they
+    // are describing. Answering it with a modal would interrupt them.
+    overlay = makeOverlay();
+    await createCommentOn(overlay, document.getElementById("target"), "root");
+
+    const panel = openInbox(overlay);
+    const detail = openDetail(panel);
+    const input = await openEditor(panel, detail, en.editComment);
+    typeInto(input, "unsaved");
+
+    document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    await flush();
+
+    expect(
+      overlay.shadowRoot.querySelector(`.${CLASSES.INBOX_PANEL}`)
+    ).toBeTruthy();
+    expect(overlay.shadowRoot.querySelector(`.${CLASSES.CONFIRM}`)).toBeNull();
+    expect(panel.querySelector(`.${CLASSES.EDITOR_INPUT}`).value).toBe(
+      "unsaved"
+    );
+  });
+
+  it("asks when the panel's close button is pressed with unsaved text", async () => {
+    // Unlike a stray click, × is an unambiguous request to close.
+    overlay = makeOverlay();
+    await createCommentOn(overlay, document.getElementById("target"), "root");
+
+    const panel = openInbox(overlay);
+    const detail = openDetail(panel);
+    const input = await openEditor(panel, detail, en.editComment);
+    typeInto(input, "unsaved");
+
+    click(panel.querySelector(`.${CLASSES.INBOX_CLOSE}`));
+    await flush();
+
+    expect(
+      overlay.shadowRoot.querySelector(`.${CLASSES.CONFIRM_TITLE}`).textContent
+    ).toBe(en.confirmDiscardTitle);
+    expect(
+      overlay.shadowRoot.querySelector(`.${CLASSES.INBOX_PANEL}`)
+    ).toBeTruthy();
+  });
+
+  it("refuses to blank a body, since that is not how deleting works", async () => {
+    overlay = makeOverlay();
+    const comment = await createCommentOn(
+      overlay,
+      document.getElementById("target"),
+      "original"
+    );
+
+    const panel = openInbox(overlay);
+    const detail = openDetail(panel);
+    const input = await openEditor(panel, detail, en.editComment);
+    typeInto(input, "    ");
+
+    expect(panel.querySelector(`.${CLASSES.EDITOR_SAVE}`).disabled).toBe(true);
+    expect(comment.text).toBe("original");
   });
 });

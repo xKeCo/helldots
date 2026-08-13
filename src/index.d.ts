@@ -62,6 +62,8 @@ export type CommentId = string | number;
 export interface SerializedComment {
   id: CommentId;
   text: string;
+  /** ISO timestamp of the last edit; null when never edited. */
+  editedAt?: string | null;
   anchor: CommentAnchor | null;
   /** location.pathname where the comment was created. */
   page: string;
@@ -105,12 +107,22 @@ export interface CommentOverlayOptions {
   autoScreenshot?: boolean;
   /** Identity used as the author of new comments and replies. */
   user?: { name: string };
+  /**
+   * Query parameter carrying a comment id in "Copy link" URLs, and read back
+   * on startup to open that comment. Default: "helldotsComment". Override it
+   * when the host already routes on that name.
+   */
+  linkParam?: string;
   /** Fired after a new comment is saved. */
   onCommentCreated?: (comment: SerializedComment) => void;
   /** Fired after a reply is added to any comment. */
   onReplyAdded?: (comment: SerializedComment, reply: CommentReply) => void;
   /** Fired after deleteReply removes a reply. */
   onReplyDeleted?: (comment: SerializedComment, reply: CommentReply) => void;
+  /** Fired after editComment rewrites a comment's text. */
+  onCommentEdited?: (comment: SerializedComment) => void;
+  /** Fired after editReply rewrites a reply's text. */
+  onReplyEdited?: (comment: SerializedComment, reply: CommentReply) => void;
   /** Fired for each comment that could not be re-anchored by loadComments. */
   onAnchorLost?: (comment: SerializedComment) => void;
   /** Fired after deleteComment removes a comment. */
@@ -127,6 +139,8 @@ export interface CommentReply {
   author: string;
   timestamp: string;
   screenshots?: string[];
+  /** ISO timestamp of the last edit; null when never edited. */
+  editedAt?: string | null;
 }
 
 export interface Comment {
@@ -181,6 +195,12 @@ export declare class CommentOverlay {
   toggleCommentMode(): void;
   addReply(comment: Comment, text: string): CommentReply;
   deleteReply(commentId: CommentId, replyId: CommentId): boolean;
+  /** Rewrites a comment's text. False when the id is unknown, the text is blank, or nothing changed. */
+  editComment(id: CommentId, text: string): boolean;
+  /** Rewrites a reply's text. Same contract as editComment. */
+  editReply(commentId: CommentId, replyId: CommentId, text: string): boolean;
+  /** The shareable URL for a comment, or null when the id is unknown. */
+  commentLink(id: CommentId): string | null;
   serializeComments(): SerializedComment[];
   loadComments(data: SerializedComment[]): {
     anchored: number;

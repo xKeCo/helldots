@@ -192,6 +192,7 @@ export const createPicker = ({
  *     label: string,
  *     onSelect: () => void,
  *     confirm?: () => import("./confirm-dialog.js").ConfirmStrings,
+ *     feedbackLabel?: string,
  *   }>,
  * }} config
  * @returns {HTMLElement}
@@ -222,6 +223,19 @@ export const createMoreMenu = ({ label, tooltip, items }) => {
     item.textContent = entry.label;
     item.addEventListener("click", async (e) => {
       e.stopPropagation();
+      // Copying to the clipboard succeeds invisibly. Closing the menu at once
+      // would leave the user with no evidence it happened, and the icon-swap
+      // trick the copy button uses needs a control that stays on screen — so
+      // the item says so itself and the menu waits before closing.
+      if (entry.feedbackLabel) {
+        entry.onSelect();
+        item.textContent = entry.feedbackLabel;
+        setTimeout(() => {
+          item.textContent = entry.label;
+          toggle.close();
+        }, 1200);
+        return;
+      }
       toggle.close();
       if (entry.confirm) {
         // Read before awaiting: onSelect may detach the row this button
@@ -241,12 +255,21 @@ export const createMoreMenu = ({ label, tooltip, items }) => {
 
 /**
  * @param {Object} comment
- * @param {{ strings: Object, onCopy: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onDelete: Function }} deps
+ * @param {{ strings: Object, onCopy: Function, onCopyLink?: Function, onEdit?: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onDelete: Function }} deps
  * @returns {HTMLElement}
  */
 export const createCommentActions = (
   comment,
-  { strings, onCopy, onSetStatus, onSetType, onSetPriority, onDelete }
+  {
+    strings,
+    onCopy,
+    onCopyLink,
+    onEdit,
+    onSetStatus,
+    onSetType,
+    onSetPriority,
+    onDelete,
+  }
 ) => {
   const actions = document.createElement("div");
   actions.className = CLASSES.INBOX_CARD_ACTIONS;
@@ -323,6 +346,15 @@ export const createCommentActions = (
       label: strings.commentOptions,
       tooltip: strings.moreOptions,
       items: [
+        {
+          label: strings.copyLink,
+          feedbackLabel: strings.linkCopied,
+          onSelect: () => onCopyLink?.(comment),
+        },
+        {
+          label: strings.editComment,
+          onSelect: () => onEdit?.(comment),
+        },
         {
           label: strings.deleteComment,
           onSelect: () => onDelete(comment),
