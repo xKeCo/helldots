@@ -201,14 +201,6 @@ alone replaces by id but never removes.
 
 TypeScript definitions ship with the package — no `@types` install needed.
 
-### Module format
-
-The npm package is **ESM-only**: `import` works everywhere modern (bundlers,
-Node ≥ 22, browsers), while `require("helldots")` is not supported. For a
-plain `<script>` tag with no build step, use the self-contained UMD build
-from a CDN (`unpkg`/`jsdelivr` point at it), which exposes a global
-`HellDots`.
-
 ## Storage notes
 
 With `persistence: "localStorage"`, every comment (screenshot included) lives
@@ -235,8 +227,8 @@ page's CSS cannot leak into it and its styles cannot leak out.
 ## ESM only
 
 This package ships ES modules only. `import` works everywhere — bundlers, Vite,
-Next.js, native `<script type="module">`. There is no CommonJS build, so
-`require("helldots")` will not work.
+Next.js, Node ≥ 18, native `<script type="module">`. There is no CommonJS
+build, so `require("helldots")` will not work.
 
 For a plain `<script>` tag with no bundler, a self-contained UMD build is on
 the CDN:
