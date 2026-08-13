@@ -1,4 +1,4 @@
-import { renderPage, cropRegion, cropViewport, AUTO_SCALE } from "./capture.js";
+import { CaptureFlow } from "./capture-flow.js";
 import { captureContext } from "./metadata.js";
 import {
   CLASSES,
@@ -112,12 +112,11 @@ class CommentOverlay {
     // rAF scheduling flag for bulk updates
     this._pendingRaf = null;
     /**
-     * The in-flight automatic capture, resolving to a JPEG data-URL or null.
-     * A promise rather than the value: the render kicks off when the comment
-     * box opens and saveComment awaits it, so the render never gates the box.
-     * @type {Promise<string | null> | null}
+     * Drag selection + screenshot orchestration (see capture-flow.js).
+     * Created in initOverlay — it mounts the selection rect into the
+     * shadow root. @type {CaptureFlow | null}
      */
-    this._pendingCapture = null;
+    this._captureFlow = null;
 
     /**
      * Parsed cross-page corpus, so every mutation does not pay a full
@@ -188,6 +187,20 @@ class CommentOverlay {
     this.attachImageInput = /** @type {any} */ (
       this.shadowRoot.getElementById(IDS.ATTACH_IMAGE_INPUT)
     );
+
+    this._captureFlow = new CaptureFlow({
+      host: this.shadowRoot,
+      autoScreenshot: this.options.autoScreenshot,
+      // The pending-attachments array stays here, next to the comment box
+      // that previews it — the flow only reports what a drag captured.
+      onRegionCaptured: (dataUrl) => {
+        if (!this._pendingScreenshots) this._pendingScreenshots = [];
+        if (this._pendingScreenshots.length < MAX_SCREENSHOTS) {
+          this._pendingScreenshots.push(dataUrl);
+        }
+      },
+      onPlace: (x, y) => this._placeCommentAtPoint(x, y),
+    });
 
     // Bind event listeners
     this.bindEventListeners();
@@ -585,99 +598,13 @@ class CommentOverlay {
     if (e.button !== 0) return;
     e.preventDefault();
 
-    this._dragStart = { x: e.clientX, y: e.clientY };
-    this._isDragging = false;
-
-    this._boundDragMove = (ev) => this._onDragMove(ev);
-    this._boundDragEnd = (ev) => this._onDragEnd(ev);
-    document.addEventListener("mousemove", this._boundDragMove);
-    document.addEventListener("mouseup", this._boundDragEnd);
-  }
-
-  _onDragMove(e) {
-    const dx = e.clientX - this._dragStart.x;
-    const dy = e.clientY - this._dragStart.y;
-
-    if (!this._isDragging && Math.hypot(dx, dy) < 5) return;
-
-    this._isDragging = true;
-
-    const left = Math.min(this._dragStart.x, e.clientX);
-    const top = Math.min(this._dragStart.y, e.clientY);
-    const width = Math.abs(dx);
-    const height = Math.abs(dy);
-
-    if (!this._selectionRect) {
-      this._selectionRect = document.createElement("div");
-      this._selectionRect.className = CLASSES.SELECTION_RECT;
-      this.shadowRoot.appendChild(this._selectionRect);
-    }
-
-    this._selectionRect.style.left = `${left}px`;
-    this._selectionRect.style.top = `${top}px`;
-    this._selectionRect.style.width = `${width}px`;
-    this._selectionRect.style.height = `${height}px`;
-  }
-
-  async _onDragEnd(e) {
-    document.removeEventListener("mousemove", this._boundDragMove);
-    document.removeEventListener("mouseup", this._boundDragEnd);
-
-    if (this._isDragging) {
-      const left = Math.min(this._dragStart.x, e.clientX);
-      const top = Math.min(this._dragStart.y, e.clientY);
-      const width = Math.abs(e.clientX - this._dragStart.x);
-      const height = Math.abs(e.clientY - this._dragStart.y);
-
-      this._selectionRect?.remove();
-      this._selectionRect = null;
-
-      if (width > 10 && height > 10) {
-        try {
-          if (!this._pendingScreenshots) this._pendingScreenshots = [];
-          // One render feeds both images: the PNG region the user selected
-          // and the automatic JPEG context shot. Unlike the click path this
-          // one awaits — the region crop IS what the user asked for, and
-          // the box should open with its preview already attached.
-          const full = await renderPage({ scale: 1 });
-          const dataUrl = cropRegion(full, { left, top, width, height });
-          if (dataUrl && this._pendingScreenshots.length < MAX_SCREENSHOTS) {
-            this._pendingScreenshots.push(dataUrl);
-          }
-          if (this.options.autoScreenshot) {
-            this._pendingCapture = Promise.resolve(
-              cropViewport(full, { sourceScale: 1 })
-            );
-          }
-        } catch (err) {
-          console.warn("HellDots: screenshot capture failed:", err);
-        }
-      }
-
-      await this._placeCommentAtPoint(e.clientX, e.clientY);
-    } else {
-      await this._placeCommentAtPoint(this._dragStart.x, this._dragStart.y);
-    }
-
-    this._isDragging = false;
-    this._dragStart = null;
+    this._captureFlow.beginDrag(e);
   }
 
   async _placeCommentAtPoint(clientX, clientY) {
-    // The no-drag path has no render yet. Half scale because the output is
-    // half scale anyway — the render is the expensive part, and it costs
-    // ~4x less here than at scale 1. Deliberately NOT awaited: on heavy
-    // pages the render takes hundreds of ms, and gating the comment box on
-    // it made every click feel broken. saveComment awaits the promise, by
-    // which time it has almost always resolved.
-    if (this.options.autoScreenshot && !this._pendingCapture) {
-      this._pendingCapture = renderPage({ scale: AUTO_SCALE })
-        .then((full) => cropViewport(full, { sourceScale: AUTO_SCALE }))
-        .catch((err) => {
-          console.warn("HellDots: automatic screenshot failed", err);
-          return null;
-        });
-    }
+    // The no-drag path has no render yet — kick the background capture off
+    // now so it resolves while the user types (see capture-flow.js).
+    this._captureFlow.armClickCapture();
 
     const prevPointerEvents = this.overlay.style.pointerEvents;
     this.overlay.style.pointerEvents = "none";
@@ -800,7 +727,7 @@ class CommentOverlay {
     this.currentPosition = null;
     this.removePreviewCircle();
     this._clearScreenshotPreview();
-    this._pendingCapture = null;
+    this._captureFlow?.clearPending();
     /** @type {any} */ (this.commentBox).classify?.reset();
 
     if (this.commentMode) {
@@ -840,9 +767,7 @@ class CommentOverlay {
   async _saveCommentNow() {
     // The capture kicked off when the box opened; by save time it has
     // usually resolved and this await costs nothing.
-    const contextScreenshot = this._pendingCapture
-      ? await this._pendingCapture
-      : null;
+    const contextScreenshot = await this._captureFlow.consumePending();
     // The box may have been dismissed (Escape) while awaiting — a save that
     // lands after that would contradict what the user sees on screen.
     if (!this.currentPosition) return;
@@ -2448,9 +2373,9 @@ class CommentOverlay {
     this.closeInbox();
     this.closeLightbox();
     this.removePreviewCircle();
-    this._selectionRect?.remove();
+    // Covers the selection rect, the drag listeners and the pending capture.
+    this._captureFlow?.destroy();
     this._pendingScreenshots = [];
-    this._pendingCapture = null;
 
     if (this._handleDocumentClickBound) {
       document.removeEventListener("mousedown", this._handleDocumentClickBound);

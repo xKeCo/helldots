@@ -2337,7 +2337,7 @@ describe("automatic context capture", () => {
     overlay.handleDocumentClick(
       new MouseEvent("mousedown", { clientX: x, clientY: y, button: 0 })
     );
-    await overlay._onDragEnd(
+    await overlay._captureFlow.onDragEnd(
       new MouseEvent("mouseup", { clientX: x, clientY: y })
     );
   };
@@ -2400,7 +2400,7 @@ describe("automatic context capture", () => {
     overlay.handleDocumentClick(
       new MouseEvent("mousedown", { clientX: 50, clientY: 50, button: 0 })
     );
-    const dragEnd = overlay._onDragEnd(
+    const dragEnd = overlay._captureFlow.onDragEnd(
       new MouseEvent("mouseup", { clientX: 50, clientY: 50 })
     );
     await Promise.resolve();
@@ -2428,7 +2428,7 @@ describe("automatic context capture", () => {
     overlay.handleDocumentClick(
       new MouseEvent("mousedown", { clientX: 50, clientY: 50, button: 0 })
     );
-    const dragEnd = overlay._onDragEnd(
+    const dragEnd = overlay._captureFlow.onDragEnd(
       new MouseEvent("mouseup", { clientX: 50, clientY: 50 })
     );
     await Promise.resolve();
@@ -2456,7 +2456,7 @@ describe("automatic context capture", () => {
     overlay.handleDocumentClick(
       new MouseEvent("mousedown", { clientX: 50, clientY: 50, button: 0 })
     );
-    const dragEnd = overlay._onDragEnd(
+    const dragEnd = overlay._captureFlow.onDragEnd(
       new MouseEvent("mouseup", { clientX: 50, clientY: 50 })
     );
     await Promise.resolve();
@@ -2521,12 +2521,12 @@ describe("automatic context capture", () => {
     // null, cropViewport bails out early, and the pending capture resolves
     // null before hideCommentBox() runs — making the assertion below pass
     // for the wrong reason. Assert it actually carries the capture first.
-    await expect(overlay._pendingCapture).resolves.toBe(
+    await expect(overlay._captureFlow.pendingCapture).resolves.toBe(
       "data:image/jpeg;base64,auto"
     );
 
     overlay.hideCommentBox();
-    expect(overlay._pendingCapture).toBeNull();
+    expect(overlay._captureFlow.pendingCapture).toBeNull();
   });
 });
 
