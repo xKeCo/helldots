@@ -1003,3 +1003,33 @@ not the reason for it.
   through native ES modules, where a bare specifier does not resolve. All
   three fixtures need it — `lighthouse.html` included, or the CI
   accessibility gate would score a page with no widget on it.
+
+## Dead-code sweep after the v0.4.0 audit
+
+A full audit of the library (2026-08-12) ran an export/usage census over the
+whole repo. What it flagged, and what was done about it:
+
+- **`captureRegion` is gone, reversing the "kept as an export for
+  compatibility" note above.** That compatibility claim had quietly stopped
+  being true: the function is not re-exported from `src/index.js`, is not
+  declared in `src/index.d.ts`, and the package `exports` map blocks deep
+  imports — no consumer could reach it. Its tests covered real behavior
+  (the scroll-offset crop math, the background-color fallback), so they were
+  rewritten against `cropRegion`/`renderPage`, the path runtime code actually
+  takes, rather than deleted.
+- **`debugPosition()` is gone.** A leftover debug helper holding the only
+  `console.log` in `src/`, with no runtime caller — it was kept alive solely
+  by a test asserting it "logs without throwing". Class methods cannot be
+  tree-shaken, so every consumer shipped it.
+- **`data-comment-text` is no longer stamped on markers.** Nothing ever read
+  it, it duplicated the full comment text into an attribute per marker, and
+  it silently went stale after `editComment`. The marker keeps its
+  `aria-label` (which has the same staleness problem — a separate, real fix).
+- **`comment-circle-wrapper` (constant + stylesheet block) is gone.** No code
+  ever assigned the class, including dynamically-composed class names.
+- **`STORAGE_KEY` and `createClassifyRow` keep their `export` keyword
+  deliberately.** Both have exactly one external importer — their test file —
+  and serve as test seams (seeding localStorage, building the row in
+  isolation). Removing the exports would force the tests through clumsier
+  paths for no bundle win (both are bundled regardless). `AUTO_QUALITY`, which
+  not even a test imported, lost its `export`.

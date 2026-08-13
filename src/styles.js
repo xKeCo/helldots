@@ -302,16 +302,6 @@ export const getStyles = () => `
         box-shadow: 0 0 0 5px rgba(46, 144, 250, 0.5), 0 1px 5px rgba(0,0,0,0.2);
     }
 
-    .${CLASSES.CIRCLE_WRAPPER} {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: ${Z_INDEX.CIRCLE};
-    }
-
     .${CLASSES.TOOLTIP} {
         position: fixed;
         background: #1C1C1E;
@@ -327,10 +317,6 @@ export const getStyles = () => `
         font-size: 14px;
         line-height: 1.5;
         box-sizing: border-box;
-    }
-
-    .${CLASSES.TOOLTIP} .${CLASSES.THREAD_HEADER} {
-        padding: 0 0 0;
     }
 
     .${CLASSES.TOOLTIP} .${CLASSES.THREAD_BODY} {
@@ -884,8 +870,6 @@ ${webkitScrollbar(
         padding: 0 4px;
     }
 
-    /* Centred in whatever height the list has, so the state sits in the
-       middle of the panel rather than clinging to the top. */
     /* Sits under the body as a quiet aside: the preview shows the root
        comment only, so this says "there is more" without competing with it. */
     .${CLASSES.TOOLTIP_REPLY_COUNT} {
@@ -894,6 +878,8 @@ ${webkitScrollbar(
         padding-top: 4px;
     }
 
+    /* Centred in whatever height the list has, so the state sits in the
+       middle of the panel rather than clinging to the top. */
     .${CLASSES.INBOX_EMPTY} {
         flex: 1;
         display: flex;
@@ -964,7 +950,7 @@ ${webkitScrollbar(
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0 0 0;
+        padding: 0;
     }
 
     /* min-width:0 is what lets the author actually shrink: a flex item

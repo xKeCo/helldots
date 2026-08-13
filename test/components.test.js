@@ -70,11 +70,10 @@ describe("components", () => {
   });
 
   describe("createCommentCircle", () => {
-    it("tags the circle with the comment id and text as data attributes", () => {
+    it("tags the circle with the comment id as a data attribute", () => {
       const circle = createCommentCircle({ id: 42, text: "hello world" });
       expect(circle.className).toBe(CLASSES.CIRCLE);
       expect(circle.dataset.commentId).toBe("42");
-      expect(circle.dataset.commentText).toBe("hello world");
     });
 
     it("is keyboard-focusable and exposes an accessible name", () => {

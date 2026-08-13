@@ -146,6 +146,8 @@ export interface CommentReply {
 export interface Comment {
   id: CommentId;
   text: string;
+  /** ISO timestamp of the last edit; null when never edited. */
+  editedAt?: string | null;
   /** Live anchor element; null while the comment is orphaned or inactive. */
   container: HTMLElement | null;
   relativeX: number;
@@ -193,7 +195,12 @@ export declare class CommentOverlay {
   constructor(options?: Omit<CommentOverlayOptions, "autoInit">);
 
   toggleCommentMode(): void;
-  addReply(comment: Comment, text: string): CommentReply;
+  /** `screenshots` are data-URLs attached to the reply. */
+  addReply(
+    comment: Comment,
+    text: string,
+    screenshots?: string[]
+  ): CommentReply;
   deleteReply(commentId: CommentId, replyId: CommentId): boolean;
   /** Rewrites a comment's text. False when the id is unknown, the text is blank, or nothing changed. */
   editComment(id: CommentId, text: string): boolean;

@@ -28,13 +28,14 @@ import {
   mergeForStorage,
   PENDING_DETAIL_KEY,
 } from "./storage.js";
-import { createId } from "./id.js";
+import { createId, sameId } from "./id.js";
 import {
   buildCommentLink,
   readCommentLinkParam,
   DEFAULT_LINK_PARAM,
 } from "./link.js";
 import {
+  circleSelector,
   createToolbar,
   createCommentBox,
   createCommentCircle,
@@ -106,7 +107,11 @@ class CommentOverlay {
     this._pendingDetailId = null;
 
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => this.initOverlay());
+      // Kept on the instance so cleanup() can cancel it — an instance
+      // destroyed while the document is still loading must not mount a
+      // zombie UI when DOMContentLoaded fires.
+      this._onDomReady = () => this.initOverlay();
+      document.addEventListener("DOMContentLoaded", this._onDomReady);
     } else {
       this.initOverlay();
     }
@@ -206,7 +211,7 @@ class CommentOverlay {
     const id = this._pendingDetailId;
     if (!id) return;
 
-    const comment = this.comments.find((c) => String(c.id) === String(id));
+    const comment = this._findComment(id);
     if (!comment) {
       // Opening the inbox anyway is the point: clicking a link and having
       // nothing at all happen is indistinguishable from a broken widget.
@@ -249,13 +254,13 @@ class CommentOverlay {
    */
   _refreshCommentViews(id, replyId = null) {
     if (this.activeThreadPopover?.dataset.for !== String(id)) return;
-    const comment = this.comments.find((c) => String(c.id) === String(id));
+    const comment = this._findComment(id);
     if (!comment) return;
 
     const source =
       replyId == null
         ? comment
-        : (comment.replies || []).find((r) => String(r.id) === String(replyId));
+        : (comment.replies || []).find((r) => sameId(r.id, replyId));
     if (!source) return;
 
     const body = document.createElement("div");
@@ -294,15 +299,11 @@ class CommentOverlay {
   _popoverEditorDirty() {
     if (!this._popoverEditing) return false;
     const { commentId, replyId, draft } = this._popoverEditing;
-    const comment = this.comments.find(
-      (c) => String(c.id) === String(commentId)
-    );
+    const comment = this._findComment(commentId);
     const source =
       replyId == null
         ? comment
-        : (comment?.replies || []).find(
-            (r) => String(r.id) === String(replyId)
-          );
+        : (comment?.replies || []).find((r) => sameId(r.id, replyId));
     return draft.trim() !== String(source?.text || "").trim();
   }
 
@@ -325,14 +326,14 @@ class CommentOverlay {
   }
 
   _restorePopoverBody(replyId) {
-    const comment = this.comments.find(
-      (c) => String(c.id) === String(this.activeThreadPopover?.dataset.for)
+    const comment = this.comments.find((c) =>
+      sameId(c.id, this.activeThreadPopover?.dataset.for)
     );
     if (!comment) return;
     const source =
       replyId == null
         ? comment
-        : (comment.replies || []).find((r) => String(r.id) === String(replyId));
+        : (comment.replies || []).find((r) => sameId(r.id, replyId));
     if (!source) return;
 
     const body = document.createElement("div");
@@ -351,15 +352,11 @@ class CommentOverlay {
   async _startPopoverEditing(commentId, replyId = null) {
     if (!(await this._releasePopoverEditor())) return;
 
-    const comment = this.comments.find(
-      (c) => String(c.id) === String(commentId)
-    );
+    const comment = this._findComment(commentId);
     const source =
       replyId == null
         ? comment
-        : (comment?.replies || []).find(
-            (r) => String(r.id) === String(replyId)
-          );
+        : (comment?.replies || []).find((r) => sameId(r.id, replyId));
     if (!source) return;
 
     this._popoverEditing = { commentId, replyId, draft: source.text };
@@ -393,7 +390,7 @@ class CommentOverlay {
 
   /** The shareable URL for a comment, as "Copy link" builds it. */
   commentLink(id) {
-    const comment = this.comments.find((c) => String(c.id) === String(id));
+    const comment = this._findComment(id);
     return comment ? buildCommentLink(comment, this._linkParam()) : null;
   }
 
@@ -493,7 +490,6 @@ class CommentOverlay {
         e.preventDefault();
         e.stopPropagation();
         this.toggleCommentMode();
-        return false;
       }
     };
 
@@ -596,7 +592,7 @@ class CommentOverlay {
             });
           }
         } catch (err) {
-          console.warn("Screenshot capture failed:", err);
+          console.warn("HellDots: screenshot capture failed:", err);
         }
       }
 
@@ -841,9 +837,7 @@ class CommentOverlay {
     this.hideCommentBox();
     this.toggleCommentMode();
 
-    const circle = this.shadowRoot.querySelector(
-      `[data-comment-id="${comment.id}"]`
-    );
+    const circle = this.shadowRoot.querySelector(circleSelector(comment.id));
     if (circle) {
       this.showThreadPopover(circle, comment);
     }
@@ -1171,7 +1165,9 @@ class CommentOverlay {
         img.onclick = () => this.showLightbox(dataUrl);
 
         const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
         removeBtn.className = CLASSES.SCREENSHOT_REMOVE;
+        removeBtn.setAttribute("aria-label", this.strings.removeScreenshot);
         removeBtn.innerHTML = "&times;";
         removeBtn.onclick = (e) => {
           e.stopPropagation();
@@ -1356,6 +1352,16 @@ class CommentOverlay {
     return Boolean(target?.closest?.(`.${CLASSES.LIGHTBOX}`));
   }
 
+  /**
+   * The one lookup every id-taking method goes through. Uses sameId so a
+   * legacy numeric id resolves no matter which spelling the caller holds —
+   * index.d.ts promises exactly that.
+   * @param {import('./index.d.ts').CommentId} id
+   */
+  _findComment(id) {
+    return this.comments.find((c) => sameId(c.id, id));
+  }
+
   addReply(comment, text, screenshots = []) {
     if (!comment.replies) comment.replies = [];
     const reply = {
@@ -1380,13 +1386,14 @@ class CommentOverlay {
    * the last reply leaves the comment itself standing, which is why this is
    * separate from deleteComment rather than a special case of it.
    *
-   * @param {number} commentId
-   * @param {number} replyId
+   * @param {import('./index.d.ts').CommentId} commentId
+   * @param {import('./index.d.ts').CommentId} replyId
    * @returns {boolean} false when either id does not resolve
    */
   deleteReply(commentId, replyId) {
-    const comment = this.comments.find((c) => c.id === commentId);
-    const index = comment?.replies?.findIndex((r) => r.id === replyId) ?? -1;
+    const comment = this._findComment(commentId);
+    const index =
+      comment?.replies?.findIndex((r) => sameId(r.id, replyId)) ?? -1;
     if (index < 0) return false;
 
     const [reply] = comment.replies.splice(index, 1);
@@ -1412,7 +1419,7 @@ class CommentOverlay {
    * @returns {boolean} false when the id does not resolve, or nothing changed
    */
   editComment(id, text) {
-    const comment = this.comments.find((c) => String(c.id) === String(id));
+    const comment = this._findComment(id);
     const next = String(text ?? "").trim();
     if (!comment || !next || next === comment.text) return false;
 
@@ -1432,12 +1439,8 @@ class CommentOverlay {
    * @returns {boolean} false when either id does not resolve, or nothing changed
    */
   editReply(commentId, replyId, text) {
-    const comment = this.comments.find(
-      (c) => String(c.id) === String(commentId)
-    );
-    const reply = comment?.replies?.find(
-      (r) => String(r.id) === String(replyId)
-    );
+    const comment = this._findComment(commentId);
+    const reply = comment?.replies?.find((r) => sameId(r.id, replyId));
     const next = String(text ?? "").trim();
     if (!reply || !next || next === reply.text) return false;
 
@@ -1495,13 +1498,13 @@ class CommentOverlay {
   /**
    * RF09 — moves a comment through its lifecycle
    * (open → in_progress → resolved → closed, in any order).
-   * @param {number} id
+   * @param {import('./index.d.ts').CommentId} id
    * @param {import('./index.d.ts').CommentStatus} status
    * @returns {boolean} false when the id or status is unknown
    */
   setCommentStatus(id, status) {
     if (!STATUSES.includes(status)) return false;
-    const comment = this.comments.find((c) => c.id === id);
+    const comment = this._findComment(id);
     if (!comment) return false;
     // No-op: picking the status the comment is already in must not re-stamp
     // resolvedAt (that would reset RF5's elapsed time to "<1m") or trigger a
@@ -1514,7 +1517,7 @@ class CommentOverlay {
       status === "resolved" ? new Date().toISOString() : null;
     // Resolving removes the on-page marker; reopening restores it.
     const circle = /** @type {HTMLElement} */ (
-      this.shadowRoot?.querySelector(`[data-comment-id="${id}"]`)
+      this.shadowRoot?.querySelector(circleSelector(id))
     );
     if (circle) this.updateCommentPosition(comment, circle);
     this._syncStorage();
@@ -1541,13 +1544,13 @@ class CommentOverlay {
 
   /**
    * RF3 — categorises a comment. `null` returns it to the neutral state.
-   * @param {number} id
+   * @param {import('./index.d.ts').CommentId} id
    * @param {import('./index.d.ts').CommentType | null} type
    * @returns {boolean} false when the id or type is unknown
    */
   setCommentType(id, type) {
     if (type !== null && !COMMENT_TYPES.includes(type)) return false;
-    const comment = this.comments.find((c) => c.id === id);
+    const comment = this._findComment(id);
     if (!comment) return false;
     comment.type = type;
     return this._commitUpdate(comment);
@@ -1555,13 +1558,13 @@ class CommentOverlay {
 
   /**
    * RF4 — prioritises a comment. `null` returns it to the neutral state.
-   * @param {number} id
+   * @param {import('./index.d.ts').CommentId} id
    * @param {import('./index.d.ts').CommentPriority | null} priority
    * @returns {boolean} false when the id or priority is unknown
    */
   setCommentPriority(id, priority) {
     if (priority !== null && !PRIORITIES.includes(priority)) return false;
-    const comment = this.comments.find((c) => c.id === id);
+    const comment = this._findComment(id);
     if (!comment) return false;
     comment.priority = priority;
     return this._commitUpdate(comment);
@@ -1570,13 +1573,13 @@ class CommentOverlay {
   /**
    * RF3 — replaces a comment's free-form labels. Values are trimmed,
    * lowercased and de-duplicated.
-   * @param {number} id
+   * @param {import('./index.d.ts').CommentId} id
    * @param {string[]} tags
    * @returns {boolean} false when the id is unknown or tags isn't an array
    */
   setCommentTags(id, tags) {
     if (!Array.isArray(tags)) return false;
-    const comment = this.comments.find((c) => c.id === id);
+    const comment = this._findComment(id);
     if (!comment) return false;
     comment.tags = normalizeTags(tags);
     return this._commitUpdate(comment);
@@ -1592,18 +1595,18 @@ class CommentOverlay {
   /**
    * Removes a comment everywhere: page marker, memory and (when the
    * localStorage mode is on) persisted storage.
-   * @param {number} id
+   * @param {import('./index.d.ts').CommentId} id
    * @returns {boolean} false when the id is unknown
    */
   deleteComment(id) {
-    if (!this.comments.some((comment) => comment.id === id)) return false;
+    if (!this._findComment(id)) return false;
     this._removeComment(id);
     if (this.options.persistence === "localStorage") {
       // The merge preserves other-page entries missing from memory, which
       // would resurrect a deleted inactive comment — drop the id explicitly.
       writeStoredComments(
         mergeForStorage(
-          readStoredComments().filter((comment) => comment.id !== id),
+          readStoredComments().filter((comment) => !sameId(comment.id, id)),
           this.serializeComments(),
           location.pathname
         )
@@ -1621,8 +1624,8 @@ class CommentOverlay {
       } catch {}
       this.mutationObservers.delete(id);
     }
-    this.shadowRoot.querySelector(`[data-comment-id="${id}"]`)?.remove();
-    this.comments = this.comments.filter((comment) => comment.id !== id);
+    this.shadowRoot.querySelector(circleSelector(id))?.remove();
+    this.comments = this.comments.filter((comment) => !sameId(comment.id, id));
   }
 
   /**
@@ -2128,7 +2131,7 @@ class CommentOverlay {
           this.comments.forEach((comment) => {
             /** @type {HTMLElement} */
             const circle = /** @type {any} */ (
-              this.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`)
+              this.shadowRoot.querySelector(circleSelector(comment.id))
             );
             if (circle) this.updateCommentPosition(comment, circle);
           });
@@ -2178,53 +2181,6 @@ class CommentOverlay {
         attributeFilter: ["style", "class", "hidden", "open"],
       });
     }
-  }
-
-  /**
-   * Debug function to log position information
-   * @param {Object} comment - The comment object
-   * @param {HTMLElement} circle - The comment circle element
-   */
-  debugPosition(comment, circle) {
-    if (!comment || !circle) return;
-
-    const containerRect = comment.container.getBoundingClientRect();
-    const circleRect = circle.getBoundingClientRect();
-
-    // Calculate expected position from relative coordinates
-    const expectedX = comment.relativeX * containerRect.width;
-    const expectedY = comment.relativeY * containerRect.height;
-
-    console.log("Position Debug:", {
-      commentId: comment.id,
-      relativePosition: { x: comment.relativeX, y: comment.relativeY },
-      containerRect: {
-        left: containerRect.left,
-        top: containerRect.top,
-        width: containerRect.width,
-        height: containerRect.height,
-      },
-      circlePosition: {
-        left: circleRect.left,
-        top: circleRect.top,
-        centerX: circleRect.left + circleRect.width / 2,
-        centerY: circleRect.top + circleRect.height / 2,
-      },
-      expectedPosition: {
-        x: expectedX,
-        y: expectedY,
-      },
-      offset: {
-        x:
-          circleRect.left +
-          circleRect.width / 2 -
-          (containerRect.left + expectedX),
-        y:
-          circleRect.top +
-          circleRect.height / 2 -
-          (containerRect.top + expectedY),
-      },
-    });
   }
 
   /**
@@ -2283,7 +2239,6 @@ class CommentOverlay {
 
     observer.observe(comment.container, {
       attributes: true,
-      attributeFilter: undefined,
       childList: true,
       subtree: true,
     });
@@ -2295,6 +2250,12 @@ class CommentOverlay {
    * Cleanup method to remove all event listeners and observers
    */
   cleanup() {
+    // An instance destroyed while the document is still loading must not
+    // mount when DOMContentLoaded eventually fires.
+    if (this._onDomReady) {
+      document.removeEventListener("DOMContentLoaded", this._onDomReady);
+      this._onDomReady = null;
+    }
     // Dropping the panels leaves their dropdowns detached-but-open, which
     // would keep the menu registry's document listener alive until the next
     // stray mousedown.
@@ -2374,9 +2335,7 @@ class CommentOverlay {
 
     // Remove all comment circles
     this.comments.forEach((comment) => {
-      const circle = this.shadowRoot.querySelector(
-        `[data-comment-id="${comment.id}"]`
-      );
+      const circle = this.shadowRoot.querySelector(circleSelector(comment.id));
       if (circle && circle.parentNode) {
         circle.parentNode.removeChild(circle);
       }

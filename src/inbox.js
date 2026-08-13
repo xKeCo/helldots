@@ -15,6 +15,7 @@ import {
   priorityLabelOf,
 } from "./comment-actions.js";
 import {
+  circleSelector,
   createMetaElement,
   createScreenshotsDisplay,
   createInputArea,
@@ -22,6 +23,7 @@ import {
   createBadgeRow,
   getShortcutText,
 } from "./components.js";
+import { sameId } from "./id.js";
 import { createInlineEditor, confirmDiscard } from "./inline-editor.js";
 import { buildCommentLink } from "./link.js";
 
@@ -141,13 +143,13 @@ export class InboxView {
 
   _editingOriginalText() {
     if (!this.editing) return "";
-    const comment = this.getComments().find(
-      (c) => String(c.id) === String(this.editing.commentId)
+    const comment = this.getComments().find((c) =>
+      sameId(c.id, this.editing.commentId)
     );
     if (!comment) return "";
     if (this.editing.replyId == null) return comment.text || "";
-    const reply = (comment.replies || []).find(
-      (r) => String(r.id) === String(this.editing.replyId)
+    const reply = (comment.replies || []).find((r) =>
+      sameId(r.id, this.editing.replyId)
     );
     return reply?.text || "";
   }
@@ -229,7 +231,7 @@ export class InboxView {
       return null;
     }
     return /** @type {any} */ (
-      this.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`)
+      this.shadowRoot.querySelector(circleSelector(comment.id))
     );
   }
 

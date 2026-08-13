@@ -12,7 +12,7 @@ import { TAG_NAME } from "./root-element.js";
 
 /** Automatic captures render and encode small — they live in localStorage. */
 export const AUTO_SCALE = 0.5;
-export const AUTO_QUALITY = 0.7;
+const AUTO_QUALITY = 0.7;
 
 const isUnpainted = (color) =>
   !color || color === "transparent" || color === "rgba(0, 0, 0, 0)";
@@ -121,14 +121,4 @@ export function cropViewport(
     out.height
   );
   return out.toDataURL("image/jpeg", quality);
-}
-
-/**
- * Captures a viewport-relative region of the current page.
- * Kept for API compatibility — renders and crops in one call.
- * @param {{ left: number, top: number, width: number, height: number }} region
- * @returns {Promise<string | null>} PNG data-URL. Render failures reject.
- */
-export async function captureRegion(region) {
-  return cropRegion(await renderPage({ scale: 1 }), region);
 }

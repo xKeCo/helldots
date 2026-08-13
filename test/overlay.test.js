@@ -10,14 +10,13 @@ vi.mock("modern-screenshot", () => ({ domToCanvas: vi.fn() }));
 // renderPage/withHiddenOverlay/cropViewport/AUTO_SCALE are kept REAL (via
 // importOriginal) — the "automatic context capture" suite below drives them
 // through the real domToCanvas mock above and asserts on real host-hiding
-// and cropping behaviour. Only cropRegion and captureRegion are faked: the
-// drag-path tests predate that plumbing and assert on a fixed data URL
-// rather than on real canvas output (jsdom has no canvas backing).
+// and cropping behaviour. Only cropRegion is faked: the drag-path tests
+// predate that plumbing and assert on a fixed data URL rather than on real
+// canvas output (jsdom has no canvas backing).
 vi.mock("../src/capture.js", async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    captureRegion: vi.fn().mockResolvedValue("data:image/png;base64,mocked"),
     cropRegion: vi.fn().mockReturnValue("data:image/png;base64,mocked"),
   };
 });
@@ -86,6 +85,24 @@ describe("CommentOverlay", () => {
       expect(overlay.toolbar).toBeUndefined();
 
       readyStateSpy.mockRestore();
+    });
+
+    it("does not mount when cleanup() runs before DOMContentLoaded fires", () => {
+      // React 18 StrictMode in an SSR app does exactly this: construct,
+      // clean up, all while the document is still loading. The deferred
+      // initOverlay must die with the instance instead of mounting a
+      // zombie UI nobody holds a handle to.
+      const readyStateSpy = vi
+        .spyOn(document, "readyState", "get")
+        .mockReturnValue("loading");
+
+      overlay = new CommentOverlay({});
+      overlay.cleanup();
+      readyStateSpy.mockRestore();
+
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+
+      expect(overlay.toolbar).toBeUndefined();
     });
 
     it("renders English UI text by default", () => {
@@ -372,7 +389,7 @@ describe("CommentOverlay", () => {
       await wait(10);
 
       expect(warnSpy).toHaveBeenCalledWith(
-        "Screenshot capture failed:",
+        "HellDots: screenshot capture failed:",
         expect.any(Error)
       );
       expect(overlay.commentBox.style.display).toBe("block");
@@ -1099,6 +1116,12 @@ describe("CommentOverlay", () => {
       const removeBtn = container.querySelector(
         `.${CLASSES.SCREENSHOT_REMOVE}`
       );
+      // Same accessible shape as the comment-box and inbox copies of this
+      // preview: a11y drift here is what code duplication cost us once.
+      expect(removeBtn.getAttribute("type")).toBe("button");
+      expect(removeBtn.getAttribute("aria-label")).toBe(
+        overlay.strings.removeScreenshot
+      );
       removeBtn.onclick({ stopPropagation: () => {} });
       expect(container.classList.contains(CLASSES.ACTIVE)).toBe(false);
     });
@@ -1471,31 +1494,6 @@ describe("CommentOverlay", () => {
     it("cleanupResizeObserver is a no-op for an untracked id", () => {
       overlay = makeOverlay();
       expect(() => overlay.cleanupResizeObserver(999)).not.toThrow();
-    });
-
-    it("debugPosition logs without throwing", () => {
-      overlay = makeOverlay();
-      const container = document.createElement("div");
-      container.getBoundingClientRect = () => ({
-        left: 0,
-        top: 0,
-        width: 100,
-        height: 100,
-      });
-      const circle = document.createElement("div");
-      circle.getBoundingClientRect = () => ({
-        left: 10,
-        top: 10,
-        width: 28,
-        height: 28,
-      });
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      overlay.debugPosition(
-        { id: 1, relativeX: 0.1, relativeY: 0.1, container },
-        circle
-      );
-      expect(logSpy).toHaveBeenCalled();
-      expect(overlay.debugPosition(null, null)).toBeUndefined();
     });
   });
 

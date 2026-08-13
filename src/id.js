@@ -24,3 +24,15 @@ import { nanoid } from "nanoid";
  * @returns {string} a fresh id for a comment or a reply
  */
 export const createId = () => nanoid();
+
+/**
+ * The one way to compare ids. New ids are strings, but Date.now()-era
+ * records still hold numbers, and either spelling may have crossed a JSON
+ * or URL boundary since — so equality is defined on the string form, as
+ * `index.d.ts` promises callers.
+ *
+ * @param {string | number} a
+ * @param {string | number} b
+ * @returns {boolean}
+ */
+export const sameId = (a, b) => String(a) === String(b);

@@ -1,7 +1,6 @@
 export const CLASSES = {
   CIRCLE: "comment-circle",
   CIRCLE_ACTIVE: "comment-circle--active",
-  CIRCLE_WRAPPER: "comment-circle-wrapper",
   TOOLTIP: "comment-tooltip",
   TOOLBAR_TEXT: "toolbar-text",
   SHORTCUT_HINT: "shortcut-hint",

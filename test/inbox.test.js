@@ -5,7 +5,6 @@ import en from "../src/locales/en.js";
 import { TAG_NAME } from "../src/root-element.js";
 
 vi.mock("../src/capture.js", () => ({
-  captureRegion: vi.fn().mockResolvedValue("data:image/png;base64,mocked"),
   renderPage: vi.fn().mockResolvedValue({ width: 0, height: 0 }),
   cropRegion: vi.fn().mockReturnValue("data:image/png;base64,mocked"),
   cropViewport: vi.fn().mockReturnValue("data:image/jpeg;base64,mocked"),

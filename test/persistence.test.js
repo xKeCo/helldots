@@ -4,7 +4,6 @@ import { CLASSES } from "../src/constants.js";
 import { TAG_NAME } from "../src/root-element.js";
 
 vi.mock("../src/capture.js", () => ({
-  captureRegion: vi.fn().mockResolvedValue("data:image/png;base64,mocked"),
   renderPage: vi.fn().mockResolvedValue({ width: 0, height: 0 }),
   cropRegion: vi.fn().mockReturnValue("data:image/png;base64,mocked"),
   cropViewport: vi.fn().mockReturnValue("data:image/jpeg;base64,mocked"),
@@ -795,6 +794,129 @@ describe("schema migration", () => {
     expect(comment.type).toBeNull();
     expect(comment.priority).toBeNull();
     expect(comment.tags).toEqual([]);
+  });
+});
+
+describe("legacy numeric ids that crossed a JSON or URL boundary", () => {
+  let overlay;
+
+  // A record persisted in the Date.now() era: numeric ids. Callers holding
+  // that id after a JSON round-trip or a URL param have it as a string, and
+  // index.d.ts promises both spellings resolve to the same comment.
+  const legacyRecord = () => ({
+    id: 1720000000000,
+    text: "legacy",
+    anchor: null,
+    page: location.pathname,
+    replies: [
+      {
+        id: 1720000000001,
+        text: "a reply",
+        author: "Ana",
+        timestamp: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+    author: "Ana",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    screenshots: [],
+    status: "open",
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    localStorage.clear();
+  });
+
+  it("deleteComment removes the comment given a stringified id", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([legacyRecord()]);
+
+    expect(overlay.deleteComment("1720000000000")).toBe(true);
+    expect(overlay.comments).toHaveLength(0);
+  });
+
+  it("deleteComment drops a stored other-page comment by stringified id", () => {
+    localStorage.setItem(
+      "helldots-comments",
+      JSON.stringify([{ ...legacyRecord(), page: "/elsewhere" }])
+    );
+    overlay = makeOverlay({ persistence: "localStorage" });
+    expect(overlay.comments).toHaveLength(1);
+
+    expect(overlay.deleteComment("1720000000000")).toBe(true);
+    const stored = JSON.parse(localStorage.getItem("helldots-comments"));
+    expect(stored).toHaveLength(0);
+  });
+
+  it("deleteReply removes the reply given stringified ids", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([legacyRecord()]);
+
+    expect(overlay.deleteReply("1720000000000", "1720000000001")).toBe(true);
+    expect(overlay.comments[0].replies).toHaveLength(0);
+  });
+
+  it("setCommentStatus resolves a stringified id", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([legacyRecord()]);
+
+    expect(overlay.setCommentStatus("1720000000000", "resolved")).toBe(true);
+    expect(overlay.comments[0].status).toBe("resolved");
+  });
+
+  it("setCommentType resolves a stringified id", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([legacyRecord()]);
+
+    expect(overlay.setCommentType("1720000000000", "bug")).toBe(true);
+    expect(overlay.comments[0].type).toBe("bug");
+  });
+
+  it("setCommentPriority resolves a stringified id", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([legacyRecord()]);
+
+    expect(overlay.setCommentPriority("1720000000000", "high")).toBe(true);
+    expect(overlay.comments[0].priority).toBe("high");
+  });
+
+  it("setCommentTags resolves a stringified id", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([legacyRecord()]);
+
+    expect(overlay.setCommentTags("1720000000000", ["ios"])).toBe(true);
+    expect(overlay.comments[0].tags).toEqual(["ios"]);
+  });
+});
+
+describe("host ids with CSS-hostile characters", () => {
+  let overlay;
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+  });
+
+  it("loadComments accepts an id containing a double quote", () => {
+    // loadComments takes arbitrary host ids, and every marker lookup
+    // interpolates the id into an attribute selector — an unescaped quote
+    // makes querySelector throw mid-load.
+    overlay = makeOverlay();
+    expect(() =>
+      overlay.loadComments([{ id: 'review "final" v2', text: "hostile id" }])
+    ).not.toThrow();
+    expect(overlay.comments).toHaveLength(1);
+  });
+
+  it("setCommentStatus resolves an id containing a double quote", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([{ id: 'review "final" v2', text: "hostile id" }]);
+
+    expect(overlay.setCommentStatus('review "final" v2', "resolved")).toBe(
+      true
+    );
+    expect(overlay.comments[0].status).toBe("resolved");
   });
 });
 

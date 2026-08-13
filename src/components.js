@@ -435,11 +435,21 @@ export const createCommentBox = (strings = defaultStrings) => {
   return commentBox;
 };
 
+/**
+ * Attribute selector for a comment's marker circle. loadComments accepts
+ * arbitrary host ids, so a quote or backslash in the id would otherwise make
+ * every querySelector throw. Escaped by hand because jsdom (where the whole
+ * test suite runs) does not implement CSS.escape.
+ * @param {string | number} id
+ * @returns {string}
+ */
+export const circleSelector = (id) =>
+  `[data-comment-id="${String(id).replace(/[\\"]/g, "\\$&")}"]`;
+
 export const createCommentCircle = (comment, strings = defaultStrings) => {
   const circle = document.createElement("div");
   circle.className = CLASSES.CIRCLE;
   circle.dataset.commentId = comment.id;
-  circle.dataset.commentText = comment.text;
   circle.setAttribute("role", "button");
   circle.setAttribute("tabindex", "0");
   circle.setAttribute(
