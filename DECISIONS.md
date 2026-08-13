@@ -1114,3 +1114,18 @@ between backticks at build time, leaving `${...}` expressions intact.
 - Both builds also pin `target: "es2022"` (previously esbuild's default
   `esnext`), so a future esbuild release can't silently emit syntax newer
   than the documented browser floor.
+
+## The Lighthouse gate was red from birth — and nobody was told
+
+The CI accessibility gate had failed on every `dev` run since the workflow
+existed: `.lighthouserc.json` used `http://localhost:PORT/...` with a
+literal `PORT` placeholder, which LHCI does not substitute — it calls
+`new URL(url)` first, which throws `Invalid URL` on a non-numeric port. LHCI
+replaces the port of any _valid_ URL when `staticDistDir` is set, so a plain
+`http://localhost/...` is the supported spelling. Verified locally with
+`@lhci/cli`: collect runs and the a11y >= 0.9 assertion passes.
+
+The lesson recorded here is less about the URL than about the failure mode:
+a gate that fails on every run is indistinguishable from a gate nobody
+reads. The audit found it only because it asked why every run of a "passing"
+project was red.

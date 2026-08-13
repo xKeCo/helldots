@@ -2,7 +2,7 @@
   "ci": {
     "collect": {
       "staticDistDir": ".",
-      "url": ["http://localhost:PORT/playground/lighthouse.html"],
+      "url": ["http://localhost/playground/lighthouse.html"],
       "numberOfRuns": 1
     },
     "assert": {
