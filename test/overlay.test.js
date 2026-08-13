@@ -47,7 +47,61 @@ const waitFor = async (predicate, timeout = 2000) => {
 // is only consumed by the createCommentOverlay() factory in index.js, not by
 // the class itself. Calling initOverlay() again here would double-register
 // every listener.
-const makeOverlay = (options = {}) => new CommentOverlay(options);
+//
+// Every instance is tracked so afterEach can tear down ALL of them, not just
+// whatever `overlay` points at last. Several suites create one in beforeEach
+// and then reassign `overlay` inside the test; each reassignment orphaned an
+// instance whose document listeners stayed live for the rest of the file.
+// They accumulated — a shuffled run caught nine comment-mode listeners
+// answering a single mousedown — which made tests that count listeners or
+// assert on drag state depend on how many suites had run before them.
+const liveOverlays = new Set();
+
+// jsdom gives every element a zero-sized rect, and a marker whose anchor
+// measures zero is treated as invisible: it renders `display: none`, which in
+// turn makes the thread popover consider its marker off-screen. Any suite that
+// needs a live marker has to give the anchor a real box.
+//
+// This is a direct assignment rather than a spy on purpose — jsdom's own
+// getBoundingClientRect is on the prototype — so `restoreAllMocks` cannot undo
+// it and the top-level afterEach deletes it instead. Two suites used to set
+// this in their own beforeEach and leak it to every suite declared after them,
+// which is what made the popover tests pass in file order and fail in any
+// other.
+// The set of mousedown listeners currently on `document`, from this point on.
+// Counting by handler identity rather than by call count, so a listener that
+// is added and then properly removed leaves nothing behind.
+const trackMousedownListeners = () => {
+  const added = new Set();
+  const realAdd = document.addEventListener.bind(document);
+  const realRemove = document.removeEventListener.bind(document);
+  vi.spyOn(document, "addEventListener").mockImplementation((t, h, o) => {
+    if (t === "mousedown") added.add(h);
+    return realAdd(t, h, o);
+  });
+  vi.spyOn(document, "removeEventListener").mockImplementation((t, h, o) => {
+    if (t === "mousedown") added.delete(h);
+    return realRemove(t, h, o);
+  });
+  return added;
+};
+
+const stubBodyRect = () => {
+  document.body.getBoundingClientRect = () => ({
+    left: 0,
+    top: 0,
+    width: 1000,
+    height: 800,
+    right: 1000,
+    bottom: 800,
+  });
+};
+
+const makeOverlay = (options = {}) => {
+  const instance = new CommentOverlay(options);
+  liveOverlays.add(instance);
+  return instance;
+};
 
 describe("CommentOverlay", () => {
   let overlay;
@@ -59,9 +113,20 @@ describe("CommentOverlay", () => {
   });
 
   afterEach(() => {
+    // cleanup() is idempotent, so instances a test already tore down itself
+    // pass through harmlessly.
+    for (const instance of liveOverlays) instance.cleanup?.();
+    liveOverlays.clear();
     overlay?.cleanup?.();
     cleanupDom();
+    // Back to jsdom's prototype implementation; see stubBodyRect.
+    delete document.body.getBoundingClientRect;
     vi.restoreAllMocks();
+    // restoreAllMocks only undoes spies. `domToCanvas` is a vi.fn() from the
+    // module factory, so an implementation set on it — the capture-rejects
+    // test installs a permanent mockRejectedValue — outlived the test that
+    // wanted it and starved every later capture of its canvas.
+    vi.mocked(domToCanvas).mockReset();
   });
 
   describe("construction", () => {
@@ -296,16 +361,7 @@ describe("CommentOverlay", () => {
   });
 
   describe("click-to-comment flow", () => {
-    beforeEach(() => {
-      document.body.getBoundingClientRect = () => ({
-        left: 0,
-        top: 0,
-        width: 1000,
-        height: 800,
-        right: 1000,
-        bottom: 800,
-      });
-    });
+    beforeEach(stubBodyRect);
 
     it("ignores clicks while comment mode is off", () => {
       overlay = makeOverlay();
@@ -388,7 +444,9 @@ describe("CommentOverlay", () => {
       document.dispatchEvent(
         new MouseEvent("mouseup", { bubbles: true, clientX: 150, clientY: 160 })
       );
-      await wait(10);
+      // The crop resolves through the capture pipeline on its own schedule;
+      // a fixed sleep here is a bet on how loaded the machine is.
+      await waitFor(() => overlay._pendingScreenshots?.length === 1);
 
       expect(overlay._pendingScreenshots?.length).toBe(1);
       expect(overlay._pendingScreenshots[0]).toBe(
@@ -621,16 +679,7 @@ describe("CommentOverlay", () => {
   });
 
   describe("saveComment", () => {
-    beforeEach(() => {
-      document.body.getBoundingClientRect = () => ({
-        left: 0,
-        top: 0,
-        width: 1000,
-        height: 800,
-        right: 1000,
-        bottom: 800,
-      });
-    });
+    beforeEach(stubBodyRect);
 
     it("does nothing without text or a current position", async () => {
       overlay = makeOverlay();
@@ -687,6 +736,10 @@ describe("CommentOverlay", () => {
     let comment;
 
     beforeEach(() => {
+      // The marker has to be visible for the popover to track it at all —
+      // declared here rather than inherited from whichever suite happened to
+      // run first.
+      stubBodyRect();
       overlay = makeOverlay();
       comment = {
         id: 7,
@@ -2328,19 +2381,7 @@ describe("CommentOverlay", () => {
     // A host unmounting the widget right after opening a thread (a route
     // change, a StrictMode double-invoke) accumulated one per mount.
     it("cannot arm the popover's outside-click listener after cleanup", async () => {
-      const added = new Set();
-      const realAdd = document.addEventListener.bind(document);
-      const realRemove = document.removeEventListener.bind(document);
-      vi.spyOn(document, "addEventListener").mockImplementation((t, h, o) => {
-        if (t === "mousedown") added.add(h);
-        return realAdd(t, h, o);
-      });
-      vi.spyOn(document, "removeEventListener").mockImplementation(
-        (t, h, o) => {
-          if (t === "mousedown") added.delete(h);
-          return realRemove(t, h, o);
-        }
-      );
+      const added = trackMousedownListeners();
 
       overlay = makeOverlay();
       const comment = {
@@ -2361,6 +2402,43 @@ describe("CommentOverlay", () => {
 
       // Whatever the popover had scheduled must not resurrect a listener.
       await wait(20);
+      expect(added.size).toBe(0);
+
+      overlay = null;
+    });
+
+    // The inbox arms its own outside-click listener the same deferred way,
+    // and had the same two holes.
+    it("cannot arm the inbox's outside-click listener after cleanup", async () => {
+      const added = trackMousedownListeners();
+
+      overlay = makeOverlay();
+      overlay.showInbox();
+      overlay.cleanup();
+      expect(added.size).toBe(0);
+
+      await wait(20);
+      expect(added.size).toBe(0);
+
+      overlay = null;
+    });
+
+    it("arms one inbox listener however many times the inbox is opened", async () => {
+      // Re-opening an already-open inbox overwrote both the pending timer and
+      // the handler field, so the previous ones were orphaned where
+      // closeInbox() could no longer reach them. Reached in practice through
+      // notifyNavigation(), which re-reads the deep link on every route
+      // change, and through the toolbar button.
+      overlay = makeOverlay();
+      const added = trackMousedownListeners();
+
+      overlay.showInbox();
+      overlay.showInbox();
+      overlay.showInbox();
+      await wait(20);
+      expect(added.size).toBe(1);
+
+      overlay.closeInbox();
       expect(added.size).toBe(0);
 
       overlay = null;

@@ -1487,3 +1487,50 @@ Two notes for whoever reads this next:
   not cancel.** That one is harmless today — it positions a detached node —
   but it is the same shape, and it is what makes two of the popover
   positioning tests order-dependent under `--sequence.shuffle`.
+
+## What the flaky outside-click test was actually hiding
+
+One CI-adjacent run failed `clicking outside the popover and circle closes it`
+and never did so again — not in 10 isolated runs, 6 under full CPU
+saturation, 8 of the whole suite, or 15 shuffled seeds. The original
+diagnosis (a `wait(10)` racing a `setTimeout(…, 10)`) was wrong twice over:
+the listener is armed on a `setTimeout(…, 0)`, whose ordering against a later
+10ms timer is guaranteed, and a 300-iteration probe armed and closed 300/300.
+That single failure has no confirmed cause.
+
+Chasing it with `--sequence.shuffle` was what paid off, because it turned
+"passes in file order" into a testable property. Four defects came out, three
+of them real leaks in the widget rather than in the tests:
+
+- **The popover armed its outside-click listener on an uncancellable timer.**
+  See the entry above.
+- **The inbox did the same, and also re-armed without disarming.** Each
+  `showInbox()` overwrote the pending timer and the handler field, so the
+  previous pair was orphaned beyond `closeInbox()`'s reach. `notifyNavigation()`
+  re-reads the deep link on every route change, which makes this one
+  accumulate on an ordinary SPA session, not just on unmount.
+- **Two suites stubbed `document.body.getBoundingClientRect` by direct
+  assignment** in their own `beforeEach`. `restoreAllMocks` cannot undo an own
+  property, so the stub leaked to every suite declared after them. The popover
+  suite silently depended on it: without a sized anchor its marker renders
+  `display: none`, and `syncToMarker` then reads the marker as off-screen,
+  hides the popover and never positions it. It now calls the shared
+  `stubBodyRect()` itself, and the top-level `afterEach` deletes the override.
+- **`domToCanvas` is a `vi.fn()` from a module factory, so
+  `restoreAllMocks` does not reset its implementation.** The
+  capture-rejects test installs a permanent `mockRejectedValue`, which starved
+  every later capture of its canvas. Reset in the top-level `afterEach`.
+
+The test harness also tracks every instance `makeOverlay` creates and tears
+them all down, instead of only whatever `overlay` points at last: several
+suites create one in `beforeEach` and reassign inside the test, and a shuffled
+run caught nine orphaned comment-mode listeners answering a single mousedown.
+
+Two habits this is worth writing down for:
+
+- **Assert on conditions, not durations.** The two tests that failed here
+  both slept a fixed number of milliseconds and then asserted. `waitFor` was
+  already in the file.
+- **`restoreAllMocks` only undoes spies.** Direct property assignments and
+  module-factory `vi.fn()`s need explicit teardown, and until they get it they
+  are a channel between tests.

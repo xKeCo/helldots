@@ -867,7 +867,18 @@ class CommentOverlay {
     }
     this.inboxView.open();
 
-    setTimeout(() => {
+    // Both fields hold one thing, so whatever is already in them has to go
+    // first: re-opening an open inbox (notifyNavigation re-reads the deep
+    // link on every route change) otherwise orphaned the previous timer and
+    // handler where closeInbox could no longer reach them.
+    this._disarmInboxOutsideClick();
+
+    // Deferred like the thread popover's, and cancellable for the same
+    // reason: closeInbox() (via cleanup(), or a host that opens and unmounts
+    // in one tick) may run before the timer, and a listener installed after
+    // that has nothing left to remove it.
+    this._inboxClickTimer = setTimeout(() => {
+      this._inboxClickTimer = null;
       this._inboxClickHandler = (e) => {
         const target = e.composedPath()[0] || e.target;
         if (
@@ -887,6 +898,19 @@ class CommentOverlay {
 
   closeInbox() {
     this.inboxView?.close();
+    this._disarmInboxOutsideClick();
+  }
+
+  /**
+   * Drops the inbox's outside-click listener, whether it is already on
+   * `document` or still sitting in a pending timer. One place, so re-opening
+   * and closing cannot each remember a different half of it.
+   */
+  _disarmInboxOutsideClick() {
+    if (this._inboxClickTimer) {
+      clearTimeout(this._inboxClickTimer);
+      this._inboxClickTimer = null;
+    }
     if (this._inboxClickHandler) {
       document.removeEventListener("mousedown", this._inboxClickHandler);
       this._inboxClickHandler = null;
