@@ -449,6 +449,59 @@ describe("persistence", () => {
       expect(overlay.comments[0].replies[0].text).toBe("the reply");
     });
 
+    it("mutations reuse the parsed corpus instead of re-reading localStorage", async () => {
+      overlay = makeOverlay({ persistence: "localStorage" });
+      const comment = await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "cached"
+      );
+
+      // The save above seeded the cache; later mutations must not pay a
+      // full getItem + JSON.parse of the cross-page corpus each.
+      const getSpy = vi.spyOn(Storage.prototype, "getItem");
+      overlay.setCommentStatus(comment.id, "resolved");
+      overlay.setCommentPriority(comment.id, "high");
+      overlay.setCommentTags(comment.id, ["checkout"]);
+
+      expect(getSpy).not.toHaveBeenCalledWith("helldots-comments");
+    });
+
+    it("a storage event from another tab invalidates the cached corpus", async () => {
+      overlay = makeOverlay({ persistence: "localStorage" });
+      const comment = await createCommentOn(
+        overlay,
+        document.getElementById("target"),
+        "mine"
+      );
+
+      // Another tab appends a comment from a different page.
+      const stored = JSON.parse(localStorage.getItem("helldots-comments"));
+      const foreign = {
+        id: "foreign-1",
+        text: "from another tab",
+        page: "/elsewhere",
+        anchor: null,
+        replies: [],
+        author: "B",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        screenshots: [],
+        status: "open",
+      };
+      localStorage.setItem(
+        "helldots-comments",
+        JSON.stringify([...stored, foreign])
+      );
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: "helldots-comments" })
+      );
+
+      overlay.setCommentStatus(comment.id, "resolved");
+
+      const after = JSON.parse(localStorage.getItem("helldots-comments"));
+      expect(after.some((c) => c.id === "foreign-1")).toBe(true);
+    });
+
     it("does not touch localStorage without the option", async () => {
       overlay = makeOverlay();
       await createCommentOn(

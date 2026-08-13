@@ -6,6 +6,7 @@ import {
   PRIORITIES,
   PRIORITY_COLORS,
   STATUS_COLORS,
+  MAX_SCREENSHOTS,
 } from "./constants.js";
 import { formatDuration, formatTemplate } from "./i18n.js";
 import defaultStrings from "./locales/en.js";
@@ -92,6 +93,9 @@ export const createEditedMark = (editedAt, strings, locale) => {
   return editedEl;
 };
 
+export const isMacPlatform = () =>
+  /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
+
 /**
  * The comment shortcut as the user's platform spells it. Exported so the
  * inbox's empty state teaches the same chord the toolbar tooltip shows —
@@ -100,7 +104,7 @@ export const createEditedMark = (editedAt, strings, locale) => {
  * @param {object} strings
  */
 export const getShortcutText = (options, strings) => {
-  const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
+  const isMac = isMacPlatform();
   const modifierMap = {
     alt: isMac ? "⌥" : strings.modifierAlt,
     ctrl: isMac ? "⌘" : strings.modifierCtrl,
@@ -112,6 +116,9 @@ export const getShortcutText = (options, strings) => {
 
   return `${modifier} + ${key}`;
 };
+
+// Shared with the inbox and the context block — one caret, not three copies.
+export const CARET_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
 
 const ATTACH_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
 
@@ -446,6 +453,101 @@ export const createCommentBox = (strings = defaultStrings) => {
 export const circleSelector = (id) =>
   `[data-comment-id="${String(id).replace(/[\\"]/g, "\\$&")}"]`;
 
+/**
+ * A comment's (or reply's) attached screenshots, tolerating the singular
+ * `screenshot` field records persisted before the array existed still carry.
+ * @param {{ screenshots?: string[], screenshot?: string }} entry
+ * @returns {string[]}
+ */
+export const screenshotsOf = (entry) =>
+  entry.screenshots || (entry.screenshot ? [entry.screenshot] : []);
+
+/**
+ * The pending-attachment preview strip. One builder for the three surfaces
+ * that show it — comment box, thread popover reply, inbox reply — which had
+ * drifted apart once already (the popover copy lost its remove button's
+ * aria-label and type).
+ * @param {Element} container
+ * @param {string[]} screenshots the pending array; remove splices it in place
+ * @param {{ strings: typeof defaultStrings, onShow: (dataUrl: string) => void,
+ *   rerender: () => void }} deps
+ */
+export const renderScreenshotsPreview = (
+  container,
+  screenshots,
+  { strings, onShow, rerender }
+) => {
+  container.innerHTML = "";
+  container.classList.toggle(CLASSES.ACTIVE, screenshots.length > 0);
+
+  screenshots.forEach((dataUrl, i) => {
+    const item = document.createElement("div");
+    item.className = CLASSES.SCREENSHOT_ITEM;
+
+    const img = document.createElement("img");
+    img.className = CLASSES.SCREENSHOT_IMG;
+    img.src = dataUrl;
+    img.alt = strings.attachedScreenshot;
+    img.onclick = () => onShow(dataUrl);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = CLASSES.SCREENSHOT_REMOVE;
+    removeBtn.setAttribute("aria-label", strings.removeScreenshot);
+    removeBtn.innerHTML = "&times;";
+    removeBtn.onclick = (e) => {
+      e.stopPropagation();
+      screenshots.splice(i, 1);
+      rerender();
+    };
+
+    item.appendChild(img);
+    item.appendChild(removeBtn);
+    container.appendChild(item);
+  });
+};
+
+/**
+ * Wires the hidden file input that feeds a pending-screenshots array,
+ * enforcing MAX_SCREENSHOTS the same way on every attachment surface.
+ * @param {HTMLInputElement} input
+ * @param {() => string[]} getScreenshots
+ * @param {() => void} rerender
+ */
+export const wireScreenshotInput = (input, getScreenshots, rerender) => {
+  input.addEventListener("change", (e) => {
+    const file = /** @type {HTMLInputElement} */ (e.target).files[0];
+    if (!file) return;
+    const screenshots = getScreenshots();
+    if (screenshots.length >= MAX_SCREENSHOTS) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      screenshots.push(/** @type {string} */ (ev.target.result));
+      rerender();
+    };
+    reader.readAsDataURL(file);
+    input.value = "";
+  });
+};
+
+/**
+ * Every rendered screenshot thumbnail opens the lightbox the same way;
+ * wired in one place so the five surfaces that render them cannot drift.
+ * @param {ParentNode} root
+ * @param {(src: string) => void} onShow
+ */
+export const wireScreenshotLightbox = (root, onShow) => {
+  root
+    .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
+    .forEach((/** @type {HTMLImageElement} */ img) => {
+      img.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onShow(img.src);
+      });
+    });
+};
+
 export const createCommentCircle = (comment, strings = defaultStrings) => {
   const circle = document.createElement("div");
   circle.className = CLASSES.CIRCLE;
@@ -523,8 +625,7 @@ export const createTooltip = (comment, strings = defaultStrings, locale) => {
   // the only place its status/type/priority can be read at all.
   const badges = createBadgeRow(comment, strings, { includeStatus: true });
   if (badges) tooltip.appendChild(badges);
-  const tooltipScreenshots =
-    comment.screenshots || (comment.screenshot ? [comment.screenshot] : []);
+  const tooltipScreenshots = screenshotsOf(comment);
   if (tooltipScreenshots.length > 0) {
     tooltip.appendChild(createScreenshotsDisplay(tooltipScreenshots, strings));
   }
@@ -629,8 +730,7 @@ export const createReplyElement = (
 
   replyEl.appendChild(meta);
   replyEl.appendChild(text);
-  const replyScreenshots =
-    reply.screenshots || (reply.screenshot ? [reply.screenshot] : []);
+  const replyScreenshots = screenshotsOf(reply);
   if (replyScreenshots.length > 0) {
     replyEl.appendChild(createScreenshotsDisplay(replyScreenshots, strings));
   }
@@ -714,8 +814,7 @@ export const createThreadPopover = (
 
   popover.appendChild(header);
   scroll.appendChild(body);
-  const popoverScreenshots =
-    comment.screenshots || (comment.screenshot ? [comment.screenshot] : []);
+  const popoverScreenshots = screenshotsOf(comment);
   if (popoverScreenshots.length > 0) {
     scroll.appendChild(createScreenshotsDisplay(popoverScreenshots, strings));
   }

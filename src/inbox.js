@@ -15,8 +15,12 @@ import {
   priorityLabelOf,
 } from "./comment-actions.js";
 import {
+  CARET_ICON_SVG,
   circleSelector,
   createMetaElement,
+  renderScreenshotsPreview,
+  wireScreenshotInput,
+  wireScreenshotLightbox,
   createScreenshotsDisplay,
   createInputArea,
   createReplyElement,
@@ -27,7 +31,6 @@ import { sameId } from "./id.js";
 import { createInlineEditor, confirmDiscard } from "./inline-editor.js";
 import { buildCommentLink } from "./link.js";
 
-const CARET_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
 const CHEVRON_LEFT_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`;
 const ARROW_UP_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`;
 const ARROW_DOWN_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
@@ -115,6 +118,15 @@ export class InboxView {
 
   refresh() {
     if (this.el) this.render();
+  }
+
+  /** Back to the default view: current page, no status/type/priority. */
+  _resetFilters() {
+    this.pageFilter = "page";
+    this.statusFilter = "all";
+    this.typeFilter = "all";
+    this.priorityFilter = "all";
+    this.render();
   }
 
   /**
@@ -410,11 +422,7 @@ export class InboxView {
       clear.className = CLASSES.INBOX_EMPTY_ACTION;
       clear.textContent = this.strings.filterClear;
       clear.addEventListener("click", () => {
-        this.pageFilter = "page";
-        this.statusFilter = "all";
-        this.typeFilter = "all";
-        this.priorityFilter = "all";
-        this.render();
+        this._resetFilters();
       });
       empty.appendChild(clear);
       return empty;
@@ -565,11 +573,7 @@ export class InboxView {
     clear.disabled = !this._isFilterActive();
     clear.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.pageFilter = "page";
-      this.statusFilter = "all";
-      this.typeFilter = "all";
-      this.priorityFilter = "all";
-      this.render();
+      this._resetFilters();
     });
     header.appendChild(clear);
     menu.appendChild(header);
@@ -673,14 +677,9 @@ export class InboxView {
 
     if (comment.screenshots?.length) {
       const shots = createScreenshotsDisplay(comment.screenshots, this.strings);
-      shots
-        .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
-        .forEach((/** @type {HTMLImageElement} */ img) => {
-          img.addEventListener("click", (e) => {
-            e.stopPropagation();
-            this.callbacks.onShowLightbox(img.src);
-          });
-        });
+      wireScreenshotLightbox(shots, (src) =>
+        this.callbacks.onShowLightbox(src)
+      );
       card.appendChild(shots);
     }
 
@@ -857,14 +856,9 @@ export class InboxView {
         onEdit: (r) => this.startEditing(comment.id, r.id),
         editing: editingThisReply ? this._editorHandlers() : null,
       });
-      replyEl
-        .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
-        .forEach((/** @type {HTMLImageElement} */ img) => {
-          img.addEventListener("click", (e) => {
-            e.stopPropagation();
-            this.callbacks.onShowLightbox(img.src);
-          });
-        });
+      wireScreenshotLightbox(replyEl, (src) =>
+        this.callbacks.onShowLightbox(src)
+      );
       replies.appendChild(replyEl);
     }
     detail.appendChild(replies);
@@ -894,47 +888,15 @@ export class InboxView {
     let pendingScreenshots = [];
 
     const updatePreview = () => {
-      screenshotsContainer.innerHTML = "";
-      screenshotsContainer.classList.toggle(
-        CLASSES.ACTIVE,
-        pendingScreenshots.length > 0
-      );
-      pendingScreenshots.forEach((dataUrl, i) => {
-        const item = document.createElement("div");
-        item.className = CLASSES.SCREENSHOT_ITEM;
-        const img = document.createElement("img");
-        img.className = CLASSES.SCREENSHOT_IMG;
-        img.src = dataUrl;
-        img.alt = this.strings.attachedScreenshot;
-        img.onclick = () => this.callbacks.onShowLightbox(dataUrl);
-        const removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.className = CLASSES.SCREENSHOT_REMOVE;
-        removeBtn.setAttribute("aria-label", this.strings.removeScreenshot);
-        removeBtn.innerHTML = "&times;";
-        removeBtn.onclick = (e) => {
-          e.stopPropagation();
-          pendingScreenshots.splice(i, 1);
-          updatePreview();
-        };
-        item.appendChild(img);
-        item.appendChild(removeBtn);
-        screenshotsContainer.appendChild(item);
+      renderScreenshotsPreview(screenshotsContainer, pendingScreenshots, {
+        strings: this.strings,
+        onShow: (dataUrl) => this.callbacks.onShowLightbox(dataUrl),
+        rerender: () => updatePreview(),
       });
     };
 
     attachBtn.addEventListener("click", () => fileInput.click());
-    fileInput.addEventListener("change", (e) => {
-      const file = /** @type {HTMLInputElement} */ (e.target).files[0];
-      if (!file || pendingScreenshots.length >= 5) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        pendingScreenshots.push(ev.target.result);
-        updatePreview();
-      };
-      reader.readAsDataURL(file);
-      fileInput.value = "";
-    });
+    wireScreenshotInput(fileInput, () => pendingScreenshots, updatePreview);
 
     const submit = () => {
       const text = inputEl.value.trim();

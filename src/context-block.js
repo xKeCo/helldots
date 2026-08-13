@@ -7,8 +7,7 @@
 // conversation first and a bug report second.
 
 import { CLASSES } from "./constants.js";
-
-const CARET_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+import { CARET_ICON_SVG } from "./components.js";
 
 /**
  * @param {any} comment

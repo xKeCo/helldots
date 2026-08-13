@@ -128,6 +128,14 @@ export const IDS = {
 
 // RF09 — comment lifecycle. Order matters: it's the order shown in the
 // status picker menu.
+// Marker circle size in px. The stylesheet's .comment-circle rule and the
+// positioning math (center offsets, edge clamps) must agree on this number.
+export const MARKER_SIZE = 28;
+
+// Cap on user-attached screenshots per comment or reply — enforced by every
+// attachment surface (comment box, thread popover, inbox reply input).
+export const MAX_SCREENSHOTS = 5;
+
 export const STATUSES = ["open", "in_progress", "resolved"];
 
 export const STATUS_COLORS = {

@@ -4,6 +4,7 @@ import {
   Z_INDEX,
   CURSOR_SVG,
   CURSOR_HOTSPOT,
+  MARKER_SIZE,
 } from "./constants.js";
 
 // Every scrollable surface in the widget sits on a #1C1C1E panel, so the
@@ -269,8 +270,8 @@ export const getStyles = () => `
 
     .${CLASSES.CIRCLE} {
         position: absolute;
-        width: 28px;
-        height: 28px;
+        width: ${MARKER_SIZE}px;
+        height: ${MARKER_SIZE}px;
         background: #2E90FA;
         border-radius: 0% 100% 100% 100%;
         border: 2px solid #FFF;

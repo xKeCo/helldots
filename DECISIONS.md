@@ -1050,3 +1050,45 @@ review memory. CI now runs `changeset status --since=<base>` on every PR.
   `npm test` step before `test:coverage`, which already runs every test) and
   started running `format:check`, which `npm run verify` always included but
   CI never did.
+
+## The position loop, batched (Fase 2 of the audit)
+
+The per-frame update used to interleave a shadow-tree query, layout reads
+and style writes per comment — O(n²) scans plus a forced layout per marker
+per scroll frame, with an `elementsFromPoint` occlusion hit-test each. Now:
+
+- **Markers are indexed in a Map**; the update is split into a read phase
+  (all measurements) and a write phase (all styles).
+- **Occlusion is throttled to one pass per 150ms during batched updates**,
+  with a trailing pass once the burst settles. The accepted limitation: a
+  marker sliding under a fixed host overlay mid-scroll can stay visible up
+  to 150ms longer than before. Direct, event-driven updates (status change,
+  container resize) still evaluate occlusion immediately — which is also why
+  every existing occlusion test passes unchanged.
+- **Inbox refreshes coalesce to one per batch** instead of one per flipped
+  marker (a host modal occluding 150 markers used to rebuild the panel 150
+  times in a single frame).
+- **The per-comment MutationObservers are gone.** The page-wide observer
+  already scheduled the same update; N observers with `subtree: true` on
+  (usually) `document.body` fired N redundant callbacks per mutation batch.
+  Accepted limitation: attribute mutations outside the global observer's
+  filter (`style`, `class`, `hidden`, `open`) no longer trigger
+  repositioning — container size changes are still caught per comment by
+  its ResizeObserver, and scroll/resize by their own handlers.
+
+## Storage: cache the parse, keep the write synchronous
+
+`_syncStorage()` used to `getItem` + `JSON.parse` the entire cross-page
+corpus on every mutation. The parsed corpus is now cached; a `storage`
+event from another tab invalidates it (that listener exists ONLY for cache
+invalidation — real cross-tab reconciliation of in-memory state remains an
+open item from the audit).
+
+The audit's suggestion to also defer the `setItem` was **rejected**: a
+debounced write buys back the `JSON.stringify` cost per burst, but a tab
+closed before the flush silently loses the last edits, and every test that
+asserts persistence right after a mutation would have to be weakened to
+match. Synchronous durability won. The stringify itself therefore still
+runs per mutation — the remaining cost is proportional to the current
+page's corpus, and the honest fix for that is a storage schema with
+per-comment keys, which is a breaking change parked for later.

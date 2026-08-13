@@ -13,6 +13,7 @@ import {
   STATUSES,
   COMMENT_TYPES,
   PRIORITIES,
+  MARKER_SIZE,
 } from "./constants.js";
 import { getStyles, getGlobalStyles } from "./styles.js";
 import { getShadowRoot, TAG_NAME } from "./root-element.js";
@@ -26,6 +27,7 @@ import {
   readStoredComments,
   writeStoredComments,
   mergeForStorage,
+  STORAGE_KEY,
   PENDING_DETAIL_KEY,
 } from "./storage.js";
 import { createId, sameId } from "./id.js";
@@ -35,8 +37,11 @@ import {
   DEFAULT_LINK_PARAM,
 } from "./link.js";
 import {
-  circleSelector,
   createToolbar,
+  isMacPlatform,
+  renderScreenshotsPreview,
+  wireScreenshotInput,
+  wireScreenshotLightbox,
   createCommentBox,
   createCommentCircle,
   createTooltip,
@@ -64,6 +69,11 @@ const normalizeTags = (tags) => {
   return [...seen];
 };
 
+// How long a batched position pass may reuse the previous occlusion verdict
+// before hit-testing again. Scrolling schedules a pass per frame; occlusion
+// rarely changes mid-scroll, and the trailing pass settles the end state.
+const OCCLUSION_INTERVAL_MS = 150;
+
 class CommentOverlay {
   /**
    * @param {import('./index.d.ts').CommentOverlayOptions} [options]
@@ -71,7 +81,7 @@ class CommentOverlay {
   constructor(options = {}) {
     this.comments = [];
     this.commentMode = false;
-    this.isMac = /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
+    this.isMac = isMacPlatform();
     this.options = {
       shortcutKey: options.shortcutKey || (this.isMac ? "c" : "C"),
       shortcutModifier: options.shortcutModifier || "alt",
@@ -83,13 +93,34 @@ class CommentOverlay {
 
     // Initialize resize observers and position validation
     this.resizeObservers = new Map();
-    // Track mutation observers per comment
-    this.mutationObservers = new Map();
     this.positionValidationEnabled = true;
+
+    /**
+     * Marker circles by String(comment.id). The per-frame position loop
+     * used to querySelector each one — a full shadow-tree scan per comment
+     * per frame, O(n²) on scroll.
+     * @type {Map<string, HTMLElement>}
+     */
+    this._circles = new Map();
+    // Occlusion hit-testing (elementsFromPoint + getComputedStyle per
+    // marker) is the expensive part of a position pass, and scrolling is
+    // when passes are hottest — so batched passes run it at most once per
+    // OCCLUSION_INTERVAL_MS, with a trailing pass to settle the final state.
+    this._lastOcclusionPass = 0;
+    this._occlusionTrailingTimer = null;
 
     // rAF scheduling flag for bulk updates
     this._pendingRaf = null;
     this._pendingContextScreenshot = null;
+
+    /**
+     * Parsed cross-page corpus, so every mutation does not pay a full
+     * getItem + JSON.parse (megabytes once screenshots accumulate). Kept in
+     * step with what this instance writes; dropped when another tab writes
+     * (the `storage` listener in initOverlay).
+     * @type {import('./index.d.ts').SerializedComment[] | null}
+     */
+    this._storedCache = null;
 
     /**
      * The popover's open editor. Tracked as state even though the popover
@@ -161,7 +192,15 @@ class CommentOverlay {
     this._pendingDetailId = this._readPendingDetailId();
 
     if (this.options.persistence === "localStorage") {
-      this.loadComments(readStoredComments());
+      this._storedCache = readStoredComments();
+      this.loadComments(this._storedCache);
+      // Another tab writing the key makes this instance's parsed copy
+      // stale — drop it so the next sync re-reads before merging, instead
+      // of clobbering what the other tab persisted.
+      this._storageHandler = (e) => {
+        if (e.key === STORAGE_KEY || e.key === null) this._storedCache = null;
+      };
+      window.addEventListener("storage", this._storageHandler);
     }
     // Also outside localStorage mode: a host that persists comments itself
     // still deserves to have the link honoured, and until its loadComments()
@@ -394,15 +433,24 @@ class CommentOverlay {
     return comment ? buildCommentLink(comment, this._linkParam()) : null;
   }
 
+  /** The parsed corpus, re-read only after another tab invalidated it. */
+  _readStoredCached() {
+    if (!this._storedCache) this._storedCache = readStoredComments();
+    return this._storedCache;
+  }
+
   _syncStorage() {
     if (this.options.persistence !== "localStorage") return;
-    writeStoredComments(
-      mergeForStorage(
-        readStoredComments(),
-        this.serializeComments(),
-        location.pathname
-      )
+    const merged = mergeForStorage(
+      this._readStoredCached(),
+      this.serializeComments(),
+      location.pathname
     );
+    writeStoredComments(merged);
+    // The merge IS the new stored state (quota shedding only nulls
+    // contextScreenshot in the written copy, which the next merge would
+    // reattempt from memory anyway — same as before the cache existed).
+    this._storedCache = merged;
   }
 
   bindEventListeners() {
@@ -421,20 +469,14 @@ class CommentOverlay {
       this.attachImageInput.click();
     });
 
-    this.attachImageInput.addEventListener("change", (e) => {
-      const file = /** @type {HTMLInputElement} */ (e.target).files[0];
-      if (!file) return;
-      if (!this._pendingScreenshots) this._pendingScreenshots = [];
-      if (this._pendingScreenshots.length >= 5) return;
-
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        this._pendingScreenshots.push(ev.target.result);
-        this._updateScreenshotsPreview();
-      };
-      reader.readAsDataURL(file);
-      this.attachImageInput.value = "";
-    });
+    wireScreenshotInput(
+      this.attachImageInput,
+      () => {
+        if (!this._pendingScreenshots) this._pendingScreenshots = [];
+        return this._pendingScreenshots;
+      },
+      () => this._updateScreenshotsPreview()
+    );
 
     this._handleDocumentClickBound = (e) => this.handleDocumentClick(e);
     document.addEventListener("mousedown", this._handleDocumentClickBound);
@@ -679,39 +721,10 @@ class CommentOverlay {
       `.${CLASSES.SCREENSHOTS_CONTAINER}`
     );
     if (!container) return;
-    container.innerHTML = "";
-
-    if (!this._pendingScreenshots || this._pendingScreenshots.length === 0) {
-      container.classList.remove(CLASSES.ACTIVE);
-      return;
-    }
-
-    container.classList.add(CLASSES.ACTIVE);
-
-    this._pendingScreenshots.forEach((dataUrl, i) => {
-      const item = document.createElement("div");
-      item.className = CLASSES.SCREENSHOT_ITEM;
-
-      const img = document.createElement("img");
-      img.className = CLASSES.SCREENSHOT_IMG;
-      img.src = dataUrl;
-      img.alt = this.strings.attachedScreenshot;
-      img.onclick = () => this.showLightbox(dataUrl);
-
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = CLASSES.SCREENSHOT_REMOVE;
-      removeBtn.setAttribute("aria-label", this.strings.removeScreenshot);
-      removeBtn.innerHTML = "&times;";
-      removeBtn.onclick = (e) => {
-        e.stopPropagation();
-        this._pendingScreenshots.splice(i, 1);
-        this._updateScreenshotsPreview();
-      };
-
-      item.appendChild(img);
-      item.appendChild(removeBtn);
-      container.appendChild(item);
+    renderScreenshotsPreview(container, this._pendingScreenshots || [], {
+      strings: this.strings,
+      onShow: (dataUrl) => this.showLightbox(dataUrl),
+      rerender: () => this._updateScreenshotsPreview(),
     });
   }
 
@@ -729,7 +742,7 @@ class CommentOverlay {
   showCommentBox(x, y) {
     this.commentBox.style.display = "block";
 
-    const circleBaseSize = 28;
+    const circleBaseSize = MARKER_SIZE;
     const circleRadius = circleBaseSize / 2;
     const offset = circleRadius + 10;
     const windowWidth = window.innerWidth;
@@ -837,7 +850,7 @@ class CommentOverlay {
     this.hideCommentBox();
     this.toggleCommentMode();
 
-    const circle = this.shadowRoot.querySelector(circleSelector(comment.id));
+    const circle = this._circles.get(String(comment.id));
     if (circle) {
       this.showThreadPopover(circle, comment);
     }
@@ -887,10 +900,14 @@ class CommentOverlay {
     });
 
     this.overlay.appendChild(circle);
+    this._circles.set(String(comment.id), circle);
     this.updateCommentPosition(comment, circle);
 
+    // Size changes of the container are watched per comment (ResizeObserver
+    // below); DOM mutations are watched once for the whole page by the
+    // global observer in setupResizeHandlers — a per-comment MutationObserver
+    // here would fire N redundant callbacks per mutation batch on top of it.
     this.createResizeObserver(comment, circle);
-    this.createMutationObserver(comment);
   }
 
   showCommentTooltip(circle, comment) {
@@ -907,14 +924,7 @@ class CommentOverlay {
     const tooltip = createTooltip(comment, this.strings, this.locale);
     this.shadowRoot.appendChild(tooltip);
 
-    tooltip
-      .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
-      .forEach((/** @type {HTMLImageElement} */ img) => {
-        img.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.showLightbox(img.src);
-        });
-      });
+    wireScreenshotLightbox(tooltip, (src) => this.showLightbox(src));
 
     setTimeout(() => {
       this.positionPopoverAtCircle(tooltip, circle);
@@ -1084,14 +1094,9 @@ class CommentOverlay {
       `.${CLASSES.THREAD_SCROLL} > .${CLASSES.SCREENSHOTS_CONTAINER}`
     );
     if (mainScreenshotsContainer) {
-      mainScreenshotsContainer
-        .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
-        .forEach((/** @type {HTMLImageElement} */ img) => {
-          img.addEventListener("click", (e) => {
-            e.stopPropagation();
-            this.showLightbox(img.src);
-          });
-        });
+      wireScreenshotLightbox(mainScreenshotsContainer, (src) =>
+        this.showLightbox(src)
+      );
     }
 
     // RF2 — the automatic capture used to be reachable only from the inbox
@@ -1148,56 +1153,26 @@ class CommentOverlay {
     let pendingReplyScreenshots = [];
 
     const updateReplyScreenshotsPreview = () => {
-      threadScreenshotsContainer.innerHTML = "";
-      if (pendingReplyScreenshots.length === 0) {
-        threadScreenshotsContainer.classList.remove(CLASSES.ACTIVE);
-        return;
-      }
-      threadScreenshotsContainer.classList.add(CLASSES.ACTIVE);
-      pendingReplyScreenshots.forEach((dataUrl, i) => {
-        const item = document.createElement("div");
-        item.className = CLASSES.SCREENSHOT_ITEM;
-
-        const img = document.createElement("img");
-        img.className = CLASSES.SCREENSHOT_IMG;
-        img.src = dataUrl;
-        img.alt = this.strings.attachedScreenshot;
-        img.onclick = () => this.showLightbox(dataUrl);
-
-        const removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.className = CLASSES.SCREENSHOT_REMOVE;
-        removeBtn.setAttribute("aria-label", this.strings.removeScreenshot);
-        removeBtn.innerHTML = "&times;";
-        removeBtn.onclick = (e) => {
-          e.stopPropagation();
-          pendingReplyScreenshots.splice(i, 1);
-          updateReplyScreenshotsPreview();
-        };
-
-        item.appendChild(img);
-        item.appendChild(removeBtn);
-        threadScreenshotsContainer.appendChild(item);
-      });
+      renderScreenshotsPreview(
+        threadScreenshotsContainer,
+        pendingReplyScreenshots,
+        {
+          strings: this.strings,
+          onShow: (dataUrl) => this.showLightbox(dataUrl),
+          rerender: () => updateReplyScreenshotsPreview(),
+        }
+      );
     };
 
     threadAttachBtn.addEventListener("click", () => {
       threadFileInput.click();
     });
 
-    threadFileInput.addEventListener("change", (e) => {
-      const file = /** @type {HTMLInputElement} */ (e.target).files[0];
-      if (!file) return;
-      if (pendingReplyScreenshots.length >= 5) return;
-
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        pendingReplyScreenshots.push(ev.target.result);
-        updateReplyScreenshotsPreview();
-      };
-      reader.readAsDataURL(file);
-      threadFileInput.value = "";
-    });
+    wireScreenshotInput(
+      threadFileInput,
+      () => pendingReplyScreenshots,
+      updateReplyScreenshotsPreview
+    );
 
     const submitReply = () => {
       const text = input.value.trim();
@@ -1217,14 +1192,7 @@ class CommentOverlay {
       });
       repliesContainer.appendChild(replyEl);
 
-      replyEl
-        .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
-        .forEach((/** @type {HTMLImageElement} */ img) => {
-          img.addEventListener("click", (e) => {
-            e.stopPropagation();
-            this.showLightbox(img.src);
-          });
-        });
+      wireScreenshotLightbox(replyEl, (src) => this.showLightbox(src));
 
       // Once the thread is taller than the popover the new reply lands below
       // the fold, so sending would look like nothing happened.
@@ -1515,10 +1483,9 @@ class CommentOverlay {
     // reopened comment loses it, and resolving again re-stamps it.
     comment.resolvedAt =
       status === "resolved" ? new Date().toISOString() : null;
-    // Resolving removes the on-page marker; reopening restores it.
-    const circle = /** @type {HTMLElement} */ (
-      this.shadowRoot?.querySelector(circleSelector(id))
-    );
+    // Resolving removes the on-page marker; reopening restores it. The
+    // lookup goes through the comment's own id, not the caller's spelling.
+    const circle = this._circles.get(String(comment.id));
     if (circle) this.updateCommentPosition(comment, circle);
     this._syncStorage();
     // Re-render the inbox so the card picks up the new status right away
@@ -1604,13 +1571,13 @@ class CommentOverlay {
     if (this.options.persistence === "localStorage") {
       // The merge preserves other-page entries missing from memory, which
       // would resurrect a deleted inactive comment — drop the id explicitly.
-      writeStoredComments(
-        mergeForStorage(
-          readStoredComments().filter((comment) => !sameId(comment.id, id)),
-          this.serializeComments(),
-          location.pathname
-        )
+      const merged = mergeForStorage(
+        this._readStoredCached().filter((comment) => !sameId(comment.id, id)),
+        this.serializeComments(),
+        location.pathname
       );
+      writeStoredComments(merged);
+      this._storedCache = merged;
     }
     this.options.onCommentDeleted?.(id);
     return true;
@@ -1618,13 +1585,8 @@ class CommentOverlay {
 
   _removeComment(id) {
     this.cleanupResizeObserver(id);
-    if (this.mutationObservers.has(id)) {
-      try {
-        this.mutationObservers.get(id).disconnect();
-      } catch {}
-      this.mutationObservers.delete(id);
-    }
-    this.shadowRoot.querySelector(circleSelector(id))?.remove();
+    this._circles.get(String(id))?.remove();
+    this._circles.delete(String(id));
     this.comments = this.comments.filter((comment) => !sameId(comment.id, id));
   }
 
@@ -1767,7 +1729,7 @@ class CommentOverlay {
     const rect = container.getBoundingClientRect();
     if (rect.height <= 0) return null;
 
-    const circleSize = 28;
+    const circleSize = MARKER_SIZE;
     const offsetY = Math.max(
       0,
       Math.min(comment.relativeY * rect.height, rect.height - circleSize)
@@ -1831,7 +1793,7 @@ class CommentOverlay {
     const circleRect = circle.getBoundingClientRect();
     const centerX = circleRect.left + circleRect.width / 2;
     const centerY = circleRect.top + circleRect.height / 2;
-    const circleBaseSize = 28;
+    const circleBaseSize = MARKER_SIZE;
     const offset = circleBaseSize / 2 + 10;
 
     // Same reasoning as showCommentBox(): the tooltip and popover are
@@ -1880,7 +1842,7 @@ class CommentOverlay {
     const circle = document.createElement("div");
     circle.className = `${CLASSES.CIRCLE} ${CLASSES.PREVIEW_CIRCLE}`;
     circle.style.position = "absolute";
-    const circleRadius = 14;
+    const circleRadius = MARKER_SIZE / 2;
     circle.style.left = `${x + circleRadius}px`;
     circle.style.top = `${y + circleRadius}px`;
     circle.style.transform = "translate(-50%, -50%)";
@@ -1932,7 +1894,7 @@ class CommentOverlay {
     const absoluteX = comment.relativeX * containerWidth;
     const absoluteY = comment.relativeY * containerHeight;
 
-    const circleSize = 28;
+    const circleSize = MARKER_SIZE;
     const validatedX = Math.max(
       0,
       Math.min(absoluteX, containerWidth - circleSize)
@@ -2062,34 +2024,37 @@ class CommentOverlay {
     }
   }
 
-  updateCommentPosition(comment, circle) {
+  /**
+   * Read half of a position update: layout reads only, no DOM writes, so a
+   * batched pass can measure every marker before touching any style (an
+   * interleaved read-write loop forces a fresh layout per marker).
+   * @param {Object} comment
+   * @param {HTMLElement} circle
+   * @param {{ checkOcclusion?: boolean }} [options] when false, the pass
+   *   reuses the marker's previous occlusion verdict instead of hit-testing.
+   * @returns {{ kind: "resolved" } | { kind: "noop" } | { kind: "hidden" }
+   *   | { kind: "visible", viewportX: number, viewportY: number,
+   *   relativeX: number, relativeY: number }}
+   */
+  _computeMarkerState(comment, circle, { checkOcclusion = true } = {}) {
     // Resolved comments have no on-page marker (RF09). This is not the
     // "hidden" state — the anchor is fine, the issue is just done.
     if (comment.status === "resolved") {
-      if (circle) circle.style.display = "none";
-      return;
+      return { kind: "resolved" };
     }
 
     let positionData = this.validateAndCalculatePosition(comment, circle);
     if (positionData && !this._isAnchorTargetVisible(comment)) {
       positionData = null;
     }
-    const wasHidden = comment.hidden === true;
-
     if (!positionData) {
       // Anchor element currently invisible (zero-size container): hide the
       // marker; it comes back automatically when the observers fire again.
-      if (circle && comment.container) {
-        comment.hidden = true;
-        circle.style.display = "none";
-        this._dismissMarkerUi(comment);
-        if (!wasHidden && this.inboxView?.isOpen()) this.inboxView.refresh();
-      }
-      return;
+      return comment.container ? { kind: "hidden" } : { kind: "noop" };
     }
 
     // Offset so the circle's top-left tip (sharp corner) aligns with the stored position
-    const circleRadius = 14;
+    const circleRadius = MARKER_SIZE / 2;
     const viewportX =
       positionData.containerLeft + positionData.absoluteX + circleRadius;
     const viewportY =
@@ -2097,25 +2062,108 @@ class CommentOverlay {
 
     // A host-page modal (or any unrelated overlay) covering the anchor also
     // hides the marker — it must not float above the modal's backdrop.
-    if (this._isMarkerOccluded(comment, viewportX, viewportY)) {
+    if (checkOcclusion) {
+      comment._occluded = this._isMarkerOccluded(comment, viewportX, viewportY);
+    }
+    if (comment._occluded) {
+      return { kind: "hidden" };
+    }
+
+    return {
+      kind: "visible",
+      viewportX,
+      viewportY,
+      relativeX: positionData.relativeX,
+      relativeY: positionData.relativeY,
+    };
+  }
+
+  /**
+   * Write half of a position update: styles and state only, no layout
+   * reads.
+   * @param {Object} comment
+   * @param {HTMLElement} circle
+   * @param {ReturnType<CommentOverlay["_computeMarkerState"]>} state
+   * @returns {boolean} true when the marker's hidden flag flipped — the
+   *   caller decides how to refresh the inbox (once per batch in the rAF
+   *   loop, immediately on direct calls).
+   */
+  _applyMarkerState(comment, circle, state) {
+    if (state.kind === "resolved") {
+      if (circle) circle.style.display = "none";
+      return false;
+    }
+    if (state.kind === "noop") return false;
+
+    const wasHidden = comment.hidden === true;
+    if (state.kind === "hidden") {
       comment.hidden = true;
       circle.style.display = "none";
       this._dismissMarkerUi(comment);
-      if (!wasHidden && this.inboxView?.isOpen()) this.inboxView.refresh();
-      return;
+      return !wasHidden;
     }
 
     comment.hidden = false;
     circle.style.display = "";
-    if (wasHidden && this.inboxView?.isOpen()) this.inboxView.refresh();
-
-    circle.style.left = `${viewportX}px`;
-    circle.style.top = `${viewportY}px`;
+    circle.style.left = `${state.viewportX}px`;
+    circle.style.top = `${state.viewportY}px`;
     circle.style.transform = "translate(-50%, -50%)";
     circle.style.position = "absolute";
 
-    comment.relativeX = positionData.relativeX;
-    comment.relativeY = positionData.relativeY;
+    comment.relativeX = state.relativeX;
+    comment.relativeY = state.relativeY;
+    return wasHidden;
+  }
+
+  updateCommentPosition(comment, circle) {
+    const state = this._computeMarkerState(comment, circle);
+    const flipped = this._applyMarkerState(comment, circle, state);
+    if (flipped && this.inboxView?.isOpen()) this.inboxView.refresh();
+  }
+
+  /**
+   * One batched pass over every marker: measure everything, then write
+   * everything, then refresh the inbox at most once — flipping N markers in
+   * one frame used to rebuild the inbox N times from inside the loop.
+   */
+  _updateAllPositions() {
+    const now = Date.now();
+    const checkOcclusion =
+      now - this._lastOcclusionPass >= OCCLUSION_INTERVAL_MS;
+    if (checkOcclusion) {
+      this._lastOcclusionPass = now;
+    } else {
+      // This pass reuses stale occlusion verdicts; make sure one more pass
+      // runs after the burst settles so the end state is honest.
+      this._armOcclusionTrailingPass();
+    }
+
+    const plans = [];
+    for (const comment of this.comments) {
+      const circle = this._circles.get(String(comment.id));
+      if (!circle) continue;
+      plans.push([
+        comment,
+        circle,
+        this._computeMarkerState(comment, circle, { checkOcclusion }),
+      ]);
+    }
+
+    let inboxDirty = false;
+    for (const [comment, circle, state] of plans) {
+      if (this._applyMarkerState(comment, circle, state)) inboxDirty = true;
+    }
+    if (inboxDirty && this.inboxView?.isOpen()) this.inboxView.refresh();
+  }
+
+  _armOcclusionTrailingPass() {
+    if (this._occlusionTrailingTimer) {
+      clearTimeout(this._occlusionTrailingTimer);
+    }
+    this._occlusionTrailingTimer = setTimeout(() => {
+      this._occlusionTrailingTimer = null;
+      this.scheduleUpdatePositions();
+    }, OCCLUSION_INTERVAL_MS);
   }
 
   /**
@@ -2128,13 +2176,7 @@ class CommentOverlay {
       this._pendingRaf = requestAnimationFrame(() => {
         this._pendingRaf = null;
         if (this.positionValidationEnabled) {
-          this.comments.forEach((comment) => {
-            /** @type {HTMLElement} */
-            const circle = /** @type {any} */ (
-              this.shadowRoot.querySelector(circleSelector(comment.id))
-            );
-            if (circle) this.updateCommentPosition(comment, circle);
-          });
+          this._updateAllPositions();
         }
         // Runs even with position validation off: the markers are placed in
         // viewport coordinates either way, so the popover has to follow.
@@ -2219,34 +2261,6 @@ class CommentOverlay {
   }
 
   /**
-   * Creates a MutationObserver to react to layout-affecting DOM changes
-   * @param {Object} comment
-   */
-  createMutationObserver(comment) {
-    if (!window.MutationObserver) return;
-
-    // Disconnect existing for this comment if any
-    if (this.mutationObservers.has(comment.id)) {
-      try {
-        this.mutationObservers.get(comment.id).disconnect();
-      } catch {}
-      this.mutationObservers.delete(comment.id);
-    }
-
-    const observer = new MutationObserver(() => {
-      this.scheduleUpdatePositions();
-    });
-
-    observer.observe(comment.container, {
-      attributes: true,
-      childList: true,
-      subtree: true,
-    });
-
-    this.mutationObservers.set(comment.id, observer);
-  }
-
-  /**
    * Cleanup method to remove all event listeners and observers
    */
   cleanup() {
@@ -2256,6 +2270,21 @@ class CommentOverlay {
       document.removeEventListener("DOMContentLoaded", this._onDomReady);
       this._onDomReady = null;
     }
+    // A pass scheduled before teardown must not run against the destroyed
+    // instance — cancel the pending frame and the trailing occlusion timer.
+    if (this._pendingRaf) {
+      cancelAnimationFrame(this._pendingRaf);
+      this._pendingRaf = null;
+    }
+    if (this._occlusionTrailingTimer) {
+      clearTimeout(this._occlusionTrailingTimer);
+      this._occlusionTrailingTimer = null;
+    }
+    if (this._storageHandler) {
+      window.removeEventListener("storage", this._storageHandler);
+      this._storageHandler = null;
+    }
+    this._storedCache = null;
     // Dropping the panels leaves their dropdowns detached-but-open, which
     // would keep the menu registry's document listener alive until the next
     // stray mousedown.
@@ -2304,16 +2333,6 @@ class CommentOverlay {
       this.resizeObservers.clear();
     }
 
-    // Cleanup mutation observers
-    if (this.mutationObservers) {
-      this.mutationObservers.forEach((observer) => {
-        try {
-          observer.disconnect();
-        } catch {}
-      });
-      this.mutationObservers.clear();
-    }
-
     // Remove keyboard shortcut handler
     if (this.keydownHandler) {
       document.removeEventListener("keydown", this.keydownHandler);
@@ -2334,12 +2353,8 @@ class CommentOverlay {
     document.getElementById(IDS.GLOBAL_STYLES)?.remove();
 
     // Remove all comment circles
-    this.comments.forEach((comment) => {
-      const circle = this.shadowRoot.querySelector(circleSelector(comment.id));
-      if (circle && circle.parentNode) {
-        circle.parentNode.removeChild(circle);
-      }
-    });
+    this._circles.forEach((circle) => circle.remove());
+    this._circles.clear();
   }
 
   injectStyles() {

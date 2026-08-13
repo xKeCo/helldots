@@ -1638,23 +1638,102 @@ describe("CommentOverlay", () => {
       overlay.comments.push(comment);
       overlay.renderCommentCircle(comment);
 
+      // Watched by the page-wide observer (there is no per-comment one),
+      // whose attribute filter covers the layout-affecting set.
       const scheduleSpy = vi.spyOn(overlay, "scheduleUpdatePositions");
-      container.setAttribute("data-x", "1");
+      container.classList.add("collapsed");
       await wait(10);
       expect(scheduleSpy).toHaveBeenCalled();
     });
+  });
 
-    it("re-creating a mutation observer for the same comment disconnects the old one", () => {
-      overlay = makeOverlay();
+  describe("batched position updates", () => {
+    const nextFrame = () =>
+      new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+    const anchorComment = (overlay, id) => {
       const container = document.createElement("div");
       document.body.appendChild(container);
-      const comment = { id: 8, container, replies: [] };
-      const circle = document.createElement("div");
-      overlay.createMutationObserver(comment, circle);
-      const first = overlay.mutationObservers.get(8);
-      const disconnectSpy = vi.spyOn(first, "disconnect");
-      overlay.createMutationObserver(comment, circle);
-      expect(disconnectSpy).toHaveBeenCalled();
+      container.getBoundingClientRect = () => ({
+        left: 0,
+        top: 0,
+        width: 200,
+        height: 200,
+      });
+      const comment = {
+        id,
+        text: "batch test",
+        author: "Tester",
+        createdAt: new Date().toISOString(),
+        container,
+        relativeX: 0.5,
+        relativeY: 0.5,
+        replies: [],
+        status: "open",
+        anchorState: "anchored",
+      };
+      overlay.comments.push(comment);
+      overlay.renderCommentCircle(comment);
+      return comment;
+    };
+
+    afterEach(() => {
+      delete document.elementsFromPoint;
+    });
+
+    it("refreshes the inbox once when several markers flip in one batch", async () => {
+      overlay = makeOverlay();
+      const first = anchorComment(overlay, 61);
+      const second = anchorComment(overlay, 62);
+      overlay.showInbox();
+      const refreshSpy = vi.spyOn(overlay.inboxView, "refresh");
+
+      const zeroRect = () => ({ left: 0, top: 0, width: 0, height: 0 });
+      first.container.getBoundingClientRect = zeroRect;
+      second.container.getBoundingClientRect = zeroRect;
+
+      overlay.scheduleUpdatePositions();
+      await nextFrame();
+
+      expect(first.hidden).toBe(true);
+      expect(second.hidden).toBe(true);
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("skips the occlusion hit test on batches inside the throttle window", async () => {
+      overlay = makeOverlay();
+      const comment = anchorComment(overlay, 63);
+      const host = document.querySelector(TAG_NAME);
+      const hits = vi.fn(() => [host, comment.container]);
+      document.elementsFromPoint = hits;
+
+      overlay.scheduleUpdatePositions();
+      await nextFrame();
+      const afterFirstBatch = hits.mock.calls.length;
+      expect(afterFirstBatch).toBeGreaterThan(0);
+
+      overlay.scheduleUpdatePositions();
+      await nextFrame();
+      expect(hits.mock.calls.length).toBe(afterFirstBatch);
+    });
+
+    it("runs a trailing occlusion pass after a throttled burst settles", async () => {
+      overlay = makeOverlay();
+      const comment = anchorComment(overlay, 64);
+      const host = document.querySelector(TAG_NAME);
+      const hits = vi.fn(() => [host, comment.container]);
+      document.elementsFromPoint = hits;
+
+      overlay.scheduleUpdatePositions();
+      await nextFrame();
+      overlay.scheduleUpdatePositions();
+      await nextFrame();
+      const afterBurst = hits.mock.calls.length;
+
+      // No further scheduling: the trailing pass must re-check on its own
+      // once the throttle window has passed.
+      await wait(260);
+      expect(hits.mock.calls.length).toBeGreaterThan(afterBurst);
     });
   });
 
@@ -1879,19 +1958,15 @@ describe("CommentOverlay", () => {
       expect(overlay._activeLightbox).toBeNull();
     });
 
-    it("disconnects any tracked resize/mutation observers", () => {
+    it("disconnects any tracked resize observers", () => {
       overlay = makeOverlay();
       const resizeObserver = { disconnect: vi.fn() };
-      const mutationObserver = { disconnect: vi.fn() };
       overlay.resizeObservers.set(1, { observer: resizeObserver });
-      overlay.mutationObservers.set(1, mutationObserver);
 
       overlay.cleanup();
 
       expect(resizeObserver.disconnect).toHaveBeenCalled();
-      expect(mutationObserver.disconnect).toHaveBeenCalled();
       expect(overlay.resizeObservers.size).toBe(0);
-      expect(overlay.mutationObservers.size).toBe(0);
     });
 
     it("does not leak the document mousedown listener across instances", () => {
