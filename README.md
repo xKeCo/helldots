@@ -145,15 +145,16 @@ OS: iOS 17.2
 
 ## Options
 
-| Option             | Type                             | Default          |                                                           |
-| ------------------ | -------------------------------- | ---------------- | --------------------------------------------------------- |
-| `user`             | `{ name: string }`               | `"Anonymous"`    | Author of new comments and replies                        |
-| `persistence`      | `"localStorage"` \| `"none"`     | `"none"`         | Auto save/restore, or handle it yourself via callbacks    |
-| `autoScreenshot`   | `boolean`                        | `true`           | Capture a screenshot and environment snapshot per comment |
-| `locale`           | `"en"` \| `"es"`                 | browser language | UI language, falling back to English                      |
-| `shortcutKey`      | `string`                         | `"c"`            | Key that toggles comment mode                             |
-| `shortcutModifier` | `"alt"` \| `"ctrl"` \| `"shift"` | `"alt"`          | Modifier for that key                                     |
-| `autoInit`         | `boolean`                        | `true`           | When `false`, returns an initializer to call yourself     |
+| Option             | Type                             | Default             |                                                           |
+| ------------------ | -------------------------------- | ------------------- | --------------------------------------------------------- |
+| `user`             | `{ name: string }`               | `"Anonymous"`       | Author of new comments and replies                        |
+| `persistence`      | `"localStorage"` \| `"none"`     | `"none"`            | Auto save/restore, or handle it yourself via callbacks    |
+| `autoScreenshot`   | `boolean`                        | `true`              | Capture a screenshot and environment snapshot per comment |
+| `locale`           | `string`                         | browser language    | `"en"` and `"es"` ship; anything else falls back per key  |
+| `linkParam`        | `string`                         | `"helldotsComment"` | Query param used by "Copy link" URLs                      |
+| `shortcutKey`      | `string`                         | `"c"`               | Key that toggles comment mode                             |
+| `shortcutModifier` | `"alt"` \| `"ctrl"` \| `"shift"` | `"alt"`             | Modifier for that key                                     |
+| `autoInit`         | `boolean`                        | `true`              | When `false`, returns an initializer to call yourself     |
 
 ### Callbacks
 
@@ -161,6 +162,9 @@ OS: iOS 17.2
 | --------------------------------- | -------------------------------------------------- |
 | `onCommentCreated(comment)`       | A new comment is saved                             |
 | `onReplyAdded(comment, reply)`    | A reply is added to any comment                    |
+| `onReplyDeleted(comment, reply)`  | A reply is removed                                 |
+| `onCommentEdited(comment)`        | A comment's text is rewritten                      |
+| `onReplyEdited(comment, reply)`   | A reply's text is rewritten                        |
 | `onCommentStatusChanged(comment)` | Status moves between open / in progress / resolved |
 | `onCommentUpdated(comment)`       | Type, priority or tags change                      |
 | `onCommentDeleted(id)`            | A comment is removed                               |
@@ -174,9 +178,14 @@ const overlay = createCommentOverlay(options);
 overlay.comments; // Comment[]
 overlay.commentMode; // boolean
 overlay.toggleCommentMode();
-overlay.addReply(comment, text); // → CommentReply
+overlay.addReply(commentOrId, text, screenshots?); // → CommentReply | null
+overlay.deleteReply(commentId, replyId); // → boolean
+overlay.editComment(id, text); // → boolean
+overlay.editReply(commentId, replyId, text); // → boolean
+overlay.commentLink(id); // → string | null (shareable URL)
 overlay.serializeComments(); // → SerializedComment[]
 overlay.loadComments(data); // → { anchored, orphaned, inactive }
+overlay.clearComments(); // bulk reset, fires no callbacks
 overlay.deleteComment(id); // → boolean
 overlay.setCommentStatus(id, status); // → boolean
 overlay.setCommentType(id, type); // → boolean
@@ -186,15 +195,32 @@ overlay.cleanup(); // remove the widget entirely
 ```
 
 The setters return `false` for an unknown id or an invalid value, and make no
-change when they do.
+change when they do. To reconcile against a backend after remote deletions,
+call `clearComments()` and then `loadComments(freshData)` — `loadComments`
+alone replaces by id but never removes.
 
 TypeScript definitions ship with the package — no `@types` install needed.
+
+### Module format
+
+The npm package is **ESM-only**: `import` works everywhere modern (bundlers,
+Node ≥ 22, browsers), while `require("helldots")` is not supported. For a
+plain `<script>` tag with no build step, use the self-contained UMD build
+from a CDN (`unpkg`/`jsdelivr` point at it), which exposes a global
+`HellDots`.
 
 ## Storage notes
 
 With `persistence: "localStorage"`, every comment (screenshot included) lives
 under a single key shared across all pages of your app. Browsers cap that at
 roughly 5 MB, which is on the order of a hundred comments with screenshots.
+
+The mode assumes one active tab per page: writes from another tab are
+preserved on the next sync, but two tabs editing the same comment
+concurrently resolve last-write-wins, and a comment deleted in one tab can
+reappear if another tab still holding it in memory saves afterwards. Hosts
+that need real multi-tab editing should persist through the callbacks
+instead.
 
 When the quota is reached, HellDots sheds the _automatic_ screenshots of the
 oldest comments and retries, so the comments themselves survive. Screenshots a

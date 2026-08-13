@@ -179,6 +179,16 @@ describe("createAnchor", () => {
 });
 
 describe("resolveAnchor", () => {
+  it("treats an anchor from a newer schema version as orphaned", () => {
+    // A v2 anchor loaded by v1 code would otherwise be half-interpreted —
+    // orphaned (listed, never positioned over the wrong element) is the
+    // honest degradation.
+    setBody(`<section id="hero">Welcome to the site</section>`);
+    const anchor = createAnchor(document.getElementById("hero"), 0.5, 0.5);
+
+    expect(resolveAnchor({ ...anchor, version: 2 })).toBeNull();
+  });
+
   it("resolves via selector when the fingerprint matches", () => {
     setBody(`<section id="hero">Welcome to the site</section>`);
     const el = document.getElementById("hero");

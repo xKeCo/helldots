@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   getStrings,
@@ -22,7 +22,10 @@ describe("i18n", () => {
     });
 
     it("returns the Spanish dictionary for 'es'", () => {
-      expect(getStrings("es")).toBe(es);
+      // toEqual, not toBe: the contract is content. getStrings merges the
+      // English dictionary underneath for per-key fallback, and with full
+      // parity the result is content-identical to es.js.
+      expect(getStrings("es")).toEqual(es);
     });
 
     it("falls back to English for an unsupported locale code", () => {
@@ -135,21 +138,48 @@ describe("i18n", () => {
     });
   });
 
-  it("components.js has no hardcoded, user-visible English UI strings", () => {
-    const source = readFileSync(
-      resolve(process.cwd(), "src/components.js"),
-      "utf-8"
+  it("no src file has hardcoded, user-visible English UI strings", () => {
+    // The scan used to cover components.js only, which CLAUDE.md presented
+    // as a repo-wide guarantee — a hardcoded string in overlay.js or
+    // inbox.js sailed through. Same lesson constants.test.js already
+    // records: a hardcoded file list silently stops covering new modules,
+    // so iterate the directory. locales/ is the translations themselves and
+    // styles.js is a stylesheet (its only quoted strings are font names).
+    const srcDir = resolve(process.cwd(), "src");
+    // styles.js is a stylesheet (its only quoted strings are font names);
+    // metadata.js is environment sniffing (its literals are UA brand names —
+    // "Chrome", "Windows" — proper nouns, not translatable copy).
+    const EXCLUDED = ["styles.js", "metadata.js"];
+    const files = readdirSync(srcDir).filter(
+      (file) => file.endsWith(".js") && !EXCLUDED.includes(file)
     );
     // Any capitalized, multi-letter double-quoted string literal that isn't
     // an SVG attribute, an import, or a class/const name is a UI string
-    // that should be coming from `strings.*`, not hardcoded here — except
-    // DOM KeyboardEvent.key names, which are protocol constants compared
-    // against e.key (e.g. `e.key !== "Enter"`), not user-visible text.
-    const DOM_KEY_NAMES = ["Enter"];
-    const matches = source.match(/"[A-Z][a-zA-Zé][a-zA-Z ]*[.:]?"/g) || [];
-    const suspicious = matches.filter(
-      (match) => !DOM_KEY_NAMES.includes(match.slice(1, -1))
-    );
+    // that should be coming from `strings.*`, not hardcoded — except DOM
+    // protocol constants (KeyboardEvent.key values, event names), which are
+    // compared against browser APIs, not shown to anyone. Comments are
+    // stripped first: prose like `// the "Copy link" URL` is not a literal.
+    const DOM_PROTOCOL_NAMES = [
+      "Enter",
+      "Escape",
+      "Tab",
+      "ArrowDown",
+      "ArrowUp",
+      "Home",
+      "End",
+      "DOMContentLoaded",
+    ];
+    const stripComments = (source) =>
+      source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const suspicious = files.flatMap((file) => {
+      const source = stripComments(
+        readFileSync(resolve(srcDir, file), "utf-8")
+      );
+      const matches = source.match(/"[A-Z][a-zA-Zé][a-zA-Z ]*[.:]?"/g) || [];
+      return matches
+        .filter((match) => !DOM_PROTOCOL_NAMES.includes(match.slice(1, -1)))
+        .map((match) => `${file}: ${match}`);
+    });
     expect(suspicious).toEqual([]);
   });
 });

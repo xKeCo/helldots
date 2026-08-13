@@ -1281,8 +1281,15 @@ class CommentOverlay {
   showLightbox(imageSrc) {
     this.closeLightbox();
 
+    // Whoever opened the lightbox (a thumbnail in the shadow tree, or a
+    // host-page element) gets focus back when it closes.
+    this._lightboxReturnFocus =
+      this.shadowRoot.activeElement || document.activeElement;
+
     const lightbox = document.createElement("div");
     lightbox.className = CLASSES.LIGHTBOX;
+    lightbox.setAttribute("role", "dialog");
+    lightbox.setAttribute("aria-label", this.strings.screenshotPreview);
 
     const img = document.createElement("img");
     img.className = CLASSES.LIGHTBOX_IMG;
@@ -1305,11 +1312,18 @@ class CommentOverlay {
 
     this.shadowRoot.appendChild(lightbox);
     this._activeLightbox = lightbox;
+    closeBtn.focus();
   }
 
   closeLightbox() {
-    this._activeLightbox?.remove();
+    if (!this._activeLightbox) return;
+    this._activeLightbox.remove();
     this._activeLightbox = null;
+    const returnFocus = /** @type {HTMLElement | null} */ (
+      this._lightboxReturnFocus
+    );
+    this._lightboxReturnFocus = null;
+    if (returnFocus?.isConnected) returnFocus.focus?.();
   }
 
   // The lightbox is opened *from* the inbox and the thread popover but lives
@@ -1330,7 +1344,23 @@ class CommentOverlay {
     return this.comments.find((c) => sameId(c.id, id));
   }
 
-  addReply(comment, text, screenshots = []) {
+  /**
+   * @param {import('./index.d.ts').Comment | import('./index.d.ts').CommentId} commentOrId
+   *   the live comment, or its id — every sibling mutator takes an id, so
+   *   this one stopped being the exception.
+   * @param {string} text
+   * @param {string[]} [screenshots]
+   * @returns {import('./index.d.ts').CommentReply | null} null when an id
+   *   does not resolve
+   */
+  addReply(commentOrId, text, screenshots = []) {
+    const comment =
+      typeof commentOrId === "object" && commentOrId !== null
+        ? commentOrId
+        : this._findComment(
+            /** @type {import('./index.d.ts').CommentId} */ (commentOrId)
+          );
+    if (!comment) return null;
     if (!comment.replies) comment.replies = [];
     const reply = {
       id: createId(),
@@ -1393,6 +1423,14 @@ class CommentOverlay {
 
     comment.text = next;
     comment.editedAt = new Date().toISOString();
+    // The marker's accessible name is the comment text — a screen-reader
+    // user tabbing to it must hear the current sentence, not the old one.
+    this._circles
+      .get(String(comment.id))
+      ?.setAttribute(
+        "aria-label",
+        `${this.strings.commentAriaLabelPrefix}${comment.text}`
+      );
     this._syncStorage();
     this.options.onCommentEdited?.(this._serializeComment(comment));
     return true;
@@ -1440,6 +1478,10 @@ class CommentOverlay {
    */
   _serializeComment(comment) {
     return {
+      // The anchor and context sub-objects always carried a version; the
+      // comment gets one too so future breaking changes have a hinge —
+      // purely additive, loadComments ignores it today.
+      schemaVersion: 1,
       id: comment.id,
       text: comment.text,
       editedAt: comment.editedAt || null,
@@ -1591,6 +1633,34 @@ class CommentOverlay {
   }
 
   /**
+   * Removes every comment at once — markers, memory and (in localStorage
+   * mode) their persisted entries. This is the bulk reset a host needs to
+   * reconcile against its backend before a fresh loadComments, so it
+   * deliberately fires no per-comment onCommentDeleted callbacks: the host
+   * initiated it and would only hear its own action echoed back.
+   */
+  clearComments() {
+    this.closeThreadPopover();
+    const cleared = this.comments;
+    for (const comment of cleared) {
+      this.cleanupResizeObserver(comment.id);
+    }
+    this._circles.forEach((circle) => circle.remove());
+    this._circles.clear();
+    this.comments = [];
+
+    if (this.options.persistence === "localStorage" && cleared.length > 0) {
+      const clearedIds = new Set(cleared.map((comment) => String(comment.id)));
+      const merged = this._readStoredCached().filter(
+        (comment) => !clearedIds.has(String(comment.id))
+      );
+      writeStoredComments(merged);
+      this._storedCache = merged;
+    }
+    if (this.inboxView?.isOpen()) this.inboxView.refresh();
+  }
+
+  /**
    * Restores serialized comments: each anchor is resolved back to a live
    * element (circle re-rendered) or the comment is kept as an orphan —
    * present in the list/inbox but never positioned over the wrong element.
@@ -1623,7 +1693,17 @@ class CommentOverlay {
         container: null,
         relativeX: 0,
         relativeY: 0,
-        replies: Array.isArray(item.replies) ? [...item.replies] : [],
+        // Same minimal gate the top-level comment passes (id + text):
+        // a malformed reply would otherwise flow into every renderer.
+        replies: Array.isArray(item.replies)
+          ? item.replies.filter(
+              (reply) =>
+                reply &&
+                typeof reply === "object" &&
+                reply.id != null &&
+                typeof reply.text === "string"
+            )
+          : [],
         author: item.author || this.strings.anonymous,
         createdAt: item.createdAt || new Date().toISOString(),
         screenshots: Array.isArray(item.screenshots)

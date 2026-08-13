@@ -258,6 +258,11 @@ const bestMatch = (candidates, fingerprint) => {
  * @returns {{ element: HTMLElement, confidence: number } | null}
  */
 export function resolveAnchor(anchor, doc = document) {
+  // An anchor written by a newer schema than this code understands is
+  // treated as orphaned rather than half-interpreted: the comment stays
+  // listed but is never positioned over a guessed element.
+  if (anchor?.version != null && anchor.version > 1) return null;
+
   const fingerprint = anchor?.fingerprint;
   if (!fingerprint || !fingerprint.tagName) return null;
 

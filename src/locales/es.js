@@ -9,6 +9,7 @@ export default {
   toolbarInbox: "Bandeja",
   modifierAlt: "Alt",
   modifierCtrl: "Ctrl",
+  modifierShift: "Mayús",
   commentBoxAriaLabel: "Nuevo comentario",
   commentPlaceholder: "Escribe tu comentario...",
   attachImage: "Adjuntar imagen",

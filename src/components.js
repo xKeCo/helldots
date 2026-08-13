@@ -108,7 +108,7 @@ export const getShortcutText = (options, strings) => {
   const modifierMap = {
     alt: isMac ? "⌥" : strings.modifierAlt,
     ctrl: isMac ? "⌘" : strings.modifierCtrl,
-    shift: "⇧",
+    shift: isMac ? "⇧" : strings.modifierShift,
   };
 
   const modifier = modifierMap[options.shortcutModifier] || modifierMap.alt;
@@ -488,7 +488,7 @@ export const renderScreenshotsPreview = (
     img.className = CLASSES.SCREENSHOT_IMG;
     img.src = dataUrl;
     img.alt = strings.attachedScreenshot;
-    img.onclick = () => onShow(dataUrl);
+    makeThumbnailOperable(img, () => onShow(dataUrl));
 
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
@@ -518,6 +518,9 @@ export const wireScreenshotInput = (input, getScreenshots, rerender) => {
   input.addEventListener("change", (e) => {
     const file = /** @type {HTMLInputElement} */ (e.target).files[0];
     if (!file) return;
+    // A non-image read into a data URL renders a broken <img> and bloats
+    // the stored payload for nothing.
+    if (file.type && !file.type.startsWith("image/")) return;
     const screenshots = getScreenshots();
     if (screenshots.length >= MAX_SCREENSHOTS) return;
 
@@ -541,11 +544,30 @@ export const wireScreenshotLightbox = (root, onShow) => {
   root
     .querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)
     .forEach((/** @type {HTMLImageElement} */ img) => {
-      img.addEventListener("click", (e) => {
-        e.stopPropagation();
-        onShow(img.src);
-      });
+      makeThumbnailOperable(img, () => onShow(img.src));
     });
+};
+
+/**
+ * A thumbnail that opens the lightbox is a control, not decoration: same
+ * role="button" + tabindex + Enter/Space pattern the marker circles use
+ * (see DECISIONS.md, Accessibility). The img's alt is its accessible name.
+ * @param {HTMLImageElement} img
+ * @param {() => void} activate
+ */
+const makeThumbnailOperable = (img, activate) => {
+  img.setAttribute("role", "button");
+  img.setAttribute("tabindex", "0");
+  img.addEventListener("click", (e) => {
+    e.stopPropagation();
+    activate();
+  });
+  img.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      activate();
+    }
+  });
 };
 
 export const createCommentCircle = (comment, strings = defaultStrings) => {

@@ -1299,6 +1299,29 @@ describe("inbox sidebar", () => {
     });
   });
 
+  describe("accessibility", () => {
+    it("moves focus into the panel when it opens", () => {
+      overlay = makeOverlay();
+      const panel = openInbox(overlay);
+
+      expect(panel.getAttribute("tabindex")).toBe("-1");
+      expect(overlay.shadowRoot.activeElement).toBe(panel);
+    });
+
+    it("groups the page-filter radio chips in a radiogroup", () => {
+      overlay = makeOverlay();
+      const panel = openInbox(overlay);
+      click(panel.querySelector(`.${CLASSES.INBOX_FILTER}`));
+
+      const radiogroup = panel.querySelector('[role="radiogroup"]');
+      expect(radiogroup).toBeTruthy();
+      expect(
+        radiogroup.querySelectorAll('[role="radio"]').length
+      ).toBeGreaterThan(0);
+      expect(radiogroup.getAttribute("aria-label")).toBeTruthy();
+    });
+  });
+
   describe("type and priority filters", () => {
     const make = (id, type, priority) => ({
       id,

@@ -64,6 +64,10 @@ export const confirmDialog = (
     const messageEl = document.createElement("p");
     messageEl.className = CLASSES.CONFIRM_MESSAGE;
     messageEl.textContent = message;
+    // The title alone doesn't say "cannot be undone" — the message does,
+    // and some AT won't announce it without describedby.
+    messageEl.id = `hd-confirm-message-${Math.random().toString(36).slice(2, 9)}`;
+    panel.setAttribute("aria-describedby", messageEl.id);
 
     const actions = document.createElement("div");
     actions.className = CLASSES.CONFIRM_ACTIONS;

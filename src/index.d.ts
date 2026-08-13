@@ -60,6 +60,11 @@ export interface CommentContext {
 export type CommentId = string | number;
 
 export interface SerializedComment {
+  /**
+   * Version of this serialized shape. Stamped as 1 by serializeComments;
+   * optional because payloads persisted before it existed have none.
+   */
+  schemaVersion?: number;
   id: CommentId;
   text: string;
   /** ISO timestamp of the last edit; null when never edited. */
@@ -99,8 +104,13 @@ export interface CommentOverlayOptions {
   shortcutKey?: string;
   shortcutModifier?: "alt" | "ctrl" | "shift";
   autoInit?: boolean;
-  /** UI language. Defaults to the browser's language when supported, else "en". */
-  locale?: "en" | "es";
+  /**
+   * UI language. "en" and "es" ship today; any other value falls back to
+   * English (and a locale missing individual keys falls back per key).
+   * Typed as string so a host can pass a runtime-detected code without a
+   * cast — an unknown code degrades, it never breaks.
+   */
+  locale?: string;
   /** Auto save/restore comments. Default: "none" (host app persists via callbacks). */
   persistence?: "localStorage" | "none";
   /** Capture a viewport screenshot and environment snapshot on every new comment. Default: true. */
@@ -195,12 +205,15 @@ export declare class CommentOverlay {
   constructor(options?: Omit<CommentOverlayOptions, "autoInit">);
 
   toggleCommentMode(): void;
-  /** `screenshots` are data-URLs attached to the reply. */
+  /**
+   * `screenshots` are data-URLs attached to the reply. Takes the live
+   * comment or its id; null when an id does not resolve.
+   */
   addReply(
-    comment: Comment,
+    comment: Comment | CommentId,
     text: string,
     screenshots?: string[]
-  ): CommentReply;
+  ): CommentReply | null;
   deleteReply(commentId: CommentId, replyId: CommentId): boolean;
   /** Rewrites a comment's text. False when the id is unknown, the text is blank, or nothing changed. */
   editComment(id: CommentId, text: string): boolean;
@@ -215,6 +228,12 @@ export declare class CommentOverlay {
     inactive: number;
   };
   deleteComment(id: CommentId): boolean;
+  /**
+   * Removes every comment at once (markers, memory, and their persisted
+   * entries in localStorage mode). A bulk reset for reconciling against a
+   * backend before loadComments — fires no per-comment callbacks.
+   */
+  clearComments(): void;
   setCommentStatus(id: CommentId, status: CommentStatus): boolean;
   setCommentType(id: CommentId, type: CommentType | null): boolean;
   setCommentPriority(id: CommentId, priority: CommentPriority | null): boolean;

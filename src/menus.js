@@ -21,6 +21,13 @@ const openMenus = new Set();
 /** @type {((e: MouseEvent) => void) | null} */
 let outsideListener = null;
 
+/** @type {((e: KeyboardEvent) => void) | null} */
+let keyListener = null;
+
+const menuItems = (menu) => [
+  ...menu.querySelectorAll('[role="menuitem"], [role="menuitemradio"]'),
+];
+
 // Menus live inside the shadow root, so `e.target` on a document listener is
 // retargeted to the host. composedPath() is the only way to see the element
 // that was really clicked.
@@ -41,12 +48,56 @@ const startWatching = () => {
     }
   };
   document.addEventListener("mousedown", outsideListener, true);
+
+  // role="menu"/"menuitem" promises keyboard behavior (ARIA menu pattern):
+  // Escape closes THIS layer only — never the popover behind it, which is
+  // why the listener runs in the capture phase and stops propagation — and
+  // the arrow keys walk the items. Registered while a menu is open, exactly
+  // like the mousedown watcher.
+  keyListener = (e) => {
+    const entry = [...openMenus].pop();
+    if (!entry) return;
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      entry.close();
+      entry.button.focus();
+      return;
+    }
+
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) {
+      const items = menuItems(entry.menu);
+      if (items.length === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Menus live in a shadow root, where document.activeElement reports
+      // the host — the root's own activeElement is the real one.
+      const root = /** @type {Document | ShadowRoot} */ (
+        entry.menu.getRootNode()
+      );
+      const index = items.indexOf(root.activeElement);
+      let next;
+      if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = items.length - 1;
+      else if (index === -1)
+        next = e.key === "ArrowDown" ? 0 : items.length - 1;
+      else {
+        const step = e.key === "ArrowDown" ? 1 : -1;
+        next = (index + step + items.length) % items.length;
+      }
+      items[next].focus();
+    }
+  };
+  document.addEventListener("keydown", keyListener, true);
 };
 
 const stopWatching = () => {
   if (!outsideListener) return;
   document.removeEventListener("mousedown", outsideListener, true);
   outsideListener = null;
+  document.removeEventListener("keydown", keyListener, true);
+  keyListener = null;
 };
 
 /** Closes every open menu. Safe to call when none are open. */

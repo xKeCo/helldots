@@ -8,11 +8,74 @@ import {
   createReplyElement,
   createClassifyRow,
   createBadgeRow,
+  getShortcutText,
+  wireScreenshotInput,
+  wireScreenshotLightbox,
 } from "../src/components.js";
 import { getStrings } from "../src/i18n.js";
 import { CLASSES, IDS } from "../src/constants.js";
 
 describe("components", () => {
+  describe("getShortcutText", () => {
+    it("localizes every modifier on non-Mac platforms, shift included", () => {
+      // jsdom's UA is not a Mac, so the localized text path runs. shift
+      // used to be a hardcoded "⇧" on every platform while alt/ctrl were
+      // localized — the one modifier that skipped the dictionary.
+      const strings = getStrings("en");
+      expect(
+        getShortcutText(
+          { shortcutModifier: "shift", shortcutKey: "k" },
+          strings
+        )
+      ).toBe(`${strings.modifierShift} + K`);
+    });
+  });
+
+  describe("wireScreenshotInput", () => {
+    it("ignores files that are not images", async () => {
+      // Reading a PDF or .txt into a data URL renders a broken <img> and
+      // bloats the stored payload — reject anything that isn't image/*.
+      const input = document.createElement("input");
+      input.type = "file";
+      const screenshots = [];
+      const rerender = () => {};
+      wireScreenshotInput(input, () => screenshots, rerender);
+
+      const file = new File(["not an image"], "notes.txt", {
+        type: "text/plain",
+      });
+      Object.defineProperty(input, "files", { value: [file] });
+      input.dispatchEvent(new Event("change"));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(screenshots).toHaveLength(0);
+    });
+  });
+
+  describe("wireScreenshotLightbox", () => {
+    it("makes thumbnails keyboard-operable", () => {
+      // Every lightbox entry point used to be a bare <img> with a click
+      // handler — mouse-only. Same role="button" + tabindex + keydown
+      // pattern the marker circles use (see DECISIONS.md, Accessibility).
+      const root = document.createElement("div");
+      const img = document.createElement("img");
+      img.className = CLASSES.SCREENSHOT_IMG;
+      img.src = "data:image/png;base64,x";
+      img.alt = "Attached screenshot";
+      root.appendChild(img);
+
+      const onShow = [];
+      wireScreenshotLightbox(root, (src) => onShow.push(src));
+
+      expect(img.getAttribute("role")).toBe("button");
+      expect(img.getAttribute("tabindex")).toBe("0");
+      img.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+      );
+      expect(onShow).toHaveLength(1);
+    });
+  });
+
   describe("createToolbar", () => {
     it("renders the comment and inbox actions with the configured shortcut hint", () => {
       const toolbar = createToolbar({

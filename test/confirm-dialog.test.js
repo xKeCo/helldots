@@ -31,6 +31,17 @@ const press = (key, init = {}) =>
   );
 
 describe("confirmDialog", () => {
+  it("announces the message through aria-describedby", () => {
+    // aria-labelledby carries only the title; the actual "cannot be
+    // undone" consequence lives in the message and some AT won't read it
+    // without describedby.
+    open();
+    const panel = panelIn().querySelector(`.${CLASSES.CONFIRM_PANEL}`);
+    const message = panelIn().querySelector(`.${CLASSES.CONFIRM_MESSAGE}`);
+    expect(message.id).toBeTruthy();
+    expect(panel.getAttribute("aria-describedby")).toBe(message.id);
+  });
+
   it("renders the supplied copy and sits above the lightbox", () => {
     open();
     const backdrop = panelIn();

@@ -15,13 +15,19 @@ export function detectLocale() {
 }
 
 /**
- * Resolves the UI strings dictionary for a given locale code, falling back
- * to English if the code isn't one HellDots ships.
+ * Resolves the UI strings dictionary for a given locale code. An unknown
+ * code falls back to English wholesale; a known locale falls back to
+ * English PER KEY, so a translation added to en.js but not yet to a sibling
+ * locale degrades to English instead of rendering literal "undefined".
  * @param {string} [localeCode]
  * @returns {typeof en}
  */
 export function getStrings(localeCode) {
-  return LOCALES[localeCode] || LOCALES[DEFAULT_LOCALE];
+  const selected = LOCALES[localeCode];
+  if (!selected || localeCode === DEFAULT_LOCALE) {
+    return LOCALES[DEFAULT_LOCALE];
+  }
+  return { ...LOCALES[DEFAULT_LOCALE], ...selected };
 }
 
 /**

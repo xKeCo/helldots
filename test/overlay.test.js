@@ -1647,6 +1647,64 @@ describe("CommentOverlay", () => {
     });
   });
 
+  describe("lightbox accessibility", () => {
+    it("announces itself as a dialog and moves focus to its close button", () => {
+      overlay = makeOverlay();
+      const outside = document.createElement("button");
+      document.body.appendChild(outside);
+      outside.focus();
+
+      overlay.showLightbox("data:image/png;base64,x");
+
+      const lightbox = overlay._activeLightbox;
+      expect(lightbox.getAttribute("role")).toBe("dialog");
+      expect(lightbox.getAttribute("aria-label")).toBe(
+        overlay.strings.screenshotPreview
+      );
+      expect(overlay.shadowRoot.activeElement).toBe(
+        lightbox.querySelector(`.${CLASSES.LIGHTBOX_CLOSE}`)
+      );
+
+      overlay.closeLightbox();
+      expect(document.activeElement).toBe(outside);
+    });
+  });
+
+  describe("marker labels", () => {
+    it("editComment refreshes the marker's accessible name", () => {
+      overlay = makeOverlay();
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      container.getBoundingClientRect = () => ({
+        left: 0,
+        top: 0,
+        width: 200,
+        height: 200,
+      });
+      const comment = {
+        id: 70,
+        text: "before the edit",
+        author: "Tester",
+        createdAt: new Date().toISOString(),
+        container,
+        relativeX: 0.5,
+        relativeY: 0.5,
+        replies: [],
+        status: "open",
+        anchorState: "anchored",
+      };
+      overlay.comments.push(comment);
+      overlay.renderCommentCircle(comment);
+
+      expect(overlay.editComment(70, "after the edit")).toBe(true);
+
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="70"]');
+      // A screen-reader user tabbing to the marker must hear the current
+      // text, not the pre-edit sentence.
+      expect(circle.getAttribute("aria-label")).toContain("after the edit");
+    });
+  });
+
   describe("batched position updates", () => {
     const nextFrame = () =>
       new Promise((resolve) => requestAnimationFrame(() => resolve()));

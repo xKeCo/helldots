@@ -1129,3 +1129,28 @@ The lesson recorded here is less about the URL than about the failure mode:
 a gate that fails on every run is indistinguishable from a gate nobody
 reads. The audit found it only because it asked why every run of a "passing"
 project was red.
+
+## Fase 3 of the audit: the safe structural items
+
+The heavy structural work the audit surfaced (keyed inbox reconciliation,
+runtime re-anchoring for SPAs, an onChange emitter) was deliberately parked
+for a dedicated design pass. What landed now:
+
+- **Menus keep `role="menu"` and earn its keyboard contract** instead of
+  downgrading the roles: Escape closes only the menu — the capture-phase
+  listener stops propagation so the overlay's Escape cascade never tears
+  down the popover behind it — and Arrow/Home/End walk the items. One
+  implementation in `menus.js` covers all five dropdowns.
+- **Thumbnails use `role="button"` + tabindex, not a `<button>` wrapper**:
+  the same documented pattern the marker circles use. Wrapping every
+  thumbnail in a real button would have restyled five surfaces for the same
+  accessibility outcome.
+- **i18n falls back per key**: `getStrings` merges English under the chosen
+  locale, so a translation added to `en.js` and not yet to a sibling
+  degrades to English instead of rendering literal "undefined". The
+  hardcoded-string gate now scans all of `src/` (comments stripped;
+  `metadata.js` excluded — its literals are UA brand names).
+- **`clearComments()` fires no callbacks.** It exists for host-initiated
+  reconciliation (clear, then loadComments with fresh data); echoing N
+  `onCommentDeleted` calls back at the host for its own bulk action would
+  force every consumer to guard against feedback loops.

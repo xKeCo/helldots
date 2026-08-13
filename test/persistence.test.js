@@ -98,6 +98,27 @@ describe("persistence", () => {
   });
 
   describe("replies", () => {
+    it("addReply accepts a comment id, like every sibling method", async () => {
+      // addReply used to be the one mutator that demanded the live object,
+      // forcing hosts to fish it out of overlay.comments for this call only.
+      overlay = makeOverlay();
+      const comment = await createCommentOn(
+        overlay,
+        document.getElementById("target")
+      );
+
+      const reply = overlay.addReply(String(comment.id), "by id");
+
+      expect(reply).not.toBeNull();
+      expect(comment.replies).toHaveLength(1);
+      expect(comment.replies[0].text).toBe("by id");
+    });
+
+    it("addReply returns null for an unknown id", () => {
+      overlay = makeOverlay();
+      expect(overlay.addReply("no-such-id", "lost")).toBeNull();
+    });
+
     it("fires onReplyAdded with the serialized comment and the reply", async () => {
       const onReplyAdded = vi.fn();
       overlay = makeOverlay({ onReplyAdded });
@@ -132,6 +153,17 @@ describe("persistence", () => {
         expect(item.container).toBeUndefined();
         expect(JSON.parse(JSON.stringify(item))).toEqual(item);
       }
+    });
+
+    it("stamps schemaVersion on every serialized comment", async () => {
+      // The anchor and context sub-objects always carried a version; the
+      // comment itself did not, leaving future breaking changes no hinge to
+      // detect "written by a newer version" on.
+      overlay = makeOverlay();
+      await createCommentOn(overlay, document.getElementById("target"));
+
+      const [serialized] = overlay.serializeComments();
+      expect(serialized.schemaVersion).toBe(1);
     });
 
     it("serializes reply screenshots", async () => {
@@ -824,6 +856,35 @@ describe("schema migration", () => {
     expect(serialized.context.url).toBe("https://a.test/");
   });
 
+  it("drops malformed replies on load instead of feeding them to renderers", () => {
+    // The top-level comment is validated (id + text) but replies used to be
+    // spread in as-is — a reply without an id or text flowed into every
+    // renderer and crashed downstream.
+    const overlay = makeOverlay();
+    overlay.loadComments([
+      {
+        id: 4,
+        text: "with broken replies",
+        anchor: null,
+        page: location.pathname,
+        replies: [
+          { id: 41, text: "fine", author: "Ana", timestamp: "2026-01-01" },
+          { text: "no id" },
+          { id: 43, text: 42 },
+          "not even an object",
+        ],
+        author: "Ana",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        screenshots: [],
+        status: "open",
+      },
+    ]);
+
+    const [comment] = overlay.comments;
+    expect(comment.replies).toHaveLength(1);
+    expect(comment.replies[0].id).toBe(41);
+  });
+
   it("rejects a type or priority that is not in the enum", () => {
     const overlay = makeOverlay();
     overlay.loadComments([
@@ -940,6 +1001,57 @@ describe("legacy numeric ids that crossed a JSON or URL boundary", () => {
 
     expect(overlay.setCommentTags("1720000000000", ["ios"])).toBe(true);
     expect(overlay.comments[0].tags).toEqual(["ios"]);
+  });
+});
+
+describe("clearComments", () => {
+  let overlay;
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    localStorage.clear();
+  });
+
+  it("removes every comment, marker and observer without firing callbacks", async () => {
+    const onCommentDeleted = vi.fn();
+    overlay = makeOverlay({ onCommentDeleted });
+    await createCommentOn(overlay, document.getElementById("target"), "one");
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<section id="second">Another anchor</section>`
+    );
+    await createCommentOn(overlay, document.getElementById("second"), "two");
+    expect(overlay.comments).toHaveLength(2);
+
+    overlay.clearComments();
+
+    expect(overlay.comments).toHaveLength(0);
+    expect(
+      overlay.shadowRoot.querySelectorAll("[data-comment-id]")
+    ).toHaveLength(0);
+    expect(overlay.resizeObservers.size).toBe(0);
+    // A host-initiated bulk reset is not N deletions — reconciliation
+    // before loadComments must not echo back through onCommentDeleted.
+    expect(onCommentDeleted).not.toHaveBeenCalled();
+  });
+
+  it("drops the cleared comments from localStorage too", async () => {
+    overlay = makeOverlay({ persistence: "localStorage" });
+    await createCommentOn(
+      overlay,
+      document.getElementById("target"),
+      "persisted"
+    );
+    expect(JSON.parse(localStorage.getItem("helldots-comments"))).toHaveLength(
+      1
+    );
+
+    overlay.clearComments();
+
+    expect(JSON.parse(localStorage.getItem("helldots-comments"))).toHaveLength(
+      0
+    );
   });
 });
 

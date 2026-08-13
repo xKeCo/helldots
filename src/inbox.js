@@ -100,8 +100,12 @@ export class InboxView {
     this.el.className = CLASSES.INBOX_PANEL;
     this.el.setAttribute("role", "dialog");
     this.el.setAttribute("aria-label", this.strings.inboxAriaLabel);
+    // Announced as a dialog, so keyboard focus has to arrive with it —
+    // otherwise the user tabs across the whole page to reach the panel.
+    this.el.setAttribute("tabindex", "-1");
     this.shadowRoot.appendChild(this.el);
     this.render();
+    this.el.focus();
   }
 
   close() {
@@ -519,6 +523,10 @@ export class InboxView {
 
     const chips = document.createElement("div");
     chips.className = CLASSES.INBOX_FILTER_CHIPS;
+    // The page chips are role="radio" (exactly one active) and radios must
+    // sit in a radiogroup; the toggling groups are switches, plain group.
+    chips.setAttribute("role", toggles ? "group" : "radiogroup");
+    chips.setAttribute("aria-label", title);
 
     for (const value of values) {
       const checked = selected === value;
