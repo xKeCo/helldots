@@ -316,7 +316,7 @@ export class InboxView {
     const comments = this.filteredComments();
     const detail =
       this.detailId != null
-        ? comments.find((comment) => comment.id === this.detailId)
+        ? comments.find((comment) => sameId(comment.id, this.detailId))
         : null;
     // Set before rendering so a detail reached by any route — a card click,
     // the prev/next nav, the cross-page handoff — marks its marker.
@@ -332,11 +332,11 @@ export class InboxView {
   /**
    * Opens the panel (if needed) directly on a comment's detail. Used by
    * the overlay for the cross-page handoff on startup.
-   * @param {number} id
+   * @param {import('./index.d.ts').CommentId} id
    */
   openDetail(id) {
     if (!this.el) this.open();
-    const comment = this.getComments().find((c) => c.id === id);
+    const comment = this.getComments().find((c) => sameId(c.id, id));
     if (comment) this._openDetail(comment);
   }
 
@@ -776,7 +776,9 @@ export class InboxView {
       onSetPriority: (c, priority) =>
         this.callbacks.onSetPriority(c.id, priority),
       onDelete: (c) => {
-        if (this.detailId === c.id) this.detailId = null;
+        if (this.detailId != null && sameId(this.detailId, c.id)) {
+          this.detailId = null;
+        }
         this.callbacks.onDelete(c.id);
         this.render();
       },

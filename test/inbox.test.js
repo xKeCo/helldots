@@ -1737,3 +1737,40 @@ describe("editing a comment or a reply", () => {
     expect(comment.text).toBe("original");
   });
 });
+
+describe("id spelling in detail lookups", () => {
+  let overlay;
+
+  beforeEach(() => {
+    document.elementFromPoint = () => null;
+    document.body.innerHTML = `<section id="target">Anchor</section>`;
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+  });
+
+  it("openDetail resolves a numeric legacy id through its string spelling", () => {
+    // Every other id-taking entry point promises sameId semantics; the
+    // detail lookup must not be the one exception.
+    overlay = makeOverlay();
+    overlay.loadComments([
+      {
+        id: 10,
+        text: "legacy numeric id",
+        anchor: null,
+        replies: [],
+        author: "Ana",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        screenshots: [],
+      },
+    ]);
+    const panel = openInbox(overlay);
+
+    overlay.inboxView.openDetail("10");
+
+    expect(overlay.inboxView.detailId).toBe(10);
+    expect(panel.querySelector(`.${CLASSES.INBOX_DETAIL}`)).toBeTruthy();
+  });
+});

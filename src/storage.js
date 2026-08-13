@@ -105,9 +105,11 @@ export function writeStoredComments(comments) {
  * @returns {import('./index.d.ts').SerializedComment[]}
  */
 export function mergeForStorage(stored, current, currentPage) {
-  const currentIds = new Set(current.map((c) => c.id));
+  // Ids are compared on their string form (see id.js) — a numeric legacy id
+  // and its string spelling are the same comment, never two entries.
+  const currentIds = new Set(current.map((c) => String(c.id)));
   const kept = stored.filter(
-    (c) => !currentIds.has(c.id) && c.page !== currentPage
+    (c) => !currentIds.has(String(c.id)) && c.page !== currentPage
   );
   return [...kept, ...current];
 }

@@ -160,4 +160,17 @@ describe("mergeForStorage", () => {
     expect(merged).toHaveLength(1);
     expect(merged[0].text).toBe("fresh");
   });
+
+  it("matches ids across spellings — a numeric legacy id never duplicates", () => {
+    // Ids are compared on their string form everywhere else (sameId); a
+    // strict Set here would keep both spellings of one comment forever.
+    const stored = [comment("7", "/other", "stale string spelling")];
+    const merged = mergeForStorage(
+      stored,
+      [comment(7, "/other", "fresh numeric spelling")],
+      "/"
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0].text).toBe("fresh numeric spelling");
+  });
 });
