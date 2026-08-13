@@ -39,13 +39,13 @@ import {
   wireScreenshotInput,
   wireScreenshotLightbox,
   createCommentBox,
-  createCommentCircle,
   createTooltip,
 } from "./components.js";
 import {
   PopoverController,
   positionPopoverAtCircle,
 } from "./popover-controller.js";
+import { MarkerEngine } from "./marker-engine.js";
 import { InboxView } from "./inbox.js";
 import { closeOpenMenus } from "./menus.js";
 import { closeOpenConfirmDialogs } from "./confirm-dialog.js";
@@ -66,11 +66,6 @@ const normalizeTags = (tags) => {
 // in a persisted array is a silently broken thumbnail waiting to happen.
 const onlyStrings = (values) => values.filter((v) => typeof v === "string");
 
-// How long a batched position pass may reuse the previous occlusion verdict
-// before hit-testing again. Scrolling schedules a pass per frame; occlusion
-// rarely changes mid-scroll, and the trailing pass settles the end state.
-const OCCLUSION_INTERVAL_MS = 150;
-
 class CommentOverlay {
   /**
    * @param {import('./index.d.ts').CommentOverlayOptions} [options]
@@ -88,26 +83,12 @@ class CommentOverlay {
     this.locale = this.options.locale || detectLocale();
     this.strings = getStrings(this.locale);
 
-    // Initialize resize observers and position validation
-    this.resizeObservers = new Map();
-    this.positionValidationEnabled = true;
-
     /**
-     * Marker circles by String(comment.id). The per-frame position loop
-     * used to querySelector each one — a full shadow-tree scan per comment
-     * per frame, O(n²) on scroll.
-     * @type {Map<string, HTMLElement>}
+     * Marker positioning, occlusion and observers (see marker-engine.js).
+     * Created in initOverlay — its circles mount into the overlay element.
+     * @type {MarkerEngine | null}
      */
-    this._circles = new Map();
-    // Occlusion hit-testing (elementsFromPoint + getComputedStyle per
-    // marker) is the expensive part of a position pass, and scrolling is
-    // when passes are hottest — so batched passes run it at most once per
-    // OCCLUSION_INTERVAL_MS, with a trailing pass to settle the final state.
-    this._lastOcclusionPass = 0;
-    this._occlusionTrailingTimer = null;
-
-    // rAF scheduling flag for bulk updates
-    this._pendingRaf = null;
+    this.markers = null;
     /**
      * Drag selection + screenshot orchestration (see capture-flow.js).
      * Created in initOverlay — it mounts the selection rect into the
@@ -224,10 +205,24 @@ class CommentOverlay {
       },
     });
 
+    this.markers = new MarkerEngine({
+      container: this.overlay,
+      strings: this.strings,
+      getComments: () => this.comments,
+      wireMarker: (circle, comment) => this._wireMarker(circle, comment),
+      onMarkerHidden: (comment) => this._dismissMarkerUi(comment),
+      onVisibilityFlip: () => {
+        if (this.inboxView?.isOpen()) this.inboxView.refresh();
+      },
+      // Runs after every rAF pass: the markers are placed in viewport
+      // coordinates, so the open thread popover has to follow.
+      onAfterPass: () => this.syncThreadPopoverToMarker(),
+    });
+    this.markers.start();
+
     // Bind event listeners
     this.bindEventListeners();
     this.setupKeyboardShortcut();
-    this.setupResizeHandlers();
     this.injectStyles();
 
     this._pendingDetailId = this._readPendingDetailId();
@@ -675,8 +670,15 @@ class CommentOverlay {
   }
 
   renderCommentCircle(comment) {
-    const circle = createCommentCircle(comment, this.strings);
+    this.markers.render(comment);
+  }
 
+  /**
+   * What a marker opens when interacted with — tooltip on hover, thread
+   * popover on activation. UI wiring only; the engine calls this once per
+   * circle it creates and owns everything about position and visibility.
+   */
+  _wireMarker(circle, comment) {
     circle.addEventListener("mouseenter", () =>
       this.showCommentTooltip(circle, comment)
     );
@@ -711,16 +713,6 @@ class CommentOverlay {
         circle.click();
       }
     });
-
-    this.overlay.appendChild(circle);
-    this._circles.set(String(comment.id), circle);
-    this.updateCommentPosition(comment, circle);
-
-    // Size changes of the container are watched per comment (ResizeObserver
-    // below); DOM mutations are watched once for the whole page by the
-    // global observer in setupResizeHandlers — a per-comment MutationObserver
-    // here would fire N redundant callbacks per mutation batch on top of it.
-    this.createResizeObserver(comment, circle);
   }
 
   showCommentTooltip(circle, comment) {
@@ -1244,9 +1236,7 @@ class CommentOverlay {
   }
 
   _removeComment(id) {
-    this.cleanupResizeObserver(id);
-    this._circles.get(String(id))?.remove();
-    this._circles.delete(String(id));
+    this.markers.remove(id);
     this.comments = this.comments.filter((comment) => !sameId(comment.id, id));
   }
 
@@ -1260,11 +1250,7 @@ class CommentOverlay {
   clearComments() {
     this.closeThreadPopover();
     const cleared = this.comments;
-    for (const comment of cleared) {
-      this.cleanupResizeObserver(comment.id);
-    }
-    this._circles.forEach((circle) => circle.remove());
-    this._circles.clear();
+    this.markers.clear();
     this.comments = [];
 
     if (this.options.persistence === "localStorage" && cleared.length > 0) {
@@ -1388,51 +1374,8 @@ class CommentOverlay {
     return { anchored, orphaned, inactive };
   }
 
-  /**
-   * Brings a comment's marker into view, centred vertically.
-   *
-   * Deliberately not `comment.container.scrollIntoView()`: the container is
-   * the coarse anchor box (`section, div[class*=container|content]`), which
-   * falls back to `<body>` whenever the commented element has no such
-   * ancestor. Centring `<body>` lands halfway down the document — nowhere
-   * near the marker, which is what made opening a comment from the inbox
-   * jump to an unrelated section.
-   *
-   * @param {any} comment
-   */
   scrollMarkerIntoView(comment) {
-    const y = this._markerViewportY(comment);
-    if (y == null) return;
-    window.scrollTo({
-      top: Math.max(0, window.scrollY + y - window.innerHeight / 2),
-    });
-  }
-
-  /**
-   * The marker's centre in viewport coordinates, derived from the anchor the
-   * same way `updateCommentPosition` derives it — including the clamp that
-   * keeps the circle inside its container.
-   *
-   * Deliberately not read off the rendered circle: the circle's coordinates
-   * are only refreshed inside a rAF on scroll, so they are stale for any
-   * caller that runs in the same tick as a scroll. The container's rect is
-   * live, which makes this correct whenever it is asked.
-   *
-   * @param {any} comment
-   * @returns {number | null} null when there is no anchor to resolve
-   */
-  _markerViewportY(comment) {
-    const container = comment.container;
-    if (!container?.isConnected) return null;
-    const rect = container.getBoundingClientRect();
-    if (rect.height <= 0) return null;
-
-    const circleSize = MARKER_SIZE;
-    const offsetY = Math.max(
-      0,
-      Math.min(comment.relativeY * rect.height, rect.height - circleSize)
-    );
-    return rect.top + offsetY + circleSize / 2;
+    this.markers.scrollMarkerIntoView(comment);
   }
 
   createPreviewCircle(x, y) {
@@ -1456,163 +1399,48 @@ class CommentOverlay {
     this.previewCircle = null;
   }
 
+  // ------------------------------------------------------------------
+  // Marker facade — the engine owns the logic (marker-engine.js); these
+  // keep the overlay-level names every internal caller and the test suite
+  // grew around. State fields surface as accessors for the same reason.
+  // ------------------------------------------------------------------
+
   cleanupResizeObserver(commentId) {
-    // Keyed by String(id), exactly like _circles: the caller may hold the
-    // other spelling of a legacy numeric id, and a missed lookup here leaks
-    // a live observer pointed at a detached circle.
-    const key = String(commentId);
-    if (this.resizeObservers && this.resizeObservers.has(key)) {
-      const { circle, observer } = this.resizeObservers.get(key);
-      if (observer) {
-        observer.disconnect();
-      }
-      if (circle && circle.parentNode) {
-        circle.parentNode.removeChild(circle);
-      }
-      this.resizeObservers.delete(key);
-    }
+    this.markers.cleanupResizeObserver(commentId);
   }
 
-  /**
-   * Validates and recalculates comment position based on container dimensions
-   * @param {Object} comment - The comment object with position data
-   * @param {HTMLElement} circle - The comment circle element
-   * @returns {Object} - Validated position data
-   */
   validateAndCalculatePosition(comment, circle) {
-    if (!comment.container || !circle) return null;
-
-    const containerRect = comment.container.getBoundingClientRect();
-    const containerWidth = containerRect.width;
-    const containerHeight = containerRect.height;
-
-    // Zero size isn't an anomaly: it's what display:none (e.g. responsive
-    // media queries) looks like. The caller hides the marker until the
-    // element gets its size back.
-    if (containerWidth <= 0 || containerHeight <= 0) {
-      return null;
-    }
-
-    // Use simple relative positioning for consistent results
-    const absoluteX = comment.relativeX * containerWidth;
-    const absoluteY = comment.relativeY * containerHeight;
-
-    const circleSize = MARKER_SIZE;
-    const validatedX = Math.max(
-      0,
-      Math.min(absoluteX, containerWidth - circleSize)
-    );
-    const validatedY = Math.max(
-      0,
-      Math.min(absoluteY, containerHeight - circleSize)
-    );
-
-    // Recalculate relative position for future calculations
-    const validatedRelativeX = validatedX / containerWidth;
-    const validatedRelativeY = validatedY / containerHeight;
-
-    return {
-      absoluteX: validatedX,
-      absoluteY: validatedY,
-      relativeX: validatedRelativeX,
-      relativeY: validatedRelativeY,
-      containerWidth,
-      containerHeight,
-      containerLeft: containerRect.left,
-      containerTop: containerRect.top,
-    };
+    return this.markers.validateAndCalculatePosition(comment, circle);
   }
 
-  /**
-   * Updates comment circle position based on validated calculations
-   * @param {Object} comment - The comment object
-   * @param {HTMLElement} circle - The comment circle element
-   */
-  /**
-   * The exact element the user clicked on can vanish (responsive
-   * display:none) while its coarse anchor container stays visible. When we
-   * have a live target — or can re-derive one from the serialized
-   * targetSelector — the marker follows ITS visibility too.
-   */
-  _isAnchorTargetVisible(comment) {
-    let target = comment.target;
-    if ((!target || !target.isConnected) && comment.anchor?.targetSelector) {
-      try {
-        target = document.querySelector(comment.anchor.targetSelector);
-      } catch {
-        target = null;
-      }
-      comment.target = target || null;
-    }
-    if (!target || !target.isConnected) return true; // no signal — assume visible
-    const rect = target.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0;
+  updateCommentPosition(comment, circle) {
+    this.markers.updatePosition(comment, circle);
   }
 
-  /**
-   * A marker floats above the whole page (own shadow host, high z-index),
-   * so a host-page modal overlay can never cover it with CSS alone. Hit-test
-   * the marker's point instead: if the topmost page element there is
-   * unrelated to the comment's anchor (neither ancestor nor descendant),
-   * something like a modal backdrop is covering it and the marker should
-   * hide with it.
-   */
-  _isMarkerOccluded(comment, x, y) {
-    if (typeof document.elementsFromPoint !== "function") return false;
-    // Off-viewport points can't be hit-tested; the marker isn't visible
-    // there anyway, so keep the current (visible) state.
-    if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) {
-      return false;
-    }
-    const stack = document.elementsFromPoint(x, y);
-    // Our own shadow host shows up first (the marker itself, toolbar, …).
-    const top = stack.find(
-      (el) => el.tagName.toLowerCase() !== TAG_NAME.toLowerCase()
-    );
-    if (!top) return false;
-
-    const target = comment.target?.isConnected ? comment.target : null;
-    // The precise element the comment was left on (or its subtree /
-    // ancestors) is what should be under the marker — never an occluder.
-    if (target && (target.contains(top) || top.contains(target))) {
-      return false;
-    }
-
-    const container = comment.container;
-    if (!container?.isConnected) return false;
-    // Something entirely unrelated to the anchor sits on top of it.
-    if (!container.contains(top) && !top.contains(container)) return true;
-
-    // `top` lives inside the anchor container — usually normal content of
-    // the anchored subtree. But broad containers (body, page wrappers) also
-    // contain the page's modals, so walk the chain up to the container: if
-    // it crosses a modal-looking layer the anchor doesn't belong to, the
-    // marker is covered after all.
-    if (container.contains(top) && top !== container) {
-      for (let el = top; el && el !== container; el = el.parentElement) {
-        if (this._looksLikeModalLayer(el, target)) return true;
-      }
-    }
-    return false;
+  scheduleUpdatePositions() {
+    this.markers.scheduleUpdate();
   }
 
-  /**
-   * Heuristic for "this element is a modal/backdrop layer": explicit dialog
-   * semantics, or a hit-testable fixed element covering most of the
-   * viewport. Elements that contain the comment's own target are the layer
-   * the comment lives in, never an occluder.
-   */
-  _looksLikeModalLayer(el, target) {
-    if (target && el.contains(target)) return false;
-    if (el.matches?.('dialog, [aria-modal="true"], [role="dialog"]')) {
-      return true;
-    }
-    if (getComputedStyle(el).position !== "fixed") return false;
-    const rect = el.getBoundingClientRect();
-    return (
-      rect.width >= window.innerWidth * 0.5 &&
-      rect.height >= window.innerHeight * 0.5
-    );
+  /** Marker circles by String(id) — lives on the engine. */
+  get _circles() {
+    return this.markers?.circles;
+  }
+
+  /** Per-comment ResizeObservers — live on the engine. */
+  get resizeObservers() {
+    return this.markers?.resizeObservers;
+  }
+
+  get positionValidationEnabled() {
+    return this.markers?.enabled ?? true;
+  }
+
+  set positionValidationEnabled(value) {
+    if (this.markers) this.markers.enabled = value;
+  }
+
+  get _globalMutationObserver() {
+    return this.markers?._globalMutationObserver ?? null;
   }
 
   // A marker that just went away must not leave its hover tooltip or its
@@ -1626,242 +1454,6 @@ class CommentOverlay {
   }
 
   /**
-   * Read half of a position update: layout reads only, no DOM writes, so a
-   * batched pass can measure every marker before touching any style (an
-   * interleaved read-write loop forces a fresh layout per marker).
-   * @param {Object} comment
-   * @param {HTMLElement} circle
-   * @param {{ checkOcclusion?: boolean }} [options] when false, the pass
-   *   reuses the marker's previous occlusion verdict instead of hit-testing.
-   * @returns {{ kind: "resolved" } | { kind: "noop" } | { kind: "hidden" }
-   *   | { kind: "visible", viewportX: number, viewportY: number,
-   *   relativeX: number, relativeY: number }}
-   */
-  _computeMarkerState(comment, circle, { checkOcclusion = true } = {}) {
-    // Resolved comments have no on-page marker (RF09). This is not the
-    // "hidden" state — the anchor is fine, the issue is just done.
-    if (comment.status === "resolved") {
-      return { kind: "resolved" };
-    }
-
-    let positionData = this.validateAndCalculatePosition(comment, circle);
-    if (positionData && !this._isAnchorTargetVisible(comment)) {
-      positionData = null;
-    }
-    if (!positionData) {
-      // Anchor element currently invisible (zero-size container): hide the
-      // marker; it comes back automatically when the observers fire again.
-      return comment.container ? { kind: "hidden" } : { kind: "noop" };
-    }
-
-    // Offset so the circle's top-left tip (sharp corner) aligns with the stored position
-    const circleRadius = MARKER_SIZE / 2;
-    const viewportX =
-      positionData.containerLeft + positionData.absoluteX + circleRadius;
-    const viewportY =
-      positionData.containerTop + positionData.absoluteY + circleRadius;
-
-    // A host-page modal (or any unrelated overlay) covering the anchor also
-    // hides the marker — it must not float above the modal's backdrop.
-    if (checkOcclusion) {
-      comment._occluded = this._isMarkerOccluded(comment, viewportX, viewportY);
-    }
-    if (comment._occluded) {
-      return { kind: "hidden" };
-    }
-
-    return {
-      kind: "visible",
-      viewportX,
-      viewportY,
-      relativeX: positionData.relativeX,
-      relativeY: positionData.relativeY,
-    };
-  }
-
-  /**
-   * Write half of a position update: styles and state only, no layout
-   * reads.
-   * @param {Object} comment
-   * @param {HTMLElement} circle
-   * @param {ReturnType<CommentOverlay["_computeMarkerState"]>} state
-   * @returns {boolean} true when the marker's hidden flag flipped — the
-   *   caller decides how to refresh the inbox (once per batch in the rAF
-   *   loop, immediately on direct calls).
-   */
-  _applyMarkerState(comment, circle, state) {
-    if (state.kind === "resolved") {
-      if (circle) circle.style.display = "none";
-      return false;
-    }
-    if (state.kind === "noop") return false;
-
-    const wasHidden = comment.hidden === true;
-    if (state.kind === "hidden") {
-      comment.hidden = true;
-      circle.style.display = "none";
-      this._dismissMarkerUi(comment);
-      return !wasHidden;
-    }
-
-    comment.hidden = false;
-    circle.style.display = "";
-    circle.style.left = `${state.viewportX}px`;
-    circle.style.top = `${state.viewportY}px`;
-    circle.style.transform = "translate(-50%, -50%)";
-    circle.style.position = "absolute";
-
-    comment.relativeX = state.relativeX;
-    comment.relativeY = state.relativeY;
-    return wasHidden;
-  }
-
-  updateCommentPosition(comment, circle) {
-    const state = this._computeMarkerState(comment, circle);
-    const flipped = this._applyMarkerState(comment, circle, state);
-    if (flipped && this.inboxView?.isOpen()) this.inboxView.refresh();
-  }
-
-  /**
-   * One batched pass over every marker: measure everything, then write
-   * everything, then refresh the inbox at most once — flipping N markers in
-   * one frame used to rebuild the inbox N times from inside the loop.
-   */
-  _updateAllPositions() {
-    const now = Date.now();
-    const checkOcclusion =
-      now - this._lastOcclusionPass >= OCCLUSION_INTERVAL_MS;
-    if (checkOcclusion) {
-      this._lastOcclusionPass = now;
-    } else {
-      // This pass reuses stale occlusion verdicts; make sure one more pass
-      // runs after the burst settles so the end state is honest.
-      this._armOcclusionTrailingPass();
-    }
-
-    const plans = [];
-    for (const comment of this.comments) {
-      const circle = this._circles.get(String(comment.id));
-      if (!circle) continue;
-      plans.push([
-        comment,
-        circle,
-        this._computeMarkerState(comment, circle, { checkOcclusion }),
-      ]);
-    }
-
-    let inboxDirty = false;
-    for (const [comment, circle, state] of plans) {
-      if (this._applyMarkerState(comment, circle, state)) inboxDirty = true;
-    }
-    if (inboxDirty && this.inboxView?.isOpen()) this.inboxView.refresh();
-  }
-
-  _armOcclusionTrailingPass() {
-    if (this._occlusionTrailingTimer) {
-      clearTimeout(this._occlusionTrailingTimer);
-    }
-    this._occlusionTrailingTimer = setTimeout(() => {
-      this._occlusionTrailingTimer = null;
-      this.scheduleUpdatePositions();
-    }, OCCLUSION_INTERVAL_MS);
-  }
-
-  /**
-   * Sets up resize observers and window resize handlers
-   */
-  setupResizeHandlers() {
-    // Throttled updater
-    this.scheduleUpdatePositions = () => {
-      if (this._pendingRaf) return;
-      this._pendingRaf = requestAnimationFrame(() => {
-        this._pendingRaf = null;
-        if (this.positionValidationEnabled) {
-          this._updateAllPositions();
-        }
-        // Runs even with position validation off: the markers are placed in
-        // viewport coordinates either way, so the popover has to follow.
-        this.syncThreadPopoverToMarker();
-      });
-    };
-
-    // Window resize handler for viewport changes
-    this.windowResizeHandler = () => {
-      this.scheduleUpdatePositions();
-    };
-    window.addEventListener("resize", this.windowResizeHandler, {
-      passive: true,
-    });
-
-    // Capture scroll on any scrolling ancestor
-    this.scrollHandler = () => {
-      this.scheduleUpdatePositions();
-    };
-    window.addEventListener("scroll", this.scrollHandler, {
-      capture: true,
-      passive: true,
-    });
-
-    // Update after resources load (images, fonts)
-    this.loadHandler = () => {
-      this.scheduleUpdatePositions();
-    };
-    window.addEventListener("load", this.loadHandler);
-
-    // Modals open/close outside any comment's container (backdrops are
-    // usually appended to <body> or toggled via style/class), so the
-    // per-comment observers never see them. One page-wide observer keeps
-    // the occlusion check honest; shadow-root internals don't bubble into
-    // it, so our own marker updates can't retrigger it.
-    if (window.MutationObserver) {
-      this._globalMutationObserver = new MutationObserver(() => {
-        this.scheduleUpdatePositions();
-      });
-      this._globalMutationObserver.observe(document.body, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ["style", "class", "hidden", "open"],
-      });
-    }
-  }
-
-  /**
-   * Creates a ResizeObserver for a specific comment container
-   * @param {Object} comment - The comment object
-   * @param {HTMLElement} circle - The comment circle element
-   */
-  createResizeObserver(comment, circle) {
-    if (!window.ResizeObserver) {
-      console.warn(
-        "ResizeObserver not supported, position validation will be limited"
-      );
-      return;
-    }
-
-    const observer = new ResizeObserver((entries) => {
-      if (!this.positionValidationEnabled) return;
-
-      for (const entry of entries) {
-        // Only update if the container size actually changed
-        if (entry.target === comment.container) {
-          this.updateCommentPosition(comment, circle);
-        }
-      }
-    });
-
-    // Start observing the container
-    observer.observe(comment.container);
-
-    // Store the observer for cleanup, keyed by String(id) like _circles.
-    this.resizeObservers.set(String(comment.id), {
-      circle,
-      observer,
-      container: comment.container,
-    });
-  }
-
-  /**
    * Cleanup method to remove all event listeners and observers
    */
   cleanup() {
@@ -1871,16 +1463,9 @@ class CommentOverlay {
       document.removeEventListener("DOMContentLoaded", this._onDomReady);
       this._onDomReady = null;
     }
-    // A pass scheduled before teardown must not run against the destroyed
-    // instance — cancel the pending frame and the trailing occlusion timer.
-    if (this._pendingRaf) {
-      cancelAnimationFrame(this._pendingRaf);
-      this._pendingRaf = null;
-    }
-    if (this._occlusionTrailingTimer) {
-      clearTimeout(this._occlusionTrailingTimer);
-      this._occlusionTrailingTimer = null;
-    }
+    // Cancels every scheduled pass, listener, observer and circle the
+    // marker engine owns — including a rAF armed before teardown.
+    this.markers?.destroy();
     if (this._storageHandler) {
       window.removeEventListener("storage", this._storageHandler);
       this._storageHandler = null;
@@ -1906,35 +1491,6 @@ class CommentOverlay {
       document.removeEventListener("mousedown", this._handleDocumentClickBound);
     }
 
-    if (this.windowResizeHandler) {
-      window.removeEventListener("resize", this.windowResizeHandler);
-    }
-
-    if (this.scrollHandler) {
-      window.removeEventListener("scroll", this.scrollHandler, {
-        capture: true,
-      });
-    }
-
-    if (this.loadHandler) {
-      window.removeEventListener("load", this.loadHandler);
-    }
-
-    if (this._globalMutationObserver) {
-      this._globalMutationObserver.disconnect();
-      this._globalMutationObserver = null;
-    }
-
-    // Cleanup all resize observers
-    if (this.resizeObservers) {
-      this.resizeObservers.forEach(({ observer }) => {
-        if (observer) {
-          observer.disconnect();
-        }
-      });
-      this.resizeObservers.clear();
-    }
-
     // Remove keyboard shortcut handler
     if (this.keydownHandler) {
       document.removeEventListener("keydown", this.keydownHandler);
@@ -1953,10 +1509,6 @@ class CommentOverlay {
 
     document.body.classList.remove(CLASSES.COMMENT_CURSOR);
     document.getElementById(IDS.GLOBAL_STYLES)?.remove();
-
-    // Remove all comment circles
-    this._circles.forEach((circle) => circle.remove());
-    this._circles.clear();
 
     // The now-empty shadow host itself: leaving <helldots-root> dangling
     // from <body> is half a cleanup. getShadowRoot() recreates it if a new

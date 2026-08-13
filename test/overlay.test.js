@@ -1578,8 +1578,9 @@ describe("CommentOverlay", () => {
     });
 
     it("also schedules a position update on window scroll and load", () => {
+      // The listeners live on the marker engine now, so the spy does too.
       overlay = makeOverlay();
-      const spy = vi.spyOn(overlay, "scheduleUpdatePositions");
+      const spy = vi.spyOn(overlay.markers, "scheduleUpdate");
       window.dispatchEvent(new Event("scroll"));
       expect(spy).toHaveBeenCalledTimes(1);
       window.dispatchEvent(new Event("load"));
@@ -1623,7 +1624,8 @@ describe("CommentOverlay", () => {
       expect(entry.observer).toBeInstanceOf(FakeResizeObserver);
       expect(entry.observer.observed).toContain(container);
 
-      const updateSpy = vi.spyOn(overlay, "updateCommentPosition");
+      // The observer callback lives on the engine, so the spy does too.
+      const updateSpy = vi.spyOn(overlay.markers, "updatePosition");
       entry.observer.cb([{ target: container }]);
       expect(updateSpy).toHaveBeenCalledWith(comment, expect.any(HTMLElement));
 
@@ -1726,7 +1728,7 @@ describe("CommentOverlay", () => {
 
       // Watched by the page-wide observer (there is no per-comment one),
       // whose attribute filter covers the layout-affecting set.
-      const scheduleSpy = vi.spyOn(overlay, "scheduleUpdatePositions");
+      const scheduleSpy = vi.spyOn(overlay.markers, "scheduleUpdate");
       container.classList.add("collapsed");
       await wait(10);
       expect(scheduleSpy).toHaveBeenCalled();
@@ -2093,7 +2095,7 @@ describe("CommentOverlay", () => {
       overlay = makeOverlay();
       expect(overlay._globalMutationObserver).toBeTruthy();
 
-      const spy = vi.spyOn(overlay, "scheduleUpdatePositions");
+      const spy = vi.spyOn(overlay.markers, "scheduleUpdate");
       const backdrop = document.createElement("div");
       document.body.appendChild(backdrop);
       backdrop.style.display = "block";

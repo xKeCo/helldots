@@ -1209,3 +1209,36 @@ Accepted trade-offs: `saveComment` is now async (it was never part of the
 public API surface in `index.d.ts`); and a save racing an Escape that
 dismissed the box is dropped, because a comment materialising after the box
 visibly closed would contradict the screen.
+
+## Fase 5.1: the god object, split along its real seams
+
+`overlay.js` had grown to ~2,500 lines and at least eight responsibilities.
+Three extractions, chosen because each has a genuine one-way dependency on
+the overlay and not on each other:
+
+- **`capture-flow.js`** — the drag rectangle, the one render per gesture,
+  and the pending background capture. Placement stays behind `onPlace`.
+- **`popover-controller.js`** — thread-popover lifecycle, in-place editing
+  state, and the placement math (`positionPopoverAtCircle` is exported on
+  its own because the hover tooltip shares it). Mutations flow back through
+  an `actions` contract; the controller never touches storage or the host
+  callbacks.
+- **`marker-engine.js`** — circles, position math, occlusion, the batched
+  rAF loop and every observer/listener feeding it. What a marker OPENS
+  (tooltip, popover) comes in through `wireMarker`; the engine knows where
+  markers are, never what they do.
+
+The overlay keeps a thin **compatibility facade**: same-named methods
+(`renderCommentCircle`, `showThreadPopover`, `scheduleUpdatePositions`, …)
+and accessor properties (`_circles`, `resizeObservers`,
+`positionValidationEnabled`, `activeThreadPopover`) that delegate to the
+modules. This was a deliberate trade: the facade is ~60 lines, it is the
+surface every internal caller and 500+ tests grew around, and deleting it
+would have turned a no-behavior-change refactor into a rename sweep with
+real regression risk. The public API in `index.d.ts` is untouched, and the
+refactor was verified against the pre-split code in a real browser (same
+playground flows, same outcomes) on top of the full suite.
+
+Accepted costs: ~0.5 KB gzip of module plumbing, and dependency-injection
+constructors in `initOverlay` that restate what the modules need — which is
+also the point: the needs are now written down.
