@@ -1458,3 +1458,32 @@ The handler is now a named `const` alongside `onDeleteReply` and both call
 sites pass it. Naming it is the actual fix: it was inlined in the
 `createThreadPopover` argument list, which is what let a second builder be
 added without it.
+
+## The popover's deferred listener is cancellable, not removed
+
+`show()` arms the outside-click listener from a `setTimeout(…, 0)` so the
+gesture that opened the popover cannot immediately close it. The timer id was
+not held, so `close()` had nothing to cancel: a `cleanup()` in the same tick
+as opening a thread was outrun by the timer, and the listener landed on
+`document` after teardown with nothing left to remove it. It closes over the
+controller, so each occurrence pinned an entire overlay instance — shadow
+root and comments included — for the page's lifetime.
+
+The alternative was to drop the deferral and arm the listener synchronously,
+which would delete the race outright. Rejected as unverifiable from here: the
+deferral exists to survive whatever event sequence opens a thread (a marker
+click, a keyboard Enter, a jump from the inbox), and proving that a
+synchronous listener never eats its own opening gesture across all three
+needs more evidence than the leak justifies. Holding the id and clearing it
+in `close()` fixes the leak without touching open/close semantics.
+
+Two notes for whoever reads this next:
+
+- **The test waits for the armed handler, not for 10ms.** The old
+  `await wait(10)` against a `setTimeout(…, 0)` passed on timer ordering
+  alone; it would have silently become a coin flip the day that delay
+  changed.
+- **`show()` also schedules positioning on a 10ms timer that `close()` does
+  not cancel.** That one is harmless today — it positions a detached node —
+  but it is the same shape, and it is what makes two of the popover
+  positioning tests order-dependent under `--sequence.shuffle`.

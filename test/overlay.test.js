@@ -1153,7 +1153,11 @@ describe("CommentOverlay", () => {
     it("clicking outside the popover and circle closes it", async () => {
       const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
       overlay.showThreadPopover(circle, comment);
-      await wait(10);
+      // The listener is armed from a timer, so wait for the precondition
+      // itself rather than for a duration that happens to outlast it — a
+      // `wait(10)` against a `setTimeout(…, 0)` passes only as long as
+      // nobody changes that delay.
+      await waitFor(() => !!overlay._popover._clickHandler);
 
       const evt = new MouseEvent("mousedown", {
         bubbles: true,
@@ -2314,6 +2318,52 @@ describe("CommentOverlay", () => {
 
       expect(resizeObserver.disconnect).toHaveBeenCalled();
       expect(overlay.resizeObservers.size).toBe(0);
+    });
+
+    // The popover arms its outside-click listener from a timer, so a
+    // cleanup() in the same tick as opening a thread used to be outrun by it:
+    // the listener landed on `document` after teardown, with nothing left to
+    // remove it. It closes over the controller, so it kept that instance —
+    // deps, shadow root and every comment — alive for the page's lifetime.
+    // A host unmounting the widget right after opening a thread (a route
+    // change, a StrictMode double-invoke) accumulated one per mount.
+    it("cannot arm the popover's outside-click listener after cleanup", async () => {
+      const added = new Set();
+      const realAdd = document.addEventListener.bind(document);
+      const realRemove = document.removeEventListener.bind(document);
+      vi.spyOn(document, "addEventListener").mockImplementation((t, h, o) => {
+        if (t === "mousedown") added.add(h);
+        return realAdd(t, h, o);
+      });
+      vi.spyOn(document, "removeEventListener").mockImplementation(
+        (t, h, o) => {
+          if (t === "mousedown") added.delete(h);
+          return realRemove(t, h, o);
+        }
+      );
+
+      overlay = makeOverlay();
+      const comment = {
+        id: 7,
+        text: "hello",
+        replies: [],
+        author: "Author",
+        createdAt: new Date().toISOString(),
+        container: document.body,
+      };
+      overlay.comments.push(comment);
+      overlay.renderCommentCircle(comment);
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+
+      overlay.showThreadPopover(circle, comment);
+      overlay.cleanup();
+      expect(added.size).toBe(0);
+
+      // Whatever the popover had scheduled must not resurrect a listener.
+      await wait(20);
+      expect(added.size).toBe(0);
+
+      overlay = null;
     });
 
     it("does not leak the document mousedown listener across instances", () => {

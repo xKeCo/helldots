@@ -135,6 +135,13 @@ export class PopoverController {
     this._resizeObserver = null;
     /** @type {((e: MouseEvent) => void) | null} */
     this._clickHandler = null;
+    /**
+     * Pending arm of `_clickHandler`. Held so `close()` can cancel it: the
+     * listener goes on `document`, so a timer that outlives teardown installs
+     * one nothing is left to remove.
+     * @type {ReturnType<typeof setTimeout> | null}
+     */
+    this._armClickTimer = null;
   }
 
   /**
@@ -507,7 +514,10 @@ export class PopoverController {
 
     setTimeout(() => input.focus(), 50);
 
-    setTimeout(() => {
+    // Deferred so the gesture that opened this popover cannot immediately
+    // close it. Cancellable, because `close()` may run first.
+    this._armClickTimer = setTimeout(() => {
+      this._armClickTimer = null;
       this._clickHandler = (e) => {
         const target = /** @type {Node} */ (e.composedPath()[0] || e.target);
         if (
@@ -547,6 +557,10 @@ export class PopoverController {
       this.active = null;
     }
     this._activeCircle = null;
+    if (this._armClickTimer) {
+      clearTimeout(this._armClickTimer);
+      this._armClickTimer = null;
+    }
     if (this._clickHandler) {
       document.removeEventListener("mousedown", this._clickHandler);
       this._clickHandler = null;
