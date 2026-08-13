@@ -1533,6 +1533,72 @@ describe("context block in the detail view", () => {
       block.querySelectorAll(`.${CLASSES.CONTEXT_ROW}`).length
     ).toBeGreaterThan(0);
   });
+
+  describe("collapsing it", () => {
+    const openWithContext = () => {
+      overlay = makeOverlay();
+      overlay.loadComments([withContext]);
+      const panel = openInbox(overlay);
+      overlay.inboxView.openDetail(1);
+      return panel;
+    };
+
+    const parts = (panel) => {
+      const block = panel.querySelector(`.${CLASSES.CONTEXT_BLOCK}`);
+      return {
+        block,
+        toggle: block.querySelector(`.${CLASSES.CONTEXT_TOGGLE}`),
+        body: block.querySelector(`.${CLASSES.CONTEXT_BODY}`),
+      };
+    };
+
+    // Expanded on arrival, unlike the thread popover's: the detail view is
+    // the surface you open to read everything about one comment. The toggle
+    // is there to get the block out of the way, not to hide it up front.
+    it("starts expanded, behind a toggle", () => {
+      const { toggle, body } = parts(openWithContext());
+
+      expect(toggle).toBeTruthy();
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(body.style.display).toBe("");
+      expect(toggle.textContent).toContain(en.contextSection);
+    });
+
+    it("collapses and expands again on click", () => {
+      const panel = openWithContext();
+      const { toggle, body } = parts(panel);
+
+      toggle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(body.style.display).toBe("none");
+
+      toggle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(body.style.display).toBe("");
+    });
+
+    // The detail view is rebuilt from scratch on every refresh, and a
+    // refresh follows any mutation — adding a reply, changing the status.
+    // Without remembering the choice, the block a user just folded away
+    // springs back open under them.
+    it("stays collapsed across a refresh", () => {
+      const panel = openWithContext();
+      parts(panel).toggle.dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+
+      overlay.setCommentStatus(1, "in_progress");
+
+      const after = parts(panel);
+      expect(after.toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(after.body.style.display).toBe("none");
+    });
+
+    it("does not leave a plain title behind next to the toggle", () => {
+      const { block } = parts(openWithContext());
+      expect(block.querySelector(`.${CLASSES.CONTEXT_TITLE}`)).toBeNull();
+    });
+  });
 });
 
 describe("editing a comment or a reply", () => {

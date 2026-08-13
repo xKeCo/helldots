@@ -70,6 +70,14 @@ export class InboxView {
     this.priorityFilter = "all"; // "all" | PRIORITIES
     this.detailId = null;
     /**
+     * Whether the detail view's context disclosure is open. State rather than
+     * DOM for the same reason as the editor below — the detail is rebuilt on
+     * every refresh — and one flag for the panel rather than one per comment,
+     * so folding it away stays folded while stepping through comments with
+     * prev/next.
+     */
+    this.contextExpanded = true;
+    /**
      * The one open editor, as state rather than DOM.
      *
      * This panel re-renders from ten places, and the overlay refreshes it
@@ -941,11 +949,17 @@ export class InboxView {
 
     detail.appendChild(this._buildCard(comment, { interactive: false }));
 
-    // Always expanded here: the detail view exists to show everything. The
-    // thread popover renders the same block as a collapsed disclosure.
+    // Open on arrival — the detail view is where you go to read everything —
+    // but foldable, and the choice outlives the rebuilds this view does on
+    // every refresh.
     const context = createContextBlock(comment, {
       strings: this.strings,
       onShowLightbox: (src) => this.callbacks.onShowLightbox(src),
+      collapsible: true,
+      expanded: this.contextExpanded,
+      onToggle: (expanded) => {
+        this.contextExpanded = expanded;
+      },
     });
     if (context) detail.appendChild(context);
 

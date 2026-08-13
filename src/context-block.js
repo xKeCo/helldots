@@ -1,10 +1,15 @@
 // RF2 — the environment a comment was reported from, plus the automatic
 // capture taken at that moment.
 //
-// Two surfaces render it: the inbox detail, where it is always expanded
-// because the detail view exists to show everything, and the thread popover,
-// where it is a disclosure collapsed by default so the popover stays a
-// conversation first and a bug report second.
+// Two surfaces render it as a disclosure, differing only in where it starts:
+// the thread popover collapses it so the popover stays a conversation first
+// and a bug report second, while the inbox detail opens expanded because that
+// view is the one you go to in order to read everything.
+//
+// The caller owns the open/closed state — `expanded` in, `onToggle` out —
+// because the inbox rebuilds its detail from scratch on every refresh, and a
+// block that remembered its own state would spring back open on the next
+// mutation.
 
 import { CLASSES } from "./constants.js";
 import { CARET_ICON_SVG } from "./components.js";
@@ -12,12 +17,13 @@ import { CARET_ICON_SVG } from "./components.js";
 /**
  * @param {any} comment
  * @param {{ strings: object, onShowLightbox: (src: string) => void,
- *   collapsible?: boolean }} deps
+ *   collapsible?: boolean, expanded?: boolean,
+ *   onToggle?: (expanded: boolean) => void }} deps
  * @returns {HTMLElement | null} null for comments created before RF1/RF2
  */
 export const createContextBlock = (
   comment,
-  { strings, onShowLightbox, collapsible = false }
+  { strings, onShowLightbox, collapsible = false, expanded = false, onToggle }
 ) => {
   const { context, contextScreenshot } = comment;
   if (!context && !contextScreenshot) return null;
@@ -32,14 +38,15 @@ export const createContextBlock = (
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = CLASSES.CONTEXT_TOGGLE;
-    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-expanded", String(expanded));
     toggle.innerHTML = `<span>${strings.contextSection}</span>${CARET_ICON_SVG}`;
-    body.style.display = "none";
+    body.style.display = expanded ? "" : "none";
     toggle.addEventListener("click", (e) => {
       e.stopPropagation();
-      const expanded = toggle.getAttribute("aria-expanded") === "true";
-      toggle.setAttribute("aria-expanded", String(!expanded));
-      body.style.display = expanded ? "none" : "";
+      const isOpen = toggle.getAttribute("aria-expanded") === "true";
+      toggle.setAttribute("aria-expanded", String(!isOpen));
+      body.style.display = isOpen ? "none" : "";
+      onToggle?.(!isOpen);
     });
     block.appendChild(toggle);
   } else {

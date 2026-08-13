@@ -1534,3 +1534,35 @@ Two habits this is worth writing down for:
 - **`restoreAllMocks` only undoes spies.** Direct property assignments and
   module-factory `vi.fn()`s need explicit teardown, and until they get it they
   are a channel between tests.
+
+## The inbox's context block is a disclosure too (amends the entry above)
+
+The earlier decision gave `createContextBlock` a `collapsible` flag and used
+it only in the thread popover: the inbox detail rendered the block expanded
+and fixed, on the reasoning that "that view exists to show everything". In
+practice the automatic screenshot plus five metadata rows push the replies
+below the fold on exactly the surface where you read a discussion, so the
+block now carries the same toggle there.
+
+What did not change: it still **starts** expanded in the inbox. The reasoning
+above holds for the first render — you opened the detail to see everything —
+and starting it collapsed would hide information that is visible today. Only
+the ability to fold it is new.
+
+Two things this required:
+
+- **The caller owns the open/closed state.** `createContextBlock` takes
+  `expanded` and reports changes through `onToggle` instead of keeping the
+  state in its own closure. The inbox rebuilds its detail from scratch on
+  every refresh, and a refresh follows any mutation — adding a reply,
+  changing a status — so a block that remembered its own state would spring
+  back open under the user. The popover, built once and mutated in place,
+  does not need this and passes neither.
+- **One flag per panel, not per comment.** `InboxView.contextExpanded` is
+  panel-level, so folding the block away keeps it folded while stepping
+  through comments with prev/next. Per-comment state would re-expand on every
+  step, which reads as the toggle not working.
+
+The state is deliberately not persisted across sessions: it is a reading
+preference for the panel that is open, and `localStorage` here is the
+comments' store, not the widget's UI settings.
