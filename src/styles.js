@@ -726,6 +726,12 @@ ${webkitScrollbar(
         box-shadow: 0 4px 16px rgba(0,0,0,0.4);
     }
 
+    /* Two classes, so this beats the base rule's \`top\` whatever the order. */
+    .${CLASSES.INBOX_MENU}.${CLASSES.INBOX_MENU_UP} {
+        top: auto;
+        bottom: calc(100% + 4px);
+    }
+
     .${CLASSES.INBOX_CARD_TEXT} {
         white-space: pre-wrap;
         word-break: break-word;

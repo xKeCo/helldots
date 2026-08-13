@@ -77,6 +77,8 @@ export const CLASSES = {
   INBOX_ACTION_LABEL: "inbox-action-label",
   INBOX_STATUS_DOT: "inbox-status-dot",
   INBOX_MENU: "inbox-menu",
+  // Set by menus.js when a dropdown has to open upward to stay unclipped.
+  INBOX_MENU_UP: "inbox-menu--up",
   INBOX_MENU_ITEM: "inbox-menu-item",
   INBOX_DETAIL: "inbox-detail",
   INBOX_DETAIL_HEADER: "inbox-detail-header",

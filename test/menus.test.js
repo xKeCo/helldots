@@ -1,5 +1,8 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { attachMenuToggle, closeOpenMenus } from "../src/menus.js";
+import { CLASSES } from "../src/constants.js";
+
+const MENU_UP_CLASS = CLASSES.INBOX_MENU_UP;
 
 // Builds a wired button + menu with n focusable menuitem buttons, attached
 // to the document so focus() works.
@@ -112,6 +115,121 @@ describe("menu registry", () => {
       expect(document.activeElement).toBe(items[2]);
       pressKey("Home");
       expect(document.activeElement).toBe(items[0]);
+    });
+  });
+
+  // Dropdowns open downward, and a scrolling ancestor clips them. Measured
+  // on a reply row, whose menu grew 10px past the bottom of `.thread-scroll`:
+  // the only way to read it was to scroll the thread. Every dropdown sitting
+  // in a scroll container is exposed the same way — inbox cards live in
+  // `.inbox-list` — so the measurement lives here, in the shared registry,
+  // rather than at one call site.
+  describe("flipping to stay visible", () => {
+    const spanRect = (top, bottom) => () => ({
+      top,
+      bottom,
+      height: bottom - top,
+      left: 0,
+      right: 100,
+      width: 100,
+    });
+
+    // `clip` is the scrolling ancestor's vertical span, or null for a menu
+    // with no clipping ancestor (then only the viewport bounds it).
+    const buildPlaced = ({ clip, button: btn, menuHeight }) => {
+      const host = document.createElement("div");
+      if (clip) {
+        host.style.overflowY = "auto";
+        host.getBoundingClientRect = spanRect(clip[0], clip[1]);
+      }
+      const wrapper = document.createElement("div");
+      const button = document.createElement("button");
+      button.getBoundingClientRect = spanRect(btn[0], btn[1]);
+      const menu = document.createElement("div");
+      menu.setAttribute("role", "menu");
+      // Where the menu sits when it opens downward: 4px under the button.
+      menu.getBoundingClientRect = spanRect(
+        btn[1] + 4,
+        btn[1] + 4 + menuHeight
+      );
+
+      wrapper.append(button, menu);
+      host.appendChild(wrapper);
+      document.body.appendChild(host);
+      return { button, menu, toggle: attachMenuToggle(button, menu) };
+    };
+
+    const opensUp = (menu) => menu.classList.contains(MENU_UP_CLASS);
+
+    it("opens upward when the scrolling ancestor would clip it", () => {
+      // The numbers measured in Chrome on the reported bug: a reply row's
+      // menu at the bottom of a 157px-tall .thread-scroll.
+      const { menu, toggle } = buildPlaced({
+        clip: [691, 848],
+        button: [790, 810],
+        menuHeight: 70,
+      });
+
+      toggle.open();
+
+      expect(opensUp(menu)).toBe(true);
+    });
+
+    it("stays downward when there is room below", () => {
+      const { menu, toggle } = buildPlaced({
+        clip: [691, 848],
+        button: [700, 720],
+        menuHeight: 70,
+      });
+
+      toggle.open();
+
+      expect(opensUp(menu)).toBe(false);
+    });
+
+    it("stays downward when it fits in neither direction", () => {
+      // Flipping a menu taller than its container only trades a clipped
+      // bottom for a clipped top, and loses the item order the user expects.
+      const { menu, toggle } = buildPlaced({
+        clip: [700, 780],
+        button: [750, 770],
+        menuHeight: 200,
+      });
+
+      toggle.open();
+
+      expect(opensUp(menu)).toBe(false);
+    });
+
+    it("respects the viewport when nothing else clips it", () => {
+      const { menu, toggle } = buildPlaced({
+        clip: null,
+        button: [window.innerHeight - 30, window.innerHeight - 10],
+        menuHeight: 70,
+      });
+
+      toggle.open();
+
+      expect(opensUp(menu)).toBe(true);
+    });
+
+    it("re-decides on every open rather than staying flipped", () => {
+      const { button, menu, toggle } = buildPlaced({
+        clip: [691, 848],
+        button: [790, 810],
+        menuHeight: 70,
+      });
+      toggle.open();
+      expect(opensUp(menu)).toBe(true);
+      toggle.close();
+
+      // The thread scrolled: the same row is now near the top of the
+      // container, where the menu fits below again.
+      button.getBoundingClientRect = spanRect(700, 720);
+      menu.getBoundingClientRect = spanRect(724, 794);
+      toggle.open();
+
+      expect(opensUp(menu)).toBe(false);
     });
   });
 });

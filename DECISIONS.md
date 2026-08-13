@@ -1401,3 +1401,46 @@ One limitation accepted: a marker anchored to the very bottom or right edge
 of a container now overhangs into whatever sits next to it. That is a
 faithful rendering of where the user clicked, and the widget already allowed
 it for the preview circle.
+
+## Dropdowns flip up instead of being clipped by a scroll container
+
+Every dropdown in the widget is `position: absolute; top: calc(100% + 4px)`
+inside a `position: relative` wrapper. Inside a scrolling ancestor that
+placement is clipped: measured in Chrome, the ⋯ menu on a reply row extended
+10px past the bottom of `.thread-scroll`, so the container reported
+`scrollHeight 167 / clientHeight 157` and the menu could only be read by
+scrolling the thread. With both items present (see the fix below) it
+overhung by roughly 37px.
+
+Three ways out were considered:
+
+- **Remove the clipping.** Not available: `.thread-scroll` exists precisely
+  so a long thread doesn't grow the popover past the viewport, and dropping
+  its `overflow` brings back the bug it was added for.
+- **Portal the menu out, positioned `fixed` from the button's rect.** Escapes
+  every clipping ancestor, and is the only fully general answer — but a
+  `fixed` element is still clipped when a containing-block ancestor sits
+  below the overflow in the chain, and the menu then has to be repositioned
+  or closed on every scroll of the thread. More machinery than the symptom
+  justifies.
+- **Flip the menu above its button when there is no room below.** Chosen:
+  the standard dropdown behaviour, no repositioning to maintain (the menu
+  stays in flow and moves with its row), and it is decided once per open.
+
+The measurement lives in `menus.js`, in `attachMenuToggle`, so every
+dropdown gets it — the status/type/priority pickers, both ⋯ menus and the
+inbox filter — rather than being fixed at the one call site that was
+reported. The clipping boundary is found by walking up to the nearest
+ancestor whose overflow is not `visible`, falling back to the viewport, and
+it is re-measured on every open: a menu on a row that has scrolled since
+last time has different room than it had.
+
+Two limits accepted, both deliberate:
+
+- **A menu that fits in neither direction stays pointing down.** Flipping it
+  would trade a clipped bottom for a clipped top while also reversing the
+  order the user reaches for. Verified by shrinking `.inbox-list` to 150px
+  around a 110px menu: it correctly declines to flip.
+- **The flip is not animated and the menu can overlap the row above it.**
+  That is what a dropdown does; the row underneath is not interactive while
+  the menu is open.

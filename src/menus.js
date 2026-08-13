@@ -11,6 +11,8 @@
 // `document` in the CAPTURE phase precisely because the toggles call
 // stopPropagation() — a bubble-phase listener would never hear the click.
 
+import { CLASSES } from "./constants.js";
+
 /**
  * @typedef {{ button: HTMLElement, menu: HTMLElement, close: () => void }} MenuEntry
  */
@@ -27,6 +29,59 @@ let keyListener = null;
 const menuItems = (menu) => [
   ...menu.querySelectorAll('[role="menuitem"], [role="menuitemradio"]'),
 ];
+
+/** Vertical gap between a menu and the button it belongs to (matches the CSS). */
+const MENU_GAP = 4;
+
+/**
+ * The nearest ancestor that would clip the menu, or null when only the
+ * viewport bounds it. Anything with a non-visible overflow clips: the thread's
+ * scroll container and the inbox list are the two that matter, and both are
+ * exactly where a dropdown near the bottom edge used to become unreachable.
+ *
+ * Walking up stops at the shadow root, whose overflow is not ours to read.
+ *
+ * @param {HTMLElement} menu
+ * @returns {DOMRect | null}
+ */
+const clipperRectOf = (menu) => {
+  for (let el = menu.parentElement; el; el = el.parentElement) {
+    const { overflowX, overflowY } = getComputedStyle(el);
+    if (overflowX !== "visible" || overflowY !== "visible") {
+      return el.getBoundingClientRect();
+    }
+  }
+  return null;
+};
+
+/**
+ * Opens the menu upward when it would otherwise be clipped below — and only
+ * when it actually fits up there. Flipping a menu taller than its container
+ * would just clip the other end while also reversing the position the user
+ * reaches for, so in that case it stays put.
+ *
+ * Measured on every open, never cached: a menu on a row that scrolled since
+ * last time has different room than it did.
+ *
+ * @param {HTMLElement} button
+ * @param {HTMLElement} menu the menu, already displayed and placed downward
+ */
+const placeMenu = (button, menu) => {
+  menu.classList.remove(CLASSES.INBOX_MENU_UP);
+
+  const clipper = clipperRectOf(menu);
+  const floor = Math.min(clipper?.bottom ?? Infinity, window.innerHeight);
+  const ceiling = Math.max(clipper?.top ?? 0, 0);
+
+  const { height } = menu.getBoundingClientRect();
+  const anchor = button.getBoundingClientRect();
+  const bottomIfDown = anchor.bottom + MENU_GAP + height;
+  const topIfUp = anchor.top - MENU_GAP - height;
+
+  if (bottomIfDown > floor && topIfUp >= ceiling) {
+    menu.classList.add(CLASSES.INBOX_MENU_UP);
+  }
+};
 
 // Menus live inside the shadow root, so `e.target` on a document listener is
 // retargeted to the host. composedPath() is the only way to see the element
@@ -130,6 +185,9 @@ export const attachMenuToggle = (button, menu) => {
   const open = () => {
     closeOpenMenus();
     menu.style.display = "block";
+    // Displayed before measuring: a menu still at display:none has no box to
+    // measure, so its height would read as zero and it would never flip.
+    placeMenu(button, menu);
     button.setAttribute("aria-expanded", "true");
     openMenus.add(entry);
     startWatching();
