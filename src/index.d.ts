@@ -123,6 +123,19 @@ export interface CommentOverlayOptions {
    * when the host already routes on that name.
    */
   linkParam?: string;
+  /**
+   * Called instead of a full-page load when the widget navigates to another
+   * page (the inbox's "view on its page" jump). Hand it your SPA router's
+   * push so the app's state survives; call `notifyNavigation()` after the
+   * route renders.
+   */
+  navigate?: (page: string) => void;
+  /**
+   * Run `notifyNavigation()` automatically on popstate (back/forward).
+   * Opt-in and popstate-only: pushState routing still needs an explicit
+   * `notifyNavigation()` call from the router's hook. Default: false.
+   */
+  autoDetectNavigation?: boolean;
   /** Fired after a new comment is saved. */
   onCommentCreated?: (comment: SerializedComment) => void;
   /** Fired after a reply is added to any comment. */
@@ -223,6 +236,17 @@ export declare class CommentOverlay {
   commentLink(id: CommentId): string | null;
   serializeComments(): SerializedComment[];
   loadComments(data: SerializedComment[]): {
+    anchored: number;
+    orphaned: number;
+    inactive: number;
+  };
+  /**
+   * Re-syncs the widget after a client-side navigation: reclassifies every
+   * comment against the new pathname, re-resolves anchors against the new
+   * DOM, rebuilds markers and moves the inbox onto the new page. Also the
+   * "re-anchor now" primitive for same-path re-renders.
+   */
+  notifyNavigation(): {
     anchored: number;
     orphaned: number;
     inactive: number;

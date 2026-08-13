@@ -242,9 +242,23 @@ class CommentOverlay {
     // still deserves to have the link honoured, and until its loadComments()
     // arrives the inbox is what tells the user the link was understood.
     this._openPendingDetail();
+
+    // Opt-in, never default: popstate only covers back/forward, and MPA
+    // hosts should not inherit listeners for navigations they don't do.
+    // pushState routing still needs an explicit notifyNavigation() call.
+    if (this.options.autoDetectNavigation) {
+      this._popstateHandler = () => this.notifyNavigation();
+      window.addEventListener("popstate", this._popstateHandler);
+    }
   }
 
   _navigateTo(url) {
+    // A host router can take over (SPA): a full-page load throws away the
+    // app's state just to show another route it could render itself.
+    if (typeof this.options.navigate === "function") {
+      this.options.navigate(url);
+      return;
+    }
     location.assign(url);
   }
 
@@ -1374,6 +1388,72 @@ class CommentOverlay {
     return { anchored, orphaned, inactive };
   }
 
+  /**
+   * Re-syncs the widget after a client-side navigation: reclassifies every
+   * comment against the new `location.pathname`, re-resolves anchors
+   * against the new DOM, rebuilds markers, and moves the inbox onto the
+   * new page. Call it from the router's "after navigation" hook; with
+   * `autoDetectNavigation` it also runs on popstate (back/forward).
+   *
+   * Same-path calls are useful too: an SPA that re-rendered its route
+   * swapped every node, and this is the "re-anchor now" primitive.
+   *
+   * @returns {{ anchored: number, orphaned: number, inactive: number }}
+   */
+  notifyNavigation() {
+    const page = location.pathname;
+    let anchored = 0;
+    let orphaned = 0;
+    let inactive = 0;
+
+    // Panels pinned to the old DOM don't survive a route change; the inbox
+    // does — it is cross-page by design and refreshes below.
+    this.closeThreadPopover();
+    this.hideCommentBox();
+    if (this.inboxView) this.inboxView.currentPage = page;
+
+    for (const comment of this.comments) {
+      this.markers.remove(comment.id);
+      comment.hidden = false;
+      comment.target = null;
+      comment._occluded = false;
+
+      if (comment.page && comment.page !== page) {
+        comment.anchorState = "inactive";
+        comment.container = null;
+        inactive++;
+        continue;
+      }
+
+      const resolved = comment.anchor ? resolveAnchor(comment.anchor) : null;
+      if (resolved) {
+        comment.container = resolved.element;
+        comment.relativeX = comment.anchor.relativeX;
+        comment.relativeY = comment.anchor.relativeY;
+        comment.anchorState = "anchored";
+        this.renderCommentCircle(comment);
+        anchored++;
+      } else {
+        // Same contract as loadComments: kept and listed, never positioned
+        // over a guessed element — and the host is told, each time, because
+        // "the element is gone on this visit" is fresh information.
+        comment.container = null;
+        comment.anchorState = "orphaned";
+        orphaned++;
+        this.options.onAnchorLost?.(this._serializeComment(comment));
+      }
+    }
+
+    // The new URL may itself carry a deep link (a copy-link opened through
+    // the SPA's router) or the cross-page handoff written just before the
+    // host navigated.
+    this._pendingDetailId = this._readPendingDetailId();
+    if (this.inboxView?.isOpen()) this.inboxView.refresh();
+    this._openPendingDetail();
+
+    return { anchored, orphaned, inactive };
+  }
+
   scrollMarkerIntoView(comment) {
     this.markers.scrollMarkerIntoView(comment);
   }
@@ -1469,6 +1549,10 @@ class CommentOverlay {
     if (this._storageHandler) {
       window.removeEventListener("storage", this._storageHandler);
       this._storageHandler = null;
+    }
+    if (this._popstateHandler) {
+      window.removeEventListener("popstate", this._popstateHandler);
+      this._popstateHandler = null;
     }
     this._storedCache = null;
     // Dropping the panels leaves their dropdowns detached-but-open, which

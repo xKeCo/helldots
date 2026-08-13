@@ -73,12 +73,34 @@ export function Comments({ user }) {
 }
 ```
 
+### Single-page apps
+
+A client-side router swaps the DOM without a page load, so tell the widget
+when a navigation happened and let its own cross-page jumps use your router:
+
+```js
+const overlay = createCommentOverlay({
+  user,
+  persistence: "localStorage",
+  navigate: (page) => router.push(page), // "view on its page" without a reload
+});
+
+// After every route render (React Router, Vue Router, …)
+router.afterEach(() => overlay.notifyNavigation());
+```
+
+`notifyNavigation()` reclassifies every comment against the new URL,
+re-resolves anchors against the new DOM and rebuilds the markers. Calling it
+after a same-path re-render is also the way to re-anchor when your app
+replaced the route's DOM. `autoDetectNavigation: true` additionally covers
+back/forward (popstate) automatically.
+
 ## What gets captured
 
 When someone leaves a comment, HellDots records more than the text:
 
 **A screenshot of the page as they saw it.** Taken automatically, JPEG at half
-scale (~30–100 KB). The widget's own UI is hidden during the capture, so the
+scale (~30–100 KB). The widget's own UI is excluded from the capture, so the
 toolbar never ends up inside the image. Dragging a region additionally attaches
 a full-resolution PNG crop of exactly what was selected.
 
@@ -145,16 +167,18 @@ OS: iOS 17.2
 
 ## Options
 
-| Option             | Type                             | Default             |                                                           |
-| ------------------ | -------------------------------- | ------------------- | --------------------------------------------------------- |
-| `user`             | `{ name: string }`               | `"Anonymous"`       | Author of new comments and replies                        |
-| `persistence`      | `"localStorage"` \| `"none"`     | `"none"`            | Auto save/restore, or handle it yourself via callbacks    |
-| `autoScreenshot`   | `boolean`                        | `true`              | Capture a screenshot and environment snapshot per comment |
-| `locale`           | `string`                         | browser language    | `"en"` and `"es"` ship; anything else falls back per key  |
-| `linkParam`        | `string`                         | `"helldotsComment"` | Query param used by "Copy link" URLs                      |
-| `shortcutKey`      | `string`                         | `"c"`               | Key that toggles comment mode                             |
-| `shortcutModifier` | `"alt"` \| `"ctrl"` \| `"shift"` | `"alt"`             | Modifier for that key                                     |
-| `autoInit`         | `boolean`                        | `true`              | When `false`, returns an initializer to call yourself     |
+| Option                 | Type                             | Default             |                                                           |
+| ---------------------- | -------------------------------- | ------------------- | --------------------------------------------------------- |
+| `user`                 | `{ name: string }`               | `"Anonymous"`       | Author of new comments and replies                        |
+| `persistence`          | `"localStorage"` \| `"none"`     | `"none"`            | Auto save/restore, or handle it yourself via callbacks    |
+| `autoScreenshot`       | `boolean`                        | `true`              | Capture a screenshot and environment snapshot per comment |
+| `locale`               | `string`                         | browser language    | `"en"` and `"es"` ship; anything else falls back per key  |
+| `linkParam`            | `string`                         | `"helldotsComment"` | Query param used by "Copy link" URLs                      |
+| `navigate`             | `(page: string) => void`         | full page load      | SPA router hook for the widget's cross-page jumps         |
+| `autoDetectNavigation` | `boolean`                        | `false`             | Run `notifyNavigation()` on popstate (back/forward)       |
+| `shortcutKey`          | `string`                         | `"c"`               | Key that toggles comment mode                             |
+| `shortcutModifier`     | `"alt"` \| `"ctrl"` \| `"shift"` | `"alt"`             | Modifier for that key                                     |
+| `autoInit`             | `boolean`                        | `true`              | When `false`, returns an initializer to call yourself     |
 
 ### Callbacks
 
@@ -185,6 +209,7 @@ overlay.editReply(commentId, replyId, text); // → boolean
 overlay.commentLink(id); // → string | null (shareable URL)
 overlay.serializeComments(); // → SerializedComment[]
 overlay.loadComments(data); // → { anchored, orphaned, inactive }
+overlay.notifyNavigation(); // re-sync after a client-side navigation
 overlay.clearComments(); // bulk reset, fires no callbacks
 overlay.deleteComment(id); // → boolean
 overlay.setCommentStatus(id, status); // → boolean

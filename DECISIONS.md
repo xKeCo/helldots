@@ -1267,3 +1267,28 @@ filter summary changes with every selection) and the detail view (one
 comment; a full rebuild keeps the editing/reply wiring simple). Verified
 in a real browser: 15 cards, list scrolled, a priority change through the
 picker — same container node, scroll intact, unchanged cards reused.
+
+## Fase 5.3: SPA support is a verb, not a watcher
+
+Client-side routers swap the DOM and rewrite the URL without a page load,
+so nothing re-ran the anchor resolution: markers floated over dead nodes
+and the inbox kept filtering by the page the widget was born on.
+
+The fix is one explicit primitive — `notifyNavigation()` — rather than
+automatic detection. It reclassifies every comment against the new
+pathname, re-resolves anchors against the new DOM (same contract as
+loadComments, including onAnchorLost for elements that did not survive),
+rebuilds markers, moves the inbox onto the new page, and re-reads the URL
+for deep links — which is also what makes the cross-page handoff and
+"Copy link" URLs work through an SPA router. Called on the same path, it
+doubles as the "re-anchor now" primitive after a route re-render.
+
+Deliberately explicit: there is no reliable, framework-neutral signal for
+"the route finished rendering". popstate misses pushState navigations,
+patching history is hostile, and the Navigation API is not cross-browser.
+`autoDetectNavigation: true` exists as an opt-in for the one signal the
+platform does provide (back/forward), and is never on by default so MPA
+hosts inherit no listeners. The `navigate` option is the mirror image:
+the widget's own cross-page jump rides the host's router instead of
+location.assign, and the sessionStorage handoff resolves on the next
+notifyNavigation() instead of the next page load.
