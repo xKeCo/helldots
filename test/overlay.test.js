@@ -2137,6 +2137,17 @@ describe("CommentOverlay", () => {
       expect(overlay._activeLightbox).toBeNull();
     });
 
+    it("removes the empty host element from the page", () => {
+      // The shadow host is created on mount; a cleanup that empties it but
+      // leaves <helldots-root> dangling from <body> is half a cleanup.
+      overlay = makeOverlay();
+      expect(document.querySelector(TAG_NAME)).toBeTruthy();
+
+      overlay.cleanup();
+
+      expect(document.querySelector(TAG_NAME)).toBeNull();
+    });
+
     it("disconnects any tracked resize observers", () => {
       overlay = makeOverlay();
       const resizeObserver = { disconnect: vi.fn() };

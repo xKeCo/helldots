@@ -885,6 +885,39 @@ describe("schema migration", () => {
     expect(comment.replies[0].id).toBe(41);
   });
 
+  it("drops non-string screenshot entries on load", () => {
+    // A non-string in screenshots[] flows straight into an <img src> and
+    // renders a silently broken thumbnail.
+    const overlay = makeOverlay();
+    overlay.loadComments([
+      {
+        id: 5,
+        text: "with broken screenshots",
+        anchor: null,
+        page: location.pathname,
+        replies: [
+          {
+            id: 51,
+            text: "reply",
+            author: "Ana",
+            timestamp: "2026-01-01",
+            screenshots: [42, "data:image/png;base64,reply-ok", null],
+          },
+        ],
+        author: "Ana",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        screenshots: ["data:image/png;base64,ok", 7, null, { not: "a url" }],
+        status: "open",
+      },
+    ]);
+
+    const [comment] = overlay.comments;
+    expect(comment.screenshots).toEqual(["data:image/png;base64,ok"]);
+    expect(comment.replies[0].screenshots).toEqual([
+      "data:image/png;base64,reply-ok",
+    ]);
+  });
+
   it("rejects a type or priority that is not in the enum", () => {
     const overlay = makeOverlay();
     overlay.loadComments([

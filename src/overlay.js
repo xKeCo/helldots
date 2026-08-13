@@ -65,6 +65,10 @@ const normalizeTags = (tags) => {
   return [...seen];
 };
 
+// Screenshots are data-URLs rendered straight into <img src>; anything else
+// in a persisted array is a silently broken thumbnail waiting to happen.
+const onlyStrings = (values) => values.filter((v) => typeof v === "string");
+
 // How long a batched position pass may reuse the previous occlusion verdict
 // before hit-testing again. Scrolling schedules a pass per frame; occlusion
 // rarely changes mid-scroll, and the trailing pass settles the end state.
@@ -1750,18 +1754,29 @@ class CommentOverlay {
         // Same minimal gate the top-level comment passes (id + text):
         // a malformed reply would otherwise flow into every renderer.
         replies: Array.isArray(item.replies)
-          ? item.replies.filter(
-              (reply) =>
-                reply &&
-                typeof reply === "object" &&
-                reply.id != null &&
-                typeof reply.text === "string"
-            )
+          ? item.replies
+              .filter(
+                (reply) =>
+                  reply &&
+                  typeof reply === "object" &&
+                  reply.id != null &&
+                  typeof reply.text === "string"
+              )
+              .map((reply) =>
+                Array.isArray(reply.screenshots)
+                  ? {
+                      ...reply,
+                      screenshots: onlyStrings(reply.screenshots),
+                    }
+                  : reply
+              )
           : [],
         author: item.author || this.strings.anonymous,
         createdAt: item.createdAt || new Date().toISOString(),
+        // Screenshots land in <img src> as-is — a non-string entry renders
+        // a silently broken thumbnail.
         screenshots: Array.isArray(item.screenshots)
-          ? [...item.screenshots]
+          ? onlyStrings(item.screenshots)
           : [],
         // "closed" existed briefly and was folded into "resolved".
         status:
@@ -2492,6 +2507,11 @@ class CommentOverlay {
     // Remove all comment circles
     this._circles.forEach((circle) => circle.remove());
     this._circles.clear();
+
+    // The now-empty shadow host itself: leaving <helldots-root> dangling
+    // from <body> is half a cleanup. getShadowRoot() recreates it if a new
+    // instance mounts later.
+    document.querySelector(TAG_NAME)?.remove();
   }
 
   injectStyles() {
