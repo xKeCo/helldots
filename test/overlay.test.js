@@ -207,6 +207,44 @@ describe("CommentOverlay", () => {
       expect(overlay.commentMode).toBe(true);
     });
 
+    it("a custom shortcut disables the default Alt+C", () => {
+      // The default chord must belong to the default config only: a host
+      // that picked Ctrl+K would otherwise ship two shortcuts, one of them
+      // impossible to turn off.
+      overlay = makeOverlay({ shortcutKey: "k", shortcutModifier: "ctrl" });
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "c", altKey: true })
+      );
+      expect(overlay.commentMode).toBe(false);
+    });
+
+    it("the default chord matches Option+C on macOS (e.key is 'ç')", () => {
+      const uaSpy = vi
+        .spyOn(navigator, "userAgent", "get")
+        .mockReturnValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)");
+      overlay = makeOverlay();
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ç", code: "KeyC", altKey: true })
+      );
+      expect(overlay.commentMode).toBe(true);
+      uaSpy.mockRestore();
+    });
+
+    it("a custom Alt chord matches by physical key on macOS dead-key layouts", () => {
+      // Option+K types "˚" on macOS, so e.key never spells the configured
+      // letter — e.code names the physical key and is the only workable
+      // match for custom Alt chords there.
+      const uaSpy = vi
+        .spyOn(navigator, "userAgent", "get")
+        .mockReturnValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)");
+      overlay = makeOverlay({ shortcutKey: "k", shortcutModifier: "alt" });
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "˚", code: "KeyK", altKey: true })
+      );
+      expect(overlay.commentMode).toBe(true);
+      uaSpy.mockRestore();
+    });
+
     it("Escape exits comment mode when nothing else is open", () => {
       overlay = makeOverlay();
       overlay.toggleCommentMode();

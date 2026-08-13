@@ -518,18 +518,26 @@ class CommentOverlay {
         return;
       }
 
-      const isMacOptionC =
-        this.isMac && e.altKey && (e.key === "ç" || e.key === "Ç");
-      const isWindowsAltC =
-        !this.isMac && e.altKey && e.key.toLowerCase() === "c";
-      const isCustomShortcut =
-        e.key.toLowerCase() === this.options.shortcutKey.toLowerCase() &&
-        ((this.options.shortcutModifier === "alt" && e.altKey) ||
-          (this.options.shortcutModifier === "ctrl" &&
-            (e.ctrlKey || e.metaKey)) ||
-          (this.options.shortcutModifier === "shift" && e.shiftKey));
+      // One matcher for default and custom chords alike — the old hardcoded
+      // Alt+C fallbacks fired unconditionally, so a host that configured its
+      // own shortcut got Alt+C on top of it with no way to turn it off.
+      const key = this.options.shortcutKey.toLowerCase();
+      const keyMatches =
+        e.key.toLowerCase() === key ||
+        // Option+letter on macOS (and AltGr layouts) types a dead or special
+        // character ("ç" for Option+C, "˚" for Option+K), so e.key never
+        // spells the configured letter there. e.code names the physical key
+        // and is what makes Alt chords matchable at all.
+        (e.altKey &&
+          /^[a-z]$/.test(key) &&
+          e.code === `Key${key.toUpperCase()}`);
+      const modifierMatches =
+        (this.options.shortcutModifier === "alt" && e.altKey) ||
+        (this.options.shortcutModifier === "ctrl" &&
+          (e.ctrlKey || e.metaKey)) ||
+        (this.options.shortcutModifier === "shift" && e.shiftKey);
 
-      if (isMacOptionC || isWindowsAltC || isCustomShortcut) {
+      if (keyMatches && modifierMatches) {
         e.preventDefault();
         e.stopPropagation();
         this.toggleCommentMode();

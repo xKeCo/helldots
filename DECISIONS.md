@@ -1168,3 +1168,21 @@ and Node ≥ 22 consume ESM without friction, a second module format is a
 second artifact to test and keep honest, and the plain-`<script>` audience
 already has the self-contained UMD global via the CDN fields. The footer is
 gone, and README's "Module format" section states the contract.
+## Fase 4: one shortcut matcher, no hardcoded fallbacks
+
+The keydown handler carried two unconditional special cases (`Option+C`
+spells "ç" on macOS; plain Alt+C on Windows) next to the configurable
+matcher. Unconditional was the bug: a host that configured `Ctrl+K` shipped
+two shortcuts — its own and Alt+C — with no way to turn the second off.
+
+The fix is one matcher for every chord: `e.key` is compared first
+(layout-correct), and for Alt chords with a single-letter key, `e.code`
+(`KeyC`, `KeyK`…) is accepted as a fallback — which is what makes ANY custom
+Alt chord work on macOS, where Option+letter types a dead or special
+character and `e.key` never spells the configured letter. The hardcoded "ç"
+case is now just one instance of that rule.
+
+Accepted limitation: `e.code` names the physical key position, not the
+printed letter, so on a non-QWERTY layout an Alt chord may also fire on the
+QWERTY position of the configured letter. That beats the previous state on
+macOS, where custom Alt chords did not fire at all.
