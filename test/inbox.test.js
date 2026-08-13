@@ -1774,3 +1774,136 @@ describe("id spelling in detail lookups", () => {
     expect(panel.querySelector(`.${CLASSES.INBOX_DETAIL}`)).toBeTruthy();
   });
 });
+
+// F5.2 — the list used to rebuild itself with innerHTML = "" on every
+// refresh: every thumbnail re-decoded and the list's scroll position reset
+// to the top each time anything anywhere changed. Reconciliation by key
+// keeps unchanged cards (and the scrolling container) alive across renders.
+describe("keyed list reconciliation", () => {
+  let overlay;
+
+  const seed = (overlay) =>
+    overlay.loadComments([
+      {
+        id: "a",
+        text: "first comment",
+        anchor: null,
+        replies: [],
+        author: "Ana",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        screenshots: [],
+        status: "open",
+      },
+      {
+        id: "b",
+        text: "second comment",
+        anchor: null,
+        replies: [],
+        author: "Bo",
+        createdAt: "2026-01-02T00:00:00.000Z",
+        screenshots: [],
+        status: "open",
+      },
+    ]);
+
+  const cardOf = (panel, id) =>
+    panel.querySelector(`.${CLASSES.INBOX_CARD}[data-comment-id="${id}"]`);
+
+  beforeEach(() => {
+    document.elementFromPoint = () => null;
+    document.body.innerHTML = `<section id="target">Anchor</section>`;
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+  });
+
+  it("refresh keeps the scrolling list container and unchanged cards alive", () => {
+    overlay = makeOverlay();
+    seed(overlay);
+    const panel = openInbox(overlay);
+    const list = panel.querySelector(`.${CLASSES.INBOX_LIST}`);
+    const cardA = cardOf(panel, "a");
+    const cardB = cardOf(panel, "b");
+
+    overlay.inboxView.refresh();
+
+    // Same nodes, not lookalike rebuilds: this is what preserves the
+    // container's scroll position and the decoded thumbnails.
+    expect(panel.querySelector(`.${CLASSES.INBOX_LIST}`)).toBe(list);
+    expect(cardOf(panel, "a")).toBe(cardA);
+    expect(cardOf(panel, "b")).toBe(cardB);
+  });
+
+  it("a classification change rebuilds only that card", () => {
+    overlay = makeOverlay();
+    seed(overlay);
+    const panel = openInbox(overlay);
+    const cardA = cardOf(panel, "a");
+    const cardB = cardOf(panel, "b");
+
+    overlay.setCommentPriority("a", "high");
+
+    const nextA = cardOf(panel, "a");
+    expect(nextA).not.toBe(cardA);
+    expect(nextA.textContent).toContain("High");
+    expect(cardOf(panel, "b")).toBe(cardB);
+  });
+
+  it("an edit rebuilds the card with the new text", () => {
+    overlay = makeOverlay();
+    seed(overlay);
+    const panel = openInbox(overlay);
+    const cardA = cardOf(panel, "a");
+
+    overlay.editComment("a", "rewritten");
+    overlay.inboxView.refresh();
+
+    const nextA = cardOf(panel, "a");
+    expect(nextA).not.toBe(cardA);
+    expect(nextA.textContent).toContain("rewritten");
+  });
+
+  it("deleting a comment drops its card without touching the others", () => {
+    overlay = makeOverlay();
+    seed(overlay);
+    const panel = openInbox(overlay);
+    const cardB = cardOf(panel, "b");
+
+    overlay.deleteComment("a");
+    overlay.inboxView.refresh();
+
+    expect(cardOf(panel, "a")).toBeNull();
+    expect(cardOf(panel, "b")).toBe(cardB);
+  });
+
+  it("emptying the filter set swaps cards for the no-matches state and back", () => {
+    overlay = makeOverlay();
+    seed(overlay);
+    const panel = openInbox(overlay);
+
+    overlay.inboxView.statusFilter = "resolved";
+    overlay.inboxView.refresh();
+    expect(panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`)).toHaveLength(0);
+    expect(panel.querySelector(`.${CLASSES.INBOX_EMPTY}`)).toBeTruthy();
+
+    overlay.inboxView.statusFilter = "all";
+    overlay.inboxView.refresh();
+    expect(panel.querySelectorAll(`.${CLASSES.INBOX_CARD}`)).toHaveLength(2);
+    expect(panel.querySelector(`.${CLASSES.INBOX_EMPTY}`)).toBeNull();
+  });
+
+  it("a resolved comment's card moves below the open ones", () => {
+    overlay = makeOverlay();
+    seed(overlay);
+    const panel = openInbox(overlay);
+
+    overlay.setCommentStatus("a", "resolved");
+
+    const ids = [
+      ...panel.querySelectorAll(`.${CLASSES.INBOX_CARD}[data-comment-id]`),
+    ].map((el) => el.dataset.commentId);
+    expect(ids).toEqual(["b", "a"]);
+  });
+});

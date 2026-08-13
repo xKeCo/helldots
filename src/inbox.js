@@ -82,6 +82,15 @@ export class InboxView {
     this.editing = null;
     /** @type {string | null} */
     this.notice = null;
+    /**
+     * Keyed card cache: String(id) → the live comment object, the
+     * fingerprint of what its card renders, and the card node itself. A
+     * refresh reuses a node whose comment and fingerprint both still match
+     * — which is what keeps thumbnails decoded and the list's scroll
+     * position intact across the many refreshes this panel receives.
+     * @type {Map<string, { comment: any, fingerprint: string, card: HTMLElement }>}
+     */
+    this._cardBindings = new Map();
     /** @type {HTMLElement | null} */
     this.el = null;
     /** @type {HTMLElement | null} */
@@ -113,6 +122,7 @@ export class InboxView {
     this._setActiveMarker(null);
     this.el?.remove();
     this.el = null;
+    this._cardBindings.clear();
     this.detailId = null;
     // Every route to here already went through releaseEditor(), so anything
     // still sitting in the draft has been answered for.
@@ -312,7 +322,6 @@ export class InboxView {
   render() {
     if (!this.el) return;
     this._clearHighlight();
-    this.el.innerHTML = "";
     const comments = this.filteredComments();
     const detail =
       this.detailId != null
@@ -322,6 +331,11 @@ export class InboxView {
     // the prev/next nav, the cross-page handoff — marks its marker.
     this._setActiveMarker(detail);
     if (detail) {
+      // The detail shows one comment: a full rebuild is cheap and keeps the
+      // editing and reply wiring simple. Leaving the list view drops its
+      // keyed state; the skeleton is rebuilt on the way back.
+      this._cardBindings.clear();
+      this.el.innerHTML = "";
       this._renderDetail(detail, comments);
     } else {
       this.detailId = null;
@@ -365,31 +379,118 @@ export class InboxView {
   }
 
   _renderList(comments) {
-    const header = document.createElement("div");
-    header.className = CLASSES.INBOX_HEADER;
-    header.appendChild(this._buildFilter());
-    header.appendChild(this._closeButton());
-    this.el.appendChild(header);
+    // Persistent skeleton: the header and the scrolling list are built once
+    // and survive every refresh. Replacing the list wholesale (the old
+    // innerHTML = "" render) reset its scroll position and re-decoded every
+    // thumbnail whenever anything anywhere changed.
+    let list = [...this.el.children].find((el) =>
+      el.classList.contains(CLASSES.INBOX_LIST)
+    );
+    if (!list) {
+      this.el.innerHTML = "";
+      this._cardBindings.clear();
+      const header = document.createElement("div");
+      header.className = CLASSES.INBOX_HEADER;
+      this.el.appendChild(header);
+      list = document.createElement("div");
+      list.className = CLASSES.INBOX_LIST;
+      this.el.appendChild(list);
+    }
 
-    const list = document.createElement("div");
-    list.className = CLASSES.INBOX_LIST;
-    this.el.appendChild(list);
+    // The header is label-driven (the filter summary changes with every
+    // selection) and holds no scroll or image state — rebuilt each pass.
+    const header = [...this.el.children].find((el) =>
+      el.classList.contains(CLASSES.INBOX_HEADER)
+    );
+    header.replaceChildren(this._buildFilter(), this._closeButton());
 
+    this._reconcileCards(list, comments);
+  }
+
+  /**
+   * Everything a list card renders, captured as a comparable string. An
+   * equal fingerprint for the same live comment object means the existing
+   * node can be reused as-is — listeners, decoded thumbnails and all. The
+   * object identity check matters because loadComments REPLACES comment
+   * objects: a reused card whose closures held the stale object would
+   * mutate a comment the overlay no longer owns.
+   */
+  _cardFingerprint(comment) {
+    return JSON.stringify([
+      comment.text,
+      comment.editedAt ?? null,
+      comment.status ?? "open",
+      comment.type ?? null,
+      comment.priority ?? null,
+      comment.tags ?? [],
+      comment.resolvedAt ?? null,
+      comment.anchorState,
+      comment.hidden === true,
+      comment.page,
+      comment.screenshots?.length ?? 0,
+    ]);
+  }
+
+  _reconcileCards(list, comments) {
+    // The notice and the empty state are stateless one-offs — always
+    // rebuilt, and removed up front so they never count as "out of place"
+    // cards during the ordering walk below.
+    for (const el of [...list.children]) {
+      if (
+        el.classList.contains(CLASSES.INBOX_NOTICE) ||
+        el.classList.contains(CLASSES.INBOX_EMPTY)
+      ) {
+        el.remove();
+      }
+    }
+
+    const desired = [];
     if (this.notice) {
       const notice = document.createElement("div");
       notice.className = CLASSES.INBOX_NOTICE;
       notice.setAttribute("role", "status");
       notice.textContent = this.notice;
-      list.appendChild(notice);
+      desired.push(notice);
     }
 
+    const seen = new Set();
     if (comments.length === 0) {
-      list.appendChild(this._buildEmptyState());
-      return;
+      desired.push(this._buildEmptyState());
+    } else {
+      for (const comment of comments) {
+        const key = String(comment.id);
+        const fingerprint = this._cardFingerprint(comment);
+        const binding = this._cardBindings.get(key);
+        let card;
+        if (
+          binding &&
+          binding.comment === comment &&
+          binding.fingerprint === fingerprint
+        ) {
+          card = binding.card;
+        } else {
+          card = this._buildCard(comment, { interactive: true });
+          this._cardBindings.set(key, { comment, fingerprint, card });
+        }
+        seen.add(key);
+        desired.push(card);
+      }
     }
 
-    for (const comment of comments) {
-      list.appendChild(this._buildCard(comment, { interactive: true }));
+    for (const key of [...this._cardBindings.keys()]) {
+      if (!seen.has(key)) this._cardBindings.delete(key);
+    }
+
+    // Minimal-move ordering: only nodes that are out of place are touched,
+    // so an untouched tail keeps its position — and the container, which is
+    // never replaced, keeps its scroll.
+    desired.forEach((node, index) => {
+      if (list.children[index] !== node) {
+        list.insertBefore(node, list.children[index] ?? null);
+      }
+    });
+    while (list.children.length > desired.length) {
+      list.lastElementChild.remove();
     }
   }
 

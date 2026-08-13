@@ -1242,3 +1242,28 @@ playground flows, same outcomes) on top of the full suite.
 Accepted costs: ~0.5 KB gzip of module plumbing, and dependency-injection
 constructors in `initOverlay` that restate what the modules need — which is
 also the point: the needs are now written down.
+
+## Fase 5.2: the inbox list reconciles by key
+
+Every `refresh()` used to rebuild the whole panel with `innerHTML = ""` —
+and refresh is called from a dozen places, including marker visibility
+flips while the page scrolls. Each rebuild re-decoded every thumbnail and
+reset the list's scroll position to the top, which read as the panel
+"jumping" whenever anything anywhere changed.
+
+The list now keeps a persistent skeleton (header + scrolling container)
+and reconciles its cards through a keyed cache: `String(id) → { comment,
+fingerprint, card }`. A card is reused as-is when its live comment object
+is the same AND its fingerprint (text, editedAt, status, type, priority,
+tags, resolvedAt, anchorState, hidden, page, screenshot count) is
+unchanged; anything else rebuilds just that card. Ordering is a
+minimal-move walk, so an untouched tail never moves. The object-identity
+check is load-bearing: `loadComments` replaces comment objects, and a
+reused card whose closures held the stale object would mutate a comment
+the overlay no longer owns.
+
+Deliberately NOT reconciled: the header (label-driven and stateless — the
+filter summary changes with every selection) and the detail view (one
+comment; a full rebuild keeps the editing/reply wiring simple). Verified
+in a real browser: 15 cards, list scrolled, a priority change through the
+picker — same container node, scroll intact, unchanged cards reused.
