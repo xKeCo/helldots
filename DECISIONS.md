@@ -1319,3 +1319,38 @@ Two deliberate calls:
 - **`clearComments()` stays silent on the stream too**, for the same reason
   it fires no `onCommentDeleted`: the host initiated the bulk reset and
   would only hear its own action echoed back N times.
+
+## Fase 5.5: constructed stylesheets, because CSP is not a cosmetic gate
+
+A host with `style-src 'self'` (no `'unsafe-inline'`) blocked both of the
+`<style>` elements the widget injected. That is not a styling nit: markers
+are positioned by CSS, so the widget arrived as unstyled controls stacked in
+the top-left corner — verified in Chrome under a real CSP, where the
+injected `<style>` was present in the DOM with `styleEl.sheet === null` and
+the toolbar computing `position: static`.
+
+Constructed stylesheets (`new CSSStyleSheet` + `replaceSync` +
+`adoptedStyleSheets`) are not subject to `style-src`, because nothing is
+parsed from document markup. `style-mount.js` takes that path wherever the
+platform offers it and injects a `<style>` otherwise, returning a detach
+function so the caller undoes exactly what was mounted.
+
+Three details worth writing down:
+
+- **Feature detection checks both halves.** Safari shipped `CSSStyleSheet`
+  for years without making it constructible, and jsdom constructs sheets
+  happily while not implementing `adoptedStyleSheets` at all — so a sheet
+  nobody can adopt would silently style nothing. Construction is also
+  wrapped in try/catch.
+- **The array is appended to, never assigned over.** A host app (Lit, or
+  anything using constructed sheets) adopts onto the document too;
+  replacing `document.adoptedStyleSheets` would delete its styles.
+- **`cleanup()` detaches the adopted sheet.** With `<style>` this was a
+  `remove()`; an adopted sheet has no element to remove, and leaving it
+  would keep styling the host page — the comment-mode cursor included —
+  after the widget is gone.
+
+Because jsdom has no `adoptedStyleSheets`, the whole suite exercises the
+fallback; the adopting path is driven in `test/styles-mount.test.js` by
+declaring the property the way a browser does, and was confirmed for real
+in Chrome under a strict CSP.

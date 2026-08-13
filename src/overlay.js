@@ -11,6 +11,7 @@ import {
   MAX_SCREENSHOTS,
 } from "./constants.js";
 import { getStyles, getGlobalStyles } from "./styles.js";
+import { mountStyles } from "./style-mount.js";
 import { getShadowRoot, TAG_NAME } from "./root-element.js";
 import { getStrings, detectLocale } from "./i18n.js";
 import {
@@ -1654,7 +1655,10 @@ class CommentOverlay {
     }
 
     document.body.classList.remove(CLASSES.COMMENT_CURSOR);
-    document.getElementById(IDS.GLOBAL_STYLES)?.remove();
+    // Covers both paths: removes the injected <style> or drops our adopted
+    // sheet from the document. Leaving the latter behind would keep styling
+    // the host page — the comment-mode cursor included — after teardown.
+    this._detachStyles();
 
     // The now-empty shadow host itself: leaving <helldots-root> dangling
     // from <body> is half a cleanup. getShadowRoot() recreates it if a new
@@ -1663,28 +1667,21 @@ class CommentOverlay {
   }
 
   injectStyles() {
-    const existingStyle = this.shadowRoot.getElementById(IDS.STYLES);
-    if (existingStyle) {
-      existingStyle.remove();
-    }
+    // Re-injecting replaces rather than accumulates, whichever path is in
+    // use — mountStyles hands back the undo for exactly what it mounted.
+    this._detachStyles();
+    this._styleDetachers = [
+      mountStyles(this.shadowRoot, getStyles(), IDS.STYLES),
+      // A few rules (e.g. the comment-mode cursor on document.body) target
+      // the host page itself, which a shadow root's stylesheet cannot
+      // reach — those go on the document instead.
+      mountStyles(document, getGlobalStyles(), IDS.GLOBAL_STYLES),
+    ];
+  }
 
-    const style = document.createElement("style");
-    style.id = IDS.STYLES;
-    style.textContent = getStyles();
-    this.shadowRoot.appendChild(style);
-
-    // A few rules (e.g. the comment-mode cursor on document.body) target
-    // the host page itself, which a shadow root's stylesheet can't reach —
-    // those live in a separate <style> in document.head instead.
-    const existingGlobalStyle = document.getElementById(IDS.GLOBAL_STYLES);
-    if (existingGlobalStyle) {
-      existingGlobalStyle.remove();
-    }
-
-    const globalStyle = document.createElement("style");
-    globalStyle.id = IDS.GLOBAL_STYLES;
-    globalStyle.textContent = getGlobalStyles();
-    document.head.appendChild(globalStyle);
+  _detachStyles() {
+    for (const detach of this._styleDetachers ?? []) detach();
+    this._styleDetachers = [];
   }
 }
 
