@@ -148,9 +148,10 @@ await build({
   globalName: "HellDots",
   plugins: [minifyStylesTemplates],
   banner: umdBanner,
-  footer: {
-    js: "if (typeof module !== 'undefined' && module.exports) { module.exports = HellDots.default; }",
-  },
+  // No CommonJS footer: the package is deliberately ESM-only (see
+  // DECISIONS.md). The old `module.exports = HellDots.default` footer
+  // implied a require() story the exports map never actually offered — and
+  // it only exported the factory, silently dropping CommentOverlay.
 });
 
 // The published tarball ships dist/ only — src/ stays out of it, since the

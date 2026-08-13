@@ -1154,3 +1154,17 @@ for a dedicated design pass. What landed now:
   reconciliation (clear, then loadComments with fresh data); echoing N
   `onCommentDeleted` calls back at the host for its own bulk action would
   force every consumer to guard against feedback loops.
+
+## The package is ESM-only, and now says so
+
+`require("helldots")` never worked from the exports map (only `import` and
+`default` conditions exist), yet the UMD build carried a
+`module.exports = HellDots.default` footer implying otherwise — and that
+footer exported only the factory, silently dropping the named
+`CommentOverlay`. Two honest options existed: ship a real CJS artifact
+wired to a `"require"` condition, or declare ESM-only. **ESM-only won**
+(explicit maintainer decision during the audit follow-up): modern bundlers
+and Node ≥ 22 consume ESM without friction, a second module format is a
+second artifact to test and keep honest, and the plain-`<script>` audience
+already has the self-contained UMD global via the CDN fields. The footer is
+gone, and README's "Module format" section states the contract.
