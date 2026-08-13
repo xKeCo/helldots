@@ -1445,6 +1445,130 @@ describe("CommentOverlay", () => {
       expect(overlay.validateAndCalculatePosition({}, null)).toBeNull();
     });
 
+    // A navbar row is ~36px tall — shorter than the 28px marker plus the
+    // click offset. Keeping the whole marker box inside such a container is
+    // impossible without moving the point the user actually clicked, and
+    // the marker used to be dragged upward to satisfy it. The stored point
+    // is the promise the preview circle made; the marker keeps it and lets
+    // its own box overhang instead.
+    describe("markers in containers shorter than the marker", () => {
+      const rectOf =
+        ({ left = 0, top = 0, width, height }) =>
+        () => ({
+          left,
+          top,
+          right: left + width,
+          bottom: top + height,
+          width,
+          height,
+        });
+
+      // The navbar section measured in the playground: 36px tall at y=30.
+      const navbarLike = () => {
+        const container = document.createElement("div");
+        container.getBoundingClientRect = rectOf({
+          left: 20,
+          top: 30,
+          width: 570,
+          height: 36,
+        });
+        document.body.appendChild(container);
+        return container;
+      };
+
+      it("keeps the clicked point instead of pulling the marker up", () => {
+        overlay = makeOverlay();
+        const container = navbarLike();
+        // Clicked at viewport y=47, i.e. 17px into a 36px-tall navbar.
+        const result = overlay.validateAndCalculatePosition(
+          { container, relativeX: 0.5, relativeY: 17 / 36 },
+          document.createElement("div")
+        );
+
+        expect(result.absoluteY).toBeCloseTo(17, 5);
+        // And the point survives the round-trip, so nothing is written back
+        // to comment.relativeY on the next pass.
+        expect(result.relativeY).toBeCloseTo(17 / 36, 5);
+      });
+
+      it("renders the marker at the clicked point, matching the preview", () => {
+        overlay = makeOverlay();
+        const container = navbarLike();
+        const comment = {
+          id: "nav-1",
+          text: "in the navbar",
+          container,
+          relativeX: 380 / 570,
+          relativeY: 17 / 36,
+          replies: [],
+          status: "open",
+          screenshots: [],
+        };
+        overlay.comments.push(comment);
+        overlay.renderCommentCircle(comment);
+
+        // What createPreviewCircle wrote for the same click: point + radius.
+        const circle = overlay._circles.get("nav-1");
+        expect(circle.style.top).toBe("61px"); // 30 + 17 + 14
+        expect(circle.style.left).toBe("414px"); // 20 + 380 + 14
+      });
+
+      it("clamps the same way on the narrow axis", () => {
+        overlay = makeOverlay();
+        const container = document.createElement("div");
+        container.getBoundingClientRect = rectOf({ width: 20, height: 400 });
+        document.body.appendChild(container);
+
+        const result = overlay.validateAndCalculatePosition(
+          { container, relativeX: 0.75, relativeY: 0.5 },
+          document.createElement("div")
+        );
+
+        expect(result.absoluteX).toBeCloseTo(15, 5);
+      });
+
+      // "Scroll to this comment" derives the marker's Y from the anchor
+      // rather than reading the rendered circle (whose coordinates lag a
+      // frame behind a scroll). That derivation has to agree with where the
+      // marker actually is, or the inbox scrolls to the wrong spot.
+      it("scrolls to the same point the marker was rendered at", () => {
+        overlay = makeOverlay();
+        const container = navbarLike();
+        const comment = {
+          id: "nav-2",
+          text: "in the navbar",
+          container,
+          relativeX: 0.5,
+          relativeY: 17 / 36,
+          replies: [],
+          status: "open",
+          screenshots: [],
+        };
+        overlay.comments.push(comment);
+        overlay.renderCommentCircle(comment);
+
+        const renderedTop = parseFloat(overlay._circles.get("nav-2").style.top);
+        expect(overlay.markers._markerViewportY(comment)).toBeCloseTo(
+          renderedTop,
+          5
+        );
+      });
+
+      it("still clamps a point a host loaded from outside the container", () => {
+        overlay = makeOverlay();
+        const container = navbarLike();
+        const result = overlay.validateAndCalculatePosition(
+          { container, relativeX: 2.5, relativeY: -1 },
+          document.createElement("div")
+        );
+
+        // The guard survives: out-of-range data lands on the container's
+        // own edges, never off in the page.
+        expect(result.absoluteX).toBe(570);
+        expect(result.absoluteY).toBe(0);
+      });
+    });
+
     it("positionPopoverAtCircle clamps to the viewport", () => {
       overlay = makeOverlay();
       const circle = document.createElement("div");

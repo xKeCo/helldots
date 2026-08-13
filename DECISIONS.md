@@ -1354,3 +1354,50 @@ Because jsdom has no `adoptedStyleSheets`, the whole suite exercises the
 fallback; the adopting path is driven in `test/styles-mount.test.js` by
 declaring the property the way a browser does, and was confirmed for real
 in Chrome under a strict CSP.
+
+## Marker placement in containers shorter than the marker
+
+A comment left on a navbar row landed ~10px above where it was clicked (up
+to 25px near the row's bottom edge), and nowhere else on the page. The cause
+was in the position clamp, which reserved room for the marker's whole 28px
+box inside the anchor container:
+
+```js
+Math.min(absoluteY, containerHeight - MARKER_SIZE);
+```
+
+In the playground's navbar the anchor container — a `<section>`, matched by
+`SELECTORS.CONTAINER` — measures 36px tall. The clamp's ceiling is therefore
+8px, so every point below it collapsed onto 8: measured in Chrome, a click
+at `y=47` rendered the marker at `top: 52px` while the preview circle had
+just drawn it at `61px`. Body sections are 500–2100px tall, which is why the
+symptom looked local to the navbar.
+
+Three options were on the table:
+
+- **Keep the marker inside its container** (the old rule), and accept that
+  it lies about the click point in short containers. Rejected: the anchor
+  container is a coarse box the widget picks by selector, not something the
+  user aimed at. Fidelity to the click is what the user can actually see.
+- **Drop the clamp entirely.** `relativeX/Y` are in `[0, 1]` by construction
+  at creation time, so the clamp is dead weight for our own data — but not
+  for data a host hands back through `loadComments`, which can carry
+  anything.
+- **Clamp the point to the container's box** instead of the marker's box.
+  Chosen: the guard against out-of-range values survives, and a legitimate
+  point is never moved.
+
+The marker's tip is what carries the meaning, so it now stays on the point
+and the marker's body overhangs the container when there is no room. That
+also makes the marker agree with the preview circle, which was never
+clamped — the preview is the promise, and the marker has to keep it.
+
+The same clamp existed twice: `_markerViewportY` re-derived it to scroll a
+comment into view. Two copies of this math will always drift apart, so it
+now lives in one `clampToBox` helper both call, with a test asserting the
+scroll target equals the rendered marker's position.
+
+One limitation accepted: a marker anchored to the very bottom or right edge
+of a container now overhangs into whatever sits next to it. That is a
+faithful rendering of where the user clicked, and the widget already allowed
+it for the preview circle.

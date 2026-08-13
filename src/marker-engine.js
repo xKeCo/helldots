@@ -16,6 +16,23 @@ import { TAG_NAME } from "./root-element.js";
 // rarely changes mid-scroll, and the trailing pass settles the end state.
 const OCCLUSION_INTERVAL_MS = 150;
 
+/**
+ * Keeps a marker's point inside its container's box.
+ *
+ * Clamped to the box itself, not to `box - MARKER_SIZE`: reserving room for
+ * the whole marker moved the point the user clicked whenever the container
+ * was shorter or narrower than the marker (a 36px navbar row pulled every
+ * marker up to 8px from its top). Only the marker's tip carries meaning, so
+ * the point stays put and the marker's body overhangs instead.
+ *
+ * The one place this math lives — `updatePosition` and `scrollMarkerIntoView`
+ * both derive from it, and they must never disagree about where a marker is.
+ *
+ * @param {number} offset position along one axis, in px from the box's edge
+ * @param {number} size the box's length along that axis
+ */
+const clampToBox = (offset, size) => Math.max(0, Math.min(offset, size));
+
 export class MarkerEngine {
   /**
    * @param {{
@@ -157,15 +174,8 @@ export class MarkerEngine {
     const absoluteX = comment.relativeX * containerWidth;
     const absoluteY = comment.relativeY * containerHeight;
 
-    const circleSize = MARKER_SIZE;
-    const validatedX = Math.max(
-      0,
-      Math.min(absoluteX, containerWidth - circleSize)
-    );
-    const validatedY = Math.max(
-      0,
-      Math.min(absoluteY, containerHeight - circleSize)
-    );
+    const validatedX = clampToBox(absoluteX, containerWidth);
+    const validatedY = clampToBox(absoluteY, containerHeight);
 
     // Recalculate relative position for future calculations
     const validatedRelativeX = validatedX / containerWidth;
@@ -504,8 +514,8 @@ export class MarkerEngine {
 
   /**
    * The marker's centre in viewport coordinates, derived from the anchor the
-   * same way `updatePosition` derives it — including the clamp that keeps
-   * the circle inside its container.
+   * same way `updatePosition` derives it — through the same `clampToBox`, so
+   * the two cannot disagree about where a marker sits.
    *
    * Deliberately not read off the rendered circle: the circle's coordinates
    * are only refreshed inside a rAF on scroll, so they are stale for any
@@ -521,12 +531,8 @@ export class MarkerEngine {
     const rect = container.getBoundingClientRect();
     if (rect.height <= 0) return null;
 
-    const circleSize = MARKER_SIZE;
-    const offsetY = Math.max(
-      0,
-      Math.min(comment.relativeY * rect.height, rect.height - circleSize)
-    );
-    return rect.top + offsetY + circleSize / 2;
+    const offsetY = clampToBox(comment.relativeY * rect.height, rect.height);
+    return rect.top + offsetY + MARKER_SIZE / 2;
   }
 
   /** Cancels every scheduled pass, listener and observer. */
