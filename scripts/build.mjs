@@ -10,6 +10,13 @@ const banner = {
   js: `/*! HellDots — MIT. Bundles nanoid (MIT) © 2017 Andrey Sitnik <andrey@sitnik.es> — https://github.com/ai/nanoid */`,
 };
 
+// The UMD artifact additionally bundles modern-screenshot (external in the
+// ESM build), whose sources also ship without a license header — same
+// reasoning as nanoid, so its MIT notice rides along here too.
+const umdBanner = {
+  js: `${banner.js}\n/*! Bundles modern-screenshot (MIT) © 2021-present wxm — https://github.com/qq15725/modern-screenshot */`,
+};
+
 await rm(outdir, { recursive: true, force: true });
 await mkdir(outdir, { recursive: true });
 
@@ -44,7 +51,7 @@ await build({
   format: "iife",
   platform: "browser",
   globalName: "HellDots",
-  banner,
+  banner: umdBanner,
   footer: {
     js: "if (typeof module !== 'undefined' && module.exports) { module.exports = HellDots.default; }",
   },
