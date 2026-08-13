@@ -1478,7 +1478,8 @@ describe("CommentOverlay", () => {
       const observer = { disconnect: vi.fn() };
       const circle = document.createElement("div");
       document.body.appendChild(circle);
-      overlay.resizeObservers.set(1, {
+      // Entries are keyed by String(id); cleanup accepts either spelling.
+      overlay.resizeObservers.set("1", {
         circle,
         observer,
         container: document.body,
@@ -1488,7 +1489,7 @@ describe("CommentOverlay", () => {
 
       expect(observer.disconnect).toHaveBeenCalled();
       expect(document.body.contains(circle)).toBe(false);
-      expect(overlay.resizeObservers.has(1)).toBe(false);
+      expect(overlay.resizeObservers.has("1")).toBe(false);
     });
 
     it("cleanupResizeObserver is a no-op for an untracked id", () => {
@@ -1576,7 +1577,7 @@ describe("CommentOverlay", () => {
       overlay.comments.push(comment);
       overlay.renderCommentCircle(comment);
 
-      const entry = overlay.resizeObservers.get(50);
+      const entry = overlay.resizeObservers.get("50");
       expect(entry.observer).toBeInstanceOf(FakeResizeObserver);
       expect(entry.observer.observed).toContain(container);
 
@@ -1591,6 +1592,49 @@ describe("CommentOverlay", () => {
       entry.observer.cb([{ target: document.createElement("div") }]);
       expect(updateSpy).toHaveBeenCalledTimes(1);
 
+      window.ResizeObserver = originalRO;
+    });
+
+    it("deleteComment disconnects the observer no matter the id spelling", () => {
+      // _circles is keyed by String(id); resizeObservers must be too. A
+      // legacy numeric id deleted through its string spelling used to leave
+      // the observer connected forever, updating a detached circle.
+      class FakeResizeObserver {
+        constructor(cb) {
+          this.cb = cb;
+        }
+        observe() {}
+        disconnect() {
+          this.disconnected = true;
+        }
+      }
+      const originalRO = window.ResizeObserver;
+      window.ResizeObserver = FakeResizeObserver;
+
+      overlay = makeOverlay();
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      container.getBoundingClientRect = () => ({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+      });
+      const comment = {
+        id: 123,
+        container,
+        relativeX: 0.5,
+        relativeY: 0.5,
+        replies: [],
+      };
+      overlay.comments.push(comment);
+      overlay.renderCommentCircle(comment);
+      const entry = [...overlay.resizeObservers.values()][0];
+
+      expect(overlay.deleteComment("123")).toBe(true);
+
+      expect(entry.observer.disconnected).toBe(true);
+      expect(overlay.resizeObservers.size).toBe(0);
       window.ResizeObserver = originalRO;
     });
 

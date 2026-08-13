@@ -1943,15 +1943,19 @@ class CommentOverlay {
   }
 
   cleanupResizeObserver(commentId) {
-    if (this.resizeObservers && this.resizeObservers.has(commentId)) {
-      const { circle, observer } = this.resizeObservers.get(commentId);
+    // Keyed by String(id), exactly like _circles: the caller may hold the
+    // other spelling of a legacy numeric id, and a missed lookup here leaks
+    // a live observer pointed at a detached circle.
+    const key = String(commentId);
+    if (this.resizeObservers && this.resizeObservers.has(key)) {
+      const { circle, observer } = this.resizeObservers.get(key);
       if (observer) {
         observer.disconnect();
       }
       if (circle && circle.parentNode) {
         circle.parentNode.removeChild(circle);
       }
-      this.resizeObservers.delete(commentId);
+      this.resizeObservers.delete(key);
     }
   }
 
@@ -2335,8 +2339,8 @@ class CommentOverlay {
     // Start observing the container
     observer.observe(comment.container);
 
-    // Store the observer for cleanup
-    this.resizeObservers.set(comment.id, {
+    // Store the observer for cleanup, keyed by String(id) like _circles.
+    this.resizeObservers.set(String(comment.id), {
       circle,
       observer,
       container: comment.container,
