@@ -1235,11 +1235,13 @@ describe("CommentOverlay", () => {
       const file = new File(["x"], "x.png", { type: "image/png" });
       Object.defineProperty(fileInput, "files", { value: [file] });
       fileInput.dispatchEvent(new Event("change", { bubbles: true }));
-      await wait(10);
 
       const container = popover.querySelector(
         `.${CLASSES.THREAD_INPUT_AREA} .${CLASSES.SCREENSHOTS_CONTAINER}`
       );
+      // FileReader resolves on its own schedule; the container going ACTIVE
+      // is the signal that the attachment landed. See waitFor's note.
+      await waitFor(() => container.classList.contains(CLASSES.ACTIVE));
       expect(container.classList.contains(CLASSES.ACTIVE)).toBe(true);
 
       const removeBtn = container.querySelector(
@@ -1280,7 +1282,15 @@ describe("CommentOverlay", () => {
       const file = new File(["x"], "x.png", { type: "image/png" });
       Object.defineProperty(fileInput, "files", { value: [file] });
       fileInput.dispatchEvent(new Event("change", { bubbles: true }));
-      await wait(10);
+      // Submitting before the reader resolves sends a reply with no
+      // screenshot, and the assertion below then has nothing to click.
+      await waitFor(() =>
+        popover
+          .querySelector(
+            `.${CLASSES.THREAD_INPUT_AREA} .${CLASSES.SCREENSHOTS_CONTAINER}`
+          )
+          .classList.contains(CLASSES.ACTIVE)
+      );
 
       const input = popover.querySelector(`.${CLASSES.THREAD_INPUT}`);
       input.value = "with a screenshot";
