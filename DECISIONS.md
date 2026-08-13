@@ -1444,3 +1444,17 @@ Two limits accepted, both deliberate:
 - **The flip is not animated and the menu can overlap the row above it.**
   That is what a dropdown does; the row underneath is not interactive while
   the menu is open.
+
+## A reply's ⋯ menu was missing its edit item until the popover was reopened
+
+`createReplyElement` builds the ⋯ menu from whichever handlers it is given,
+and `submitReply` — the path that appends the row the user just created —
+passed only `onDelete`. The full render in `createThreadPopover` passed both,
+so the item appeared as soon as the popover was closed and opened again:
+the reply most likely to need a correction was the one that could not be
+corrected.
+
+The handler is now a named `const` alongside `onDeleteReply` and both call
+sites pass it. Naming it is the actual fix: it was inlined in the
+`createThreadPopover` argument list, which is what let a second builder be
+added without it.

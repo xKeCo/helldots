@@ -1098,6 +1098,36 @@ describe("CommentOverlay", () => {
       );
     });
 
+    // The live-append path built the row with only the delete handler, so a
+    // reply could not be edited until the popover was closed and reopened —
+    // at which point the full render wired both. A row the user just created
+    // is the one they are most likely to want to fix.
+    it("a just-submitted reply can be edited without reopening the popover", async () => {
+      const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
+      overlay.showThreadPopover(circle, comment);
+      const popover = overlay.activeThreadPopover;
+      const input = popover.querySelector(`.${CLASSES.THREAD_INPUT}`);
+      input.value = "a reply";
+      popover
+        .querySelector(`.${CLASSES.THREAD_SUBMIT}`)
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      const row = popover.querySelector(`.${CLASSES.THREAD_REPLY}`);
+      const labels = [...row.querySelectorAll('[role="menuitem"]')].map(
+        (item) => item.textContent
+      );
+      expect(labels).toEqual([en.editReply, en.deleteReply]);
+
+      // And the item actually opens the editor, rather than being inert.
+      const editItem = [...row.querySelectorAll('[role="menuitem"]')].find(
+        (item) => item.textContent === en.editReply
+      );
+      editItem.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      // startEditing releases any open editor first, so the swap lands a
+      // microtask later.
+      await waitFor(() => !!row.querySelector(`.${CLASSES.EDITOR_INPUT}`));
+    });
+
     it("submits a reply via Enter in the thread input", () => {
       const circle = overlay.shadowRoot.querySelector('[data-comment-id="7"]');
       overlay.showThreadPopover(circle, comment);

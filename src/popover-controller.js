@@ -322,9 +322,15 @@ export class PopoverController {
       this.deps.refreshInbox();
     };
 
+    // Named rather than inlined below: `submitReply` builds a reply row too,
+    // and when this handler lived only in the call site there, the row the
+    // user had just created came out with a ⋯ menu that could delete but not
+    // edit — until the popover was reopened and the full render wired both.
+    const onEditReply = (reply) => this.startEditing(comment.id, reply.id);
+
     const popover = createThreadPopover(comment, strings, locale, {
       onDeleteReply,
-      onEditReply: (reply) => this.startEditing(comment.id, reply.id),
+      onEditReply,
     });
     this.deps.shadowRoot.appendChild(popover);
 
@@ -461,6 +467,7 @@ export class PopoverController {
       );
       const replyEl = createReplyElement(reply, strings, locale, {
         onDelete: onDeleteReply,
+        onEdit: onEditReply,
       });
       repliesContainer.appendChild(replyEl);
 
