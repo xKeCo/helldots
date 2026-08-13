@@ -3,7 +3,6 @@ import {
   renderPage,
   cropRegion,
   cropViewport,
-  withHiddenOverlay,
   AUTO_SCALE,
 } from "../src/capture.js";
 import { TAG_NAME } from "../src/root-element.js";
@@ -196,38 +195,20 @@ describe("cropViewport", () => {
   });
 });
 
-describe("withHiddenOverlay", () => {
-  it("hides the whole host during the callback and restores it after", async () => {
-    const host = document.createElement(TAG_NAME);
-    host.style.display = "block";
-    document.body.appendChild(host);
+describe("renderPage filter", () => {
+  // Replaces the old hide-during-render dance (withHiddenOverlay): filtering
+  // the host out of the clone keeps the widget out of its own screenshot
+  // WITHOUT taking the UI off screen, which is what lets captures run in the
+  // background while the user types.
+  it("filters the widget host out of the render and keeps everything else", async () => {
+    vi.mocked(domToCanvas).mockResolvedValue({ width: 1, height: 1 });
 
-    let displayDuringCall = null;
-    await withHiddenOverlay(() => {
-      displayDuringCall = host.style.display;
-      return Promise.resolve("ok");
-    });
+    await renderPage();
 
-    expect(displayDuringCall).toBe("none");
-    expect(host.style.display).toBe("block");
-    host.remove();
-  });
-
-  it("restores the host even when the callback throws", async () => {
-    // Regression guard: a render failure must never leave the widget hidden.
-    const host = document.createElement(TAG_NAME);
-    host.style.display = "block";
-    document.body.appendChild(host);
-
-    await expect(
-      withHiddenOverlay(() => Promise.reject(new Error("render failed")))
-    ).rejects.toThrow("render failed");
-
-    expect(host.style.display).toBe("block");
-    host.remove();
-  });
-
-  it("is a no-op when no host is mounted", async () => {
-    await expect(withHiddenOverlay(() => Promise.resolve(1))).resolves.toBe(1);
+    const options = vi.mocked(domToCanvas).mock.calls[0][1];
+    expect(typeof options.filter).toBe("function");
+    expect(options.filter(document.createElement(TAG_NAME))).toBe(false);
+    expect(options.filter(document.body)).toBe(true);
+    expect(options.filter(document.createTextNode("text node"))).toBe(true);
   });
 });

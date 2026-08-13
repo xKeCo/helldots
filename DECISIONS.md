@@ -1168,6 +1168,7 @@ and Node ≥ 22 consume ESM without friction, a second module format is a
 second artifact to test and keep honest, and the plain-`<script>` audience
 already has the self-contained UMD global via the CDN fields. The footer is
 gone, and README's "Module format" section states the contract.
+
 ## Fase 4: one shortcut matcher, no hardcoded fallbacks
 
 The keydown handler carried two unconditional special cases (`Option+C`
@@ -1186,3 +1187,25 @@ Accepted limitation: `e.code` names the physical key position, not the
 printed letter, so on a non-QWERTY layout an Alt chord may also fire on the
 QWERTY position of the configured letter. That beats the previous state on
 macOS, where custom Alt chords did not fire at all.
+
+## Fase 4: captures filter the widget out instead of hiding it
+
+`withHiddenOverlay` set `display: none` on the shadow host for the duration
+of every render. That had a structural cost: anything on screen (including
+the comment box, had it been shown) vanished while the render ran, which is
+why the click path AWAITED the capture before opening the comment box — on
+heavy pages, hundreds of ms between the click and being able to type.
+
+`modern-screenshot` accepts a `filter` callback; excluding the
+`helldots-root` node from the clone keeps the widget out of its own
+screenshot without touching the live page. With the flash gone, the click
+path now kicks the render off and shows the box immediately; `saveComment`
+awaits the in-flight promise (usually already resolved by the time anyone
+finishes typing) and carries a double-submit guard. The drag path still
+awaits its render on purpose: there the region crop IS what the user asked
+for, and the box should open with the preview attached.
+
+Accepted trade-offs: `saveComment` is now async (it was never part of the
+public API surface in `index.d.ts`); and a save racing an Escape that
+dismissed the box is dropped, because a comment materialising after the box
+visibly closed would contradict the screen.

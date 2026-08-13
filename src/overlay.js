@@ -1,10 +1,4 @@
-import {
-  renderPage,
-  cropRegion,
-  cropViewport,
-  withHiddenOverlay,
-  AUTO_SCALE,
-} from "./capture.js";
+import { renderPage, cropRegion, cropViewport, AUTO_SCALE } from "./capture.js";
 import { captureContext } from "./metadata.js";
 import {
   CLASSES,
@@ -14,6 +8,7 @@ import {
   COMMENT_TYPES,
   PRIORITIES,
   MARKER_SIZE,
+  MAX_SCREENSHOTS,
 } from "./constants.js";
 import { getStyles, getGlobalStyles } from "./styles.js";
 import { getShadowRoot, TAG_NAME } from "./root-element.js";
@@ -112,7 +107,13 @@ class CommentOverlay {
 
     // rAF scheduling flag for bulk updates
     this._pendingRaf = null;
-    this._pendingContextScreenshot = null;
+    /**
+     * The in-flight automatic capture, resolving to a JPEG data-URL or null.
+     * A promise rather than the value: the render kicks off when the comment
+     * box opens and saveComment awaits it, so the render never gates the box.
+     * @type {Promise<string | null> | null}
+     */
+    this._pendingCapture = null;
 
     /**
      * Parsed cross-page corpus, so every mutation does not pay a full
@@ -631,16 +632,18 @@ class CommentOverlay {
         try {
           if (!this._pendingScreenshots) this._pendingScreenshots = [];
           // One render feeds both images: the PNG region the user selected
-          // and the automatic JPEG context shot.
-          const full = await withHiddenOverlay(() => renderPage({ scale: 1 }));
+          // and the automatic JPEG context shot. Unlike the click path this
+          // one awaits — the region crop IS what the user asked for, and
+          // the box should open with its preview already attached.
+          const full = await renderPage({ scale: 1 });
           const dataUrl = cropRegion(full, { left, top, width, height });
-          if (dataUrl && this._pendingScreenshots.length < 5) {
+          if (dataUrl && this._pendingScreenshots.length < MAX_SCREENSHOTS) {
             this._pendingScreenshots.push(dataUrl);
           }
           if (this.options.autoScreenshot) {
-            this._pendingContextScreenshot = cropViewport(full, {
-              sourceScale: 1,
-            });
+            this._pendingCapture = Promise.resolve(
+              cropViewport(full, { sourceScale: 1 })
+            );
           }
         } catch (err) {
           console.warn("HellDots: screenshot capture failed:", err);
@@ -659,19 +662,17 @@ class CommentOverlay {
   async _placeCommentAtPoint(clientX, clientY) {
     // The no-drag path has no render yet. Half scale because the output is
     // half scale anyway — the render is the expensive part, and it costs
-    // ~4x less here than at scale 1.
-    if (this.options.autoScreenshot && !this._pendingContextScreenshot) {
-      try {
-        const full = await withHiddenOverlay(() =>
-          renderPage({ scale: AUTO_SCALE })
-        );
-        this._pendingContextScreenshot = cropViewport(full, {
-          sourceScale: AUTO_SCALE,
+    // ~4x less here than at scale 1. Deliberately NOT awaited: on heavy
+    // pages the render takes hundreds of ms, and gating the comment box on
+    // it made every click feel broken. saveComment awaits the promise, by
+    // which time it has almost always resolved.
+    if (this.options.autoScreenshot && !this._pendingCapture) {
+      this._pendingCapture = renderPage({ scale: AUTO_SCALE })
+        .then((full) => cropViewport(full, { sourceScale: AUTO_SCALE }))
+        .catch((err) => {
+          console.warn("HellDots: automatic screenshot failed", err);
+          return null;
         });
-      } catch (err) {
-        console.warn("HellDots: automatic screenshot failed", err);
-        this._pendingContextScreenshot = null;
-      }
     }
 
     const prevPointerEvents = this.overlay.style.pointerEvents;
@@ -795,7 +796,7 @@ class CommentOverlay {
     this.currentPosition = null;
     this.removePreviewCircle();
     this._clearScreenshotPreview();
-    this._pendingContextScreenshot = null;
+    this._pendingCapture = null;
     /** @type {any} */ (this.commentBox).classify?.reset();
 
     if (this.commentMode) {
@@ -820,8 +821,27 @@ class CommentOverlay {
     }
   }
 
-  saveComment() {
+  async saveComment() {
+    // Two Enters while the capture resolves must not save twice.
+    if (this._saving) return;
     if (!this.commentInput.value.trim() || !this.currentPosition) return;
+    this._saving = true;
+    try {
+      await this._saveCommentNow();
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  async _saveCommentNow() {
+    // The capture kicked off when the box opened; by save time it has
+    // usually resolved and this await costs nothing.
+    const contextScreenshot = this._pendingCapture
+      ? await this._pendingCapture
+      : null;
+    // The box may have been dismissed (Escape) while awaiting — a save that
+    // lands after that would contradict what the user sees on screen.
+    if (!this.currentPosition) return;
 
     const comment = {
       text: this.commentInput.value,
@@ -849,7 +869,7 @@ class CommentOverlay {
       tags: [],
       resolvedAt: null,
       context: captureContext(),
-      contextScreenshot: this._pendingContextScreenshot,
+      contextScreenshot,
     };
 
     this.comments.push(comment);
@@ -2415,6 +2435,7 @@ class CommentOverlay {
     this.removePreviewCircle();
     this._selectionRect?.remove();
     this._pendingScreenshots = [];
+    this._pendingCapture = null;
 
     if (this._handleDocumentClickBound) {
       document.removeEventListener("mousedown", this._handleDocumentClickBound);

@@ -33,6 +33,13 @@ const effectiveBackgroundColor = () => {
 /**
  * Renders the whole page to a canvas. This is the expensive call — callers
  * that need more than one image should render once and crop repeatedly.
+ *
+ * The widget must never render into its own screenshot: the host node is
+ * filtered out of the clone. Filtering replaced the old hide-during-render
+ * approach (withHiddenOverlay), which took the whole UI off screen for the
+ * duration of the render and therefore forced callers to await the capture
+ * before showing anything — with the filter, a capture can run in the
+ * background while the comment box is already on screen.
  * @param {{ scale?: number }} [options] scale 1 keeps the canvas in CSS
  *   pixels so crop rects map 1:1 to page coordinates.
  * @returns {Promise<any>}
@@ -41,26 +48,10 @@ export async function renderPage({ scale = 1 } = {}) {
   return domToCanvas(document.body, {
     scale,
     backgroundColor: effectiveBackgroundColor(),
+    // nodeName, not tagName: the filter also receives text nodes, which
+    // must be kept (and have no tagName).
+    filter: (node) => node.nodeName?.toLowerCase() !== TAG_NAME,
   });
-}
-
-/**
- * Runs `fn` with the HellDots UI hidden, so the widget never renders into
- * its own screenshot. Restores the host even if `fn` throws — a failed
- * render must not leave the widget invisible.
- * @template T
- * @param {() => Promise<T>} fn
- * @returns {Promise<T>}
- */
-export async function withHiddenOverlay(fn) {
-  const host = /** @type {HTMLElement} */ (document.querySelector(TAG_NAME));
-  const previousDisplay = host?.style.display;
-  if (host) host.style.display = "none";
-  try {
-    return await fn();
-  } finally {
-    if (host) host.style.display = previousDisplay || "";
-  }
 }
 
 /**

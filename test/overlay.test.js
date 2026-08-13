@@ -631,10 +631,10 @@ describe("CommentOverlay", () => {
       });
     });
 
-    it("does nothing without text or a current position", () => {
+    it("does nothing without text or a current position", async () => {
       overlay = makeOverlay();
       overlay.commentInput.value = "";
-      overlay.saveComment();
+      await overlay.saveComment();
       expect(overlay.comments.length).toBe(0);
     });
 
@@ -642,7 +642,7 @@ describe("CommentOverlay", () => {
       overlay = makeOverlay();
       await overlay._placeCommentAtPoint(100, 100);
       overlay.commentInput.value = "a new comment";
-      overlay.saveComment();
+      await overlay.saveComment();
 
       expect(overlay.comments.length).toBe(1);
       expect(
@@ -660,6 +660,9 @@ describe("CommentOverlay", () => {
       overlay.commentInput.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
       );
+      // saveComment awaits the in-flight capture, so the push lands a few
+      // microtasks after the keystroke.
+      await waitFor(() => overlay.comments.length === 1);
       expect(overlay.comments.length).toBe(1);
     });
 
@@ -2353,9 +2356,14 @@ describe("automatic context capture", () => {
     expect(domToCanvas).not.toHaveBeenCalled();
   });
 
-  it("hides the host during the render", async () => {
+  it("keeps the host visible and filters it out of the render instead", async () => {
+    // Hiding the widget during the render was what forced callers to await
+    // the capture before showing anything; the filter option keeps the UI
+    // on screen and the widget out of its own screenshot.
+    let filterDuringRender = null;
     let displayDuringRender = null;
-    vi.mocked(domToCanvas).mockImplementation(async () => {
+    vi.mocked(domToCanvas).mockImplementation(async (_node, options) => {
+      filterDuringRender = options.filter;
       const host = document.querySelector(TAG_NAME);
       displayDuringRender = /** @type {HTMLElement} */ (host)?.style.display;
       return { width: 10, height: 10 };
@@ -2364,9 +2372,92 @@ describe("automatic context capture", () => {
     overlay = makeOverlay();
     await clickAt(overlay, 50, 50);
 
-    expect(displayDuringRender).toBe("none");
-    const host = /** @type {HTMLElement} */ (document.querySelector(TAG_NAME));
-    expect(host.style.display).not.toBe("none");
+    expect(displayDuringRender).not.toBe("none");
+    expect(typeof filterDuringRender).toBe("function");
+    expect(filterDuringRender(document.querySelector(TAG_NAME))).toBe(false);
+    expect(filterDuringRender(document.body)).toBe(true);
+  });
+
+  it("opens the comment box before the render resolves", async () => {
+    let resolveRender;
+    vi.mocked(domToCanvas).mockReturnValue(
+      new Promise((resolve) => (resolveRender = resolve))
+    );
+
+    overlay = makeOverlay();
+    overlay.toggleCommentMode();
+    overlay.handleDocumentClick(
+      new MouseEvent("mousedown", { clientX: 50, clientY: 50, button: 0 })
+    );
+    const dragEnd = overlay._onDragEnd(
+      new MouseEvent("mouseup", { clientX: 50, clientY: 50 })
+    );
+    await Promise.resolve();
+
+    // The user can start typing right away — the capture is still in flight.
+    expect(overlay.commentBox.style.display).toBe("block");
+
+    resolveRender({ width: 10, height: 10 });
+    await dragEnd;
+  });
+
+  it("a save racing the capture attaches it once resolved", async () => {
+    let resolveRender;
+    vi.mocked(domToCanvas).mockReturnValue(
+      new Promise((resolve) => (resolveRender = resolve))
+    );
+    vi.spyOn(document, "createElement").mockImplementation((tag) =>
+      tag === "canvas"
+        ? /** @type {any} */ (fakeOutCanvas())
+        : Object.getPrototypeOf(document).createElement.call(document, tag)
+    );
+
+    overlay = makeOverlay();
+    overlay.toggleCommentMode();
+    overlay.handleDocumentClick(
+      new MouseEvent("mousedown", { clientX: 50, clientY: 50, button: 0 })
+    );
+    const dragEnd = overlay._onDragEnd(
+      new MouseEvent("mouseup", { clientX: 50, clientY: 50 })
+    );
+    await Promise.resolve();
+
+    overlay.commentInput.value = "typed fast";
+    const save = overlay.saveComment();
+    resolveRender({ width: 10, height: 10 });
+    await save;
+    await dragEnd;
+
+    expect(overlay.comments).toHaveLength(1);
+    expect(overlay.comments[0].contextScreenshot).toBe(
+      "data:image/jpeg;base64,auto"
+    );
+  });
+
+  it("a second save while the capture is pending does not duplicate", async () => {
+    let resolveRender;
+    vi.mocked(domToCanvas).mockReturnValue(
+      new Promise((resolve) => (resolveRender = resolve))
+    );
+
+    overlay = makeOverlay();
+    overlay.toggleCommentMode();
+    overlay.handleDocumentClick(
+      new MouseEvent("mousedown", { clientX: 50, clientY: 50, button: 0 })
+    );
+    const dragEnd = overlay._onDragEnd(
+      new MouseEvent("mouseup", { clientX: 50, clientY: 50 })
+    );
+    await Promise.resolve();
+
+    overlay.commentInput.value = "double enter";
+    const first = overlay.saveComment();
+    const second = overlay.saveComment();
+    resolveRender({ width: 10, height: 10 });
+    await Promise.all([first, second]);
+    await dragEnd;
+
+    expect(overlay.comments).toHaveLength(1);
   });
 
   it("saves the capture and the context onto the comment", async () => {
@@ -2380,7 +2471,7 @@ describe("automatic context capture", () => {
     overlay = makeOverlay();
     await clickAt(overlay, 50, 50);
     overlay.commentInput.value = "a bug";
-    overlay.saveComment();
+    await overlay.saveComment();
 
     const [comment] = overlay.comments;
     expect(comment.contextScreenshot).toBe("data:image/jpeg;base64,auto");
@@ -2397,7 +2488,7 @@ describe("automatic context capture", () => {
     overlay = makeOverlay();
     await clickAt(overlay, 50, 50);
     overlay.commentInput.value = "still saved";
-    overlay.saveComment();
+    await overlay.saveComment();
 
     expect(overlay.comments).toHaveLength(1);
     expect(overlay.comments[0].contextScreenshot).toBeNull();
@@ -2416,15 +2507,15 @@ describe("automatic context capture", () => {
     overlay = makeOverlay();
     await clickAt(overlay, 50, 50);
     // Without stubbing the canvas above, jsdom's getContext("2d") returns
-    // null, cropViewport bails out early, and _pendingContextScreenshot is
-    // already null before hideCommentBox() runs — making the assertion
-    // below pass for the wrong reason. Assert it's actually populated first.
-    expect(overlay._pendingContextScreenshot).toBe(
+    // null, cropViewport bails out early, and the pending capture resolves
+    // null before hideCommentBox() runs — making the assertion below pass
+    // for the wrong reason. Assert it actually carries the capture first.
+    await expect(overlay._pendingCapture).resolves.toBe(
       "data:image/jpeg;base64,auto"
     );
 
     overlay.hideCommentBox();
-    expect(overlay._pendingContextScreenshot).toBeNull();
+    expect(overlay._pendingCapture).toBeNull();
   });
 });
 

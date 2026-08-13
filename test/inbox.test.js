@@ -36,7 +36,7 @@ const createCommentOn = async (overlay, container, text = "A test comment") => {
   overlay.commentMode = true;
   await overlay._placeCommentAtPoint(10, 10);
   overlay.commentInput.value = text;
-  overlay.saveComment();
+  await overlay.saveComment();
   return overlay.comments[overlay.comments.length - 1];
 };
 
