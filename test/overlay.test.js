@@ -2428,3 +2428,97 @@ describe("deep links to a single comment", () => {
     expect(item.textContent).toBe(en.linkCopied);
   });
 });
+
+// The Fase-1 fix escaped hostile host ids for the data-comment-id lookups
+// (circleSelector), but the tooltip, thread-popover and reply-row lookups
+// still interpolate raw ids into attribute selectors. loadComments accepts
+// arbitrary host ids, so a quote in one must not crash the marker UI.
+describe("CSS-hostile ids in marker UI lookups", () => {
+  let overlay;
+  const HOSTILE_ID = 'review "final" \\v2';
+  const HOSTILE_REPLY_ID = 'reply "1"';
+
+  const anchoredHostileComment = (overlay) => {
+    const container = document.getElementById("hostile-target");
+    const comment = {
+      id: HOSTILE_ID,
+      text: "hostile",
+      container,
+      target: container,
+      relativeX: 0.5,
+      relativeY: 0.5,
+      anchor: null,
+      anchorState: "anchored",
+      hidden: false,
+      status: "open",
+      page: location.pathname,
+      replies: [
+        {
+          id: HOSTILE_REPLY_ID,
+          text: "a reply",
+          author: "Ana",
+          timestamp: new Date().toISOString(),
+          screenshots: [],
+        },
+      ],
+      author: "Ana",
+      createdAt: new Date().toISOString(),
+      screenshots: [],
+      type: null,
+      priority: null,
+      tags: [],
+      resolvedAt: null,
+      context: null,
+      contextScreenshot: null,
+    };
+    overlay.comments.push(comment);
+    overlay.renderCommentCircle(comment);
+    return comment;
+  };
+
+  beforeEach(() => {
+    document.elementFromPoint = () => null;
+    document.body.innerHTML = `<section id="hostile-target">Anchor text</section>`;
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+  });
+
+  it("hovering the marker builds its tooltip instead of throwing", () => {
+    overlay = makeOverlay();
+    const comment = anchoredHostileComment(overlay);
+    const circle = overlay._circles.get(String(comment.id));
+
+    expect(() => overlay.showCommentTooltip(circle, comment)).not.toThrow();
+    expect(
+      overlay.shadowRoot.querySelector(`.${CLASSES.TOOLTIP}`)
+    ).toBeTruthy();
+  });
+
+  it("opening and dismissing the thread popover does not throw", () => {
+    overlay = makeOverlay();
+    const comment = anchoredHostileComment(overlay);
+    const circle = overlay._circles.get(String(comment.id));
+
+    expect(() => overlay.showThreadPopover(circle, comment)).not.toThrow();
+    expect(overlay.activeThreadPopover).toBeTruthy();
+    expect(() => overlay._dismissMarkerUi(comment)).not.toThrow();
+    // Dismissing must actually close the popover, not silently fail.
+    expect(overlay.activeThreadPopover).toBeNull();
+  });
+
+  it("editing a reply with a hostile id mounts the editor in its row", async () => {
+    overlay = makeOverlay();
+    const comment = anchoredHostileComment(overlay);
+    const circle = overlay._circles.get(String(comment.id));
+    overlay.showThreadPopover(circle, comment);
+
+    await overlay._startPopoverEditing(comment.id, HOSTILE_REPLY_ID);
+
+    expect(
+      overlay.activeThreadPopover.querySelector(`.${CLASSES.EDITOR}`)
+    ).toBeTruthy();
+  });
+});

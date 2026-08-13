@@ -38,6 +38,7 @@ import {
 } from "./link.js";
 import {
   createToolbar,
+  cssAttrValue,
   isMacPlatform,
   renderScreenshotsPreview,
   wireScreenshotInput,
@@ -279,7 +280,7 @@ class CommentOverlay {
       );
     }
     const row = popover.querySelector(
-      `.${CLASSES.THREAD_REPLY}[data-reply-id="${replyId}"]`
+      `.${CLASSES.THREAD_REPLY}[data-reply-id="${cssAttrValue(replyId)}"]`
     );
     return (
       row?.querySelector(`.${CLASSES.THREAD_BODY}, .${CLASSES.EDITOR}`) || null
@@ -314,7 +315,7 @@ class CommentOverlay {
         ? this.activeThreadPopover.querySelector(`.${CLASSES.THREAD_META}`)
         : this.activeThreadPopover
             .querySelector(
-              `.${CLASSES.THREAD_REPLY}[data-reply-id="${replyId}"]`
+              `.${CLASSES.THREAD_REPLY}[data-reply-id="${cssAttrValue(replyId)}"]`
             )
             ?.querySelector(`.${CLASSES.THREAD_META}`);
     if (
@@ -864,9 +865,7 @@ class CommentOverlay {
     );
     circle.addEventListener("mouseleave", () => {
       setTimeout(() => {
-        const tooltip = this.shadowRoot.querySelector(
-          `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
-        );
+        const tooltip = this._tooltipEl(comment.id);
         if (tooltip && !tooltip.matches(":hover")) {
           tooltip.remove();
         }
@@ -875,10 +874,7 @@ class CommentOverlay {
 
     circle.addEventListener("click", (e) => {
       e.stopPropagation();
-      const tooltip = this.shadowRoot.querySelector(
-        `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
-      );
-      if (tooltip) tooltip.remove();
+      this._tooltipEl(comment.id)?.remove();
       // The marker toggles its own thread: clicking the active marker
       // closes it rather than tearing the popover down and rebuilding an
       // identical one. Only its own — clicking a different marker still
@@ -912,14 +908,11 @@ class CommentOverlay {
 
   showCommentTooltip(circle, comment) {
     const existingPopover = this.shadowRoot.querySelector(
-      `.${CLASSES.THREAD_POPOVER}[data-for="${comment.id}"]`
+      `.${CLASSES.THREAD_POPOVER}[data-for="${cssAttrValue(comment.id)}"]`
     );
     if (existingPopover) return;
 
-    const existingTooltip = this.shadowRoot.querySelector(
-      `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
-    );
-    if (existingTooltip) return;
+    if (this._tooltipEl(comment.id)) return;
 
     const tooltip = createTooltip(comment, this.strings, this.locale);
     this.shadowRoot.appendChild(tooltip);
@@ -1030,10 +1023,7 @@ class CommentOverlay {
   showThreadPopover(circle, comment) {
     this.closeThreadPopover();
 
-    const existingTooltip = this.shadowRoot.querySelector(
-      `.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`
-    );
-    if (existingTooltip) existingTooltip.remove();
+    this._tooltipEl(comment.id)?.remove();
 
     // Keeps the selected marker visibly picked out while its thread is open
     // — same growth as hover, plus a ring, so it survives the pointer
@@ -1342,6 +1332,21 @@ class CommentOverlay {
    */
   _findComment(id) {
     return this.comments.find((c) => sameId(c.id, id));
+  }
+
+  /**
+   * The hover tooltip currently open for a comment, if any. The one place
+   * the `[data-for]` selector is built, so a host id carrying a quote is
+   * escaped once instead of at five call sites.
+   * @param {import('./index.d.ts').CommentId} id
+   * @returns {HTMLElement | null}
+   */
+  _tooltipEl(id) {
+    return (
+      this.shadowRoot?.querySelector(
+        `.${CLASSES.TOOLTIP}[data-for="${cssAttrValue(id)}"]`
+      ) ?? null
+    );
   }
 
   /**
@@ -2096,9 +2101,7 @@ class CommentOverlay {
   // open thread popover floating on the page (e.g. above the modal that
   // now covers the marker).
   _dismissMarkerUi(comment) {
-    this.shadowRoot
-      .querySelector(`.${CLASSES.TOOLTIP}[data-for="${comment.id}"]`)
-      ?.remove();
+    this._tooltipEl(comment.id)?.remove();
     if (this.activeThreadPopover?.dataset.for === String(comment.id)) {
       this.closeThreadPopover();
     }

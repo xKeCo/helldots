@@ -443,15 +443,22 @@ export const createCommentBox = (strings = defaultStrings) => {
 };
 
 /**
- * Attribute selector for a comment's marker circle. loadComments accepts
- * arbitrary host ids, so a quote or backslash in the id would otherwise make
- * every querySelector throw. Escaped by hand because jsdom (where the whole
- * test suite runs) does not implement CSS.escape.
+ * Escapes a value for interpolation inside a double-quoted CSS attribute
+ * selector. loadComments accepts arbitrary host ids, so a quote or backslash
+ * in one would otherwise make every querySelector throw. Escaped by hand
+ * because jsdom (where the whole test suite runs) does not implement
+ * CSS.escape.
+ * @param {string | number} value
+ * @returns {string}
+ */
+export const cssAttrValue = (value) => String(value).replace(/[\\"]/g, "\\$&");
+
+/**
+ * Attribute selector for a comment's marker circle.
  * @param {string | number} id
  * @returns {string}
  */
-export const circleSelector = (id) =>
-  `[data-comment-id="${String(id).replace(/[\\"]/g, "\\$&")}"]`;
+export const circleSelector = (id) => `[data-comment-id="${cssAttrValue(id)}"]`;
 
 /**
  * A comment's (or reply's) attached screenshots, tolerating the singular
