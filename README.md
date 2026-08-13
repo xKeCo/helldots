@@ -182,6 +182,25 @@ OS: iOS 17.2
 
 ### Callbacks
 
+Every change is also available as one stream, which is usually what you want
+when the whole thing syncs to a single endpoint:
+
+```js
+createCommentOverlay({
+  onChange: (event) => {
+    // "comment:created" | "comment:edited" | "comment:deleted"
+    // "comment:status-changed" | "comment:updated" | "comment:anchor-lost"
+    // "reply:added" | "reply:deleted" | "reply:edited"
+    api.post("/helldots-events", event);
+  },
+});
+```
+
+`ChangeEvent` is a discriminated union: switch on `event.type` and
+TypeScript narrows the payload. The specific callbacks below carry the same
+events at the same moments — subscribe either way, or both. A handler that
+throws is caught and warned about, never rolling back the change.
+
 | Callback                          | Fires when                                         |
 | --------------------------------- | -------------------------------------------------- |
 | `onCommentCreated(comment)`       | A new comment is saved                             |

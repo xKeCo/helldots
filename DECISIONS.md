@@ -1292,3 +1292,30 @@ hosts inherit no listeners. The `navigate` option is the mirror image:
 the widget's own cross-page jump rides the host's router instead of
 location.assign, and the sessionStorage handoff resolves on the next
 notifyNavigation() instead of the next page load.
+
+## Fase 5.4: one dispatcher, two shapes of subscription
+
+Nine specific callbacks are right for a host that cares about one or two
+things. A host that mirrors everything to one endpoint had to wire all nine
+and re-derive "what happened" from which function fired. `onChange` is that
+stream, typed as a discriminated union on `type`.
+
+The nine callbacks are **kept**, not deprecated: they are the documented API
+every existing consumer wired, and a convenience is not a reason to break
+them. Both flow through one private `_emit(type, callbackArgs, payload)`,
+driven by a `CHANGE_CALLBACKS` table that pairs each event type with its
+callback name. That table is the point: a new event cannot join the stream
+while forgetting the callback (or vice versa), and the two can never
+disagree about when they fire.
+
+Two deliberate calls:
+
+- **Host handlers are isolated.** `_emit` wraps each in try/catch and warns.
+  This is a behavior change: a throwing callback used to propagate out of
+  the mutation that called it, so `editComment` could throw _after_ having
+  already edited the comment — leaving the caller to believe nothing
+  happened. Swallowing (and logging) is the honest choice; the mutation is
+  done either way, and one bad subscriber must not take its sibling down.
+- **`clearComments()` stays silent on the stream too**, for the same reason
+  it fires no `onCommentDeleted`: the host initiated the bulk reset and
+  would only hear its own action echoed back N times.

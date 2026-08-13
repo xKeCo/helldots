@@ -100,6 +100,37 @@ export interface SerializedComment {
   reactions?: Record<string, string[]>;
 }
 
+/**
+ * Everything that can change, as one discriminated union. Switch on `type`
+ * and TypeScript narrows the rest of the fields for you.
+ *
+ * The nine specific callbacks below carry exactly the same events at
+ * exactly the same moments; subscribe either way, or both.
+ */
+export type ChangeEvent =
+  | { type: "comment:created"; comment: SerializedComment }
+  | { type: "comment:edited"; comment: SerializedComment }
+  | { type: "comment:deleted"; id: CommentId }
+  | { type: "comment:status-changed"; comment: SerializedComment }
+  /** Type, priority or tags changed. */
+  | { type: "comment:updated"; comment: SerializedComment }
+  | { type: "comment:anchor-lost"; comment: SerializedComment }
+  | {
+      type: "reply:added";
+      comment: SerializedComment;
+      reply: CommentReply;
+    }
+  | {
+      type: "reply:deleted";
+      comment: SerializedComment;
+      reply: CommentReply;
+    }
+  | {
+      type: "reply:edited";
+      comment: SerializedComment;
+      reply: CommentReply;
+    };
+
 export interface CommentOverlayOptions {
   shortcutKey?: string;
   shortcutModifier?: "alt" | "ctrl" | "shift";
@@ -136,6 +167,14 @@ export interface CommentOverlayOptions {
    * `notifyNavigation()` call from the router's hook. Default: false.
    */
   autoDetectNavigation?: boolean;
+  /**
+   * Single subscription point: fires for every change, alongside whichever
+   * specific callback below carries the same event. Handy when a host syncs
+   * everything to one endpoint instead of wiring nine functions. A handler
+   * that throws is caught and warned about — it never rolls back the
+   * mutation that emitted it.
+   */
+  onChange?: (event: ChangeEvent) => void;
   /** Fired after a new comment is saved. */
   onCommentCreated?: (comment: SerializedComment) => void;
   /** Fired after a reply is added to any comment. */

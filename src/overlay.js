@@ -66,6 +66,22 @@ const normalizeTags = (tags) => {
 // in a persisted array is a silently broken thumbnail waiting to happen.
 const onlyStrings = (values) => values.filter((v) => typeof v === "string");
 
+// Every change the host can hear about, as `type` → the specific callback
+// that has always carried it. One table so a new event cannot be added to
+// the stream while forgetting the callback (or the other way round), and so
+// the two can never disagree about when they fire.
+const CHANGE_CALLBACKS = {
+  "comment:created": "onCommentCreated",
+  "comment:edited": "onCommentEdited",
+  "comment:deleted": "onCommentDeleted",
+  "comment:status-changed": "onCommentStatusChanged",
+  "comment:updated": "onCommentUpdated",
+  "comment:anchor-lost": "onAnchorLost",
+  "reply:added": "onReplyAdded",
+  "reply:deleted": "onReplyDeleted",
+  "reply:edited": "onReplyEdited",
+};
+
 class CommentOverlay {
   /**
    * @param {import('./index.d.ts').CommentOverlayOptions} [options]
@@ -313,6 +329,40 @@ class CommentOverlay {
     this.showInbox();
     this.inboxView.clearNotice();
     this.inboxView.openDetail(comment.id);
+  }
+
+  /**
+   * The one place a change leaves the widget. Fires the specific callback
+   * that has always carried this event and then the onChange stream, so a
+   * host can subscribe either way — or both — and never sees the two
+   * disagree about what happened or when.
+   *
+   * Host handlers are isolated: a subscriber that throws must not roll back
+   * a mutation that already happened, and must not stop its sibling from
+   * hearing about it either.
+   *
+   * @param {keyof typeof CHANGE_CALLBACKS} type
+   * @param {any[]} callbackArgs arguments for the specific callback, in the
+   *   order it has always taken them
+   * @param {Object} payload the event's own fields, minus `type`
+   */
+  _emit(type, callbackArgs, payload) {
+    const name = CHANGE_CALLBACKS[type];
+    const callback = this.options[name];
+    if (typeof callback === "function") {
+      try {
+        callback(...callbackArgs);
+      } catch (err) {
+        console.warn(`HellDots: ${name} handler threw`, err);
+      }
+    }
+    if (typeof this.options.onChange === "function") {
+      try {
+        this.options.onChange({ type, ...payload });
+      } catch (err) {
+        console.warn("HellDots: onChange handler threw", err);
+      }
+    }
   }
 
   /** The shareable URL for a comment, as "Copy link" builds it. */
@@ -672,7 +722,8 @@ class CommentOverlay {
 
     this.comments.push(comment);
     this._syncStorage();
-    this.options.onCommentCreated?.(this._serializeComment(comment));
+    const created = this._serializeComment(comment);
+    this._emit("comment:created", [created], { comment: created });
     this.renderCommentCircle(comment);
     this.hideCommentBox();
     this.toggleCommentMode();
@@ -996,10 +1047,12 @@ class CommentOverlay {
     };
     comment.replies.push(reply);
     this._syncStorage();
-    this.options.onReplyAdded?.(
-      this._serializeComment(comment),
-      this._serializeReply(reply)
-    );
+    const serialized = this._serializeComment(comment);
+    const serializedReply = this._serializeReply(reply);
+    this._emit("reply:added", [serialized, serializedReply], {
+      comment: serialized,
+      reply: serializedReply,
+    });
     return reply;
   }
 
@@ -1020,10 +1073,12 @@ class CommentOverlay {
 
     const [reply] = comment.replies.splice(index, 1);
     this._syncStorage();
-    this.options.onReplyDeleted?.(
-      this._serializeComment(comment),
-      this._serializeReply(reply)
-    );
+    const serialized = this._serializeComment(comment);
+    const serializedReply = this._serializeReply(reply);
+    this._emit("reply:deleted", [serialized, serializedReply], {
+      comment: serialized,
+      reply: serializedReply,
+    });
     return true;
   }
 
@@ -1056,7 +1111,8 @@ class CommentOverlay {
         `${this.strings.commentAriaLabelPrefix}${comment.text}`
       );
     this._syncStorage();
-    this.options.onCommentEdited?.(this._serializeComment(comment));
+    const edited = this._serializeComment(comment);
+    this._emit("comment:edited", [edited], { comment: edited });
     return true;
   }
 
@@ -1077,10 +1133,12 @@ class CommentOverlay {
     reply.text = next;
     reply.editedAt = new Date().toISOString();
     this._syncStorage();
-    this.options.onReplyEdited?.(
-      this._serializeComment(comment),
-      this._serializeReply(reply)
-    );
+    const serialized = this._serializeComment(comment);
+    const serializedReply = this._serializeReply(reply);
+    this._emit("reply:edited", [serialized, serializedReply], {
+      comment: serialized,
+      reply: serializedReply,
+    });
     return true;
   }
 
@@ -1158,7 +1216,8 @@ class CommentOverlay {
     // (resolved styling + sink-to-bottom sorting) no matter where the
     // change came from — card, detail or thread popover.
     if (this.inboxView?.isOpen()) this.inboxView.refresh();
-    this.options.onCommentStatusChanged?.(this._serializeComment(comment));
+    const changed = this._serializeComment(comment);
+    this._emit("comment:status-changed", [changed], { comment: changed });
     return true;
   }
 
@@ -1171,7 +1230,8 @@ class CommentOverlay {
   _commitUpdate(comment) {
     this._syncStorage();
     if (this.inboxView?.isOpen()) this.inboxView.refresh();
-    this.options.onCommentUpdated?.(this._serializeComment(comment));
+    const updated = this._serializeComment(comment);
+    this._emit("comment:updated", [updated], { comment: updated });
     return true;
   }
 
@@ -1245,7 +1305,7 @@ class CommentOverlay {
       writeStoredComments(merged);
       this._storedCache = merged;
     }
-    this.options.onCommentDeleted?.(id);
+    this._emit("comment:deleted", [id], { id });
     return true;
   }
 
@@ -1377,7 +1437,8 @@ class CommentOverlay {
       } else {
         this.comments.push(comment);
         orphaned++;
-        this.options.onAnchorLost?.(this._serializeComment(comment));
+        const lost = this._serializeComment(comment);
+        this._emit("comment:anchor-lost", [lost], { comment: lost });
       }
     }
 
@@ -1440,7 +1501,8 @@ class CommentOverlay {
         comment.container = null;
         comment.anchorState = "orphaned";
         orphaned++;
-        this.options.onAnchorLost?.(this._serializeComment(comment));
+        const lost = this._serializeComment(comment);
+        this._emit("comment:anchor-lost", [lost], { comment: lost });
       }
     }
 
