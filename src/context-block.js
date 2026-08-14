@@ -12,7 +12,7 @@
 // mutation.
 
 import { CLASSES } from "./constants.js";
-import { CARET_ICON_SVG } from "./components.js";
+import { CARET_ICON_SVG, wireScreenshotLightbox } from "./components.js";
 
 /**
  * @param {any} comment
@@ -66,11 +66,13 @@ export const createContextBlock = (
     img.className = CLASSES.SCREENSHOT_IMG;
     img.src = contextScreenshot;
     img.alt = strings.autoScreenshotLabel;
-    img.addEventListener("click", (e) => {
-      e.stopPropagation();
-      onShowLightbox(contextScreenshot);
-    });
     body.appendChild(img);
+
+    // Through the shared helper rather than a click listener of its own:
+    // this thumbnail opens the lightbox like every other one, so it needs
+    // the same role="button" + tabindex + Enter/Space treatment. Wiring it
+    // by hand here is exactly the drift the helper exists to prevent.
+    wireScreenshotLightbox(body, onShowLightbox);
   }
 
   if (context) {
