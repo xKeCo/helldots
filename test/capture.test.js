@@ -4,6 +4,7 @@ import {
   cropRegion,
   cropViewport,
   AUTO_SCALE,
+  canEmbedWebFonts,
 } from "../src/capture.js";
 import { TAG_NAME } from "../src/root-element.js";
 import { domToCanvas } from "modern-screenshot";
@@ -14,13 +15,16 @@ vi.mock("modern-screenshot", () => ({
 
 const makeFakeCanvas = () => {
   const drawImage = vi.fn();
+  // fillRect is part of the contract now: every crop lays the page
+  // background down before drawing the render over it.
+  const fillRect = vi.fn();
   const canvas = {
     width: 0,
     height: 0,
-    getContext: vi.fn(() => ({ drawImage })),
+    getContext: vi.fn(() => ({ drawImage, fillRect, fillStyle: "" })),
     toDataURL: vi.fn(() => "data:image/png;base64,cropped"),
   };
-  return { canvas, drawImage };
+  return { canvas, drawImage, fillRect };
 };
 
 afterEach(() => {
@@ -87,7 +91,7 @@ describe("renderPage", () => {
     vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
     await renderPage({ scale: 0.5 });
     expect(domToCanvas).toHaveBeenCalledWith(
-      document.body,
+      document.documentElement,
       expect.objectContaining({ scale: 0.5 })
     );
   });
@@ -96,7 +100,7 @@ describe("renderPage", () => {
     vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
     await renderPage();
     expect(domToCanvas).toHaveBeenCalledWith(
-      document.body,
+      document.documentElement,
       expect.objectContaining({ scale: 1 })
     );
   });
@@ -110,7 +114,7 @@ describe("renderPage", () => {
     await renderPage();
 
     expect(domToCanvas).toHaveBeenCalledWith(
-      document.body,
+      document.documentElement,
       expect.objectContaining({ backgroundColor: "#ffffff" })
     );
   });
@@ -122,7 +126,7 @@ describe("renderPage", () => {
     await renderPage();
 
     expect(domToCanvas).toHaveBeenCalledWith(
-      document.body,
+      document.documentElement,
       expect.objectContaining({ backgroundColor: "rgb(28, 28, 30)" })
     );
   });
@@ -210,5 +214,158 @@ describe("renderPage filter", () => {
     expect(options.filter(document.createElement(TAG_NAME))).toBe(false);
     expect(options.filter(document.body)).toBe(true);
     expect(options.filter(document.createTextNode("text node"))).toBe(true);
+  });
+});
+
+describe("web font embedding under a Content Security Policy", () => {
+  // modern-screenshot reads @font-face rules by parking a <style> in a
+  // detached document. That element inherits the page's CSP, so a strict
+  // `style-src` leaves `.sheet` null and the render throws on
+  // `null.cssRules` — the whole capture is lost, not just the fonts.
+  // Verified in Chrome: with `font: false` the same policy renders fine.
+  const withDetachedSheet = (sheet) =>
+    vi.spyOn(document.implementation, "createHTMLDocument").mockReturnValue(
+      /** @type {any} */ ({
+        head: { appendChild: () => {} },
+        createElement: () => ({ sheet }),
+      })
+    );
+
+  it("reports web fonts as embeddable when the detached sheet parses", () => {
+    withDetachedSheet({});
+    expect(canEmbedWebFonts()).toBe(true);
+  });
+
+  it("reports them as unembeddable when the policy blocks the sheet", () => {
+    withDetachedSheet(null);
+    expect(canEmbedWebFonts()).toBe(false);
+  });
+
+  it("reports them as unembeddable when probing throws outright", () => {
+    vi.spyOn(document.implementation, "createHTMLDocument").mockImplementation(
+      () => {
+        throw new Error("blocked");
+      }
+    );
+    expect(canEmbedWebFonts()).toBe(false);
+  });
+
+  it("keeps fonts on when nothing blocks them, so captures stay faithful", async () => {
+    withDetachedSheet({});
+    vi.mocked(domToCanvas).mockResolvedValue({ width: 1, height: 1 });
+
+    await renderPage();
+
+    expect(vi.mocked(domToCanvas).mock.calls[0][1]).not.toHaveProperty("font");
+  });
+
+  it("drops fonts rather than the whole screenshot under a strict policy", async () => {
+    withDetachedSheet(null);
+    vi.mocked(domToCanvas).mockResolvedValue({ width: 1, height: 1 });
+
+    await renderPage();
+
+    expect(vi.mocked(domToCanvas).mock.calls[0][1]).toMatchObject({
+      font: false,
+    });
+  });
+});
+
+describe("crops on pages shorter than the region being cut", () => {
+  // domToCanvas renders the BODY's box. On a page shorter than the viewport
+  // that canvas is shorter than the crop, so the uncovered strip stayed at
+  // the output canvas's initial transparent black — which JPEG encodes as a
+  // solid black band across the bottom of every automatic screenshot.
+  // Painting the page's own background first is what the user actually sees
+  // there: the browser paints html/body across the whole viewport.
+  const makePaintedCanvas = () => {
+    const calls = [];
+    const ctx = {
+      set fillStyle(v) {
+        calls.push(["fillStyle", v]);
+      },
+      fillRect: (...a) => calls.push(["fillRect", ...a]),
+      drawImage: (...a) => calls.push(["drawImage", a.length]),
+    };
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ctx,
+      toDataURL: () => "data:image/jpeg;base64,out",
+    };
+    return { canvas, calls };
+  };
+
+  it("paints the page background under the viewport crop, before the render", () => {
+    document.body.style.backgroundColor = "rgb(28, 28, 30)";
+    const { canvas, calls } = makePaintedCanvas();
+    vi.spyOn(document, "createElement").mockReturnValue(
+      /** @type {any} */ (canvas)
+    );
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(1000);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(800);
+
+    cropViewport({ width: 1000, height: 76 }, { outputScale: 1 });
+
+    expect(calls[0]).toEqual(["fillStyle", "rgb(28, 28, 30)"]);
+    expect(calls[1]).toEqual(["fillRect", 0, 0, 1000, 800]);
+    // The backdrop must go down first, or it would erase the render.
+    expect(calls[2][0]).toBe("drawImage");
+  });
+
+  it("falls back to white for a page that paints no background of its own", () => {
+    const { canvas, calls } = makePaintedCanvas();
+    vi.spyOn(document, "createElement").mockReturnValue(
+      /** @type {any} */ (canvas)
+    );
+
+    cropViewport({ width: 10, height: 10 }, {});
+
+    expect(calls[0]).toEqual(["fillStyle", "#ffffff"]);
+  });
+
+  it("paints it under a drag selection too", () => {
+    document.body.style.backgroundColor = "rgb(28, 28, 30)";
+    const { canvas, calls } = makePaintedCanvas();
+    vi.spyOn(document, "createElement").mockReturnValue(
+      /** @type {any} */ (canvas)
+    );
+
+    cropRegion(
+      { width: 500, height: 76 },
+      {
+        left: 0,
+        top: 0,
+        width: 400,
+        height: 300,
+      }
+    );
+
+    expect(calls[0]).toEqual(["fillStyle", "rgb(28, 28, 30)"]);
+    expect(calls[1]).toEqual(["fillRect", 0, 0, 400, 300]);
+    expect(calls[2][0]).toBe("drawImage");
+  });
+});
+
+describe("what the render is anchored to", () => {
+  // Rendering <body> puts the clone somewhere the UA's `body { margin: 8px }`
+  // applies again, even on a page that zeroed it. Every flow element lands 8px
+  // right and 8px down inside a canvas that did not grow, so the last 8px fall
+  // off the right edge — and a crop taken at live coordinates is off by that
+  // much. Measured in Chrome on the playground: body → content at (7,8) and
+  // 799px wide; documentElement → (0,0) and the full 806px.
+  //
+  // <html> carries no such margin, so page coordinates and canvas pixels line
+  // up 1:1, which is the whole contract cropRegion depends on.
+  it("renders the document element, so page coordinates map 1:1", async () => {
+    vi.mocked(domToCanvas).mockResolvedValue(
+      /** @type {any} */ ({ width: 10, height: 10 })
+    );
+
+    await renderPage();
+
+    expect(vi.mocked(domToCanvas).mock.calls[0][0]).toBe(
+      document.documentElement
+    );
   });
 });

@@ -146,6 +146,24 @@ export interface CommentOverlayOptions {
   persistence?: "localStorage" | "none";
   /** Capture a viewport screenshot and environment snapshot on every new comment. Default: true. */
   autoScreenshot?: boolean;
+  /**
+   * Fetch stylesheets the renderer cannot read, so their web fonts survive
+   * into screenshots. Default: false.
+   *
+   * A cross-origin `<link>` (Google Fonts and friends) throws `SecurityError`
+   * on `cssRules`, so its `@font-face` never reaches the capture and the text
+   * is rendered in a fallback face. The fallback's metrics differ, which
+   * shifts glyphs sideways — a drag selection tight around a few letters then
+   * comes back holding the wrong ones. Enabling this re-fetches those sheets
+   * (the same URLs the page already loaded, cached per session) so the
+   * capture matches the page.
+   *
+   * Off by default because a comment widget making third-party requests
+   * should be the host's decision. Leave it off and captures of such a page
+   * stay misaligned; a host can also fix it at the source by self-hosting the
+   * font or adding `crossorigin` to the `<link>`.
+   */
+  embedCrossOriginFonts?: boolean;
   /** Identity used as the author of new comments and replies. */
   user?: { name: string };
   /**

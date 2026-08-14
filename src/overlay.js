@@ -95,6 +95,7 @@ class CommentOverlay {
       shortcutKey: options.shortcutKey || (this.isMac ? "c" : "C"),
       shortcutModifier: options.shortcutModifier || "alt",
       autoScreenshot: options.autoScreenshot !== false,
+      embedCrossOriginFonts: options.embedCrossOriginFonts === true,
       ...options,
     };
     this.locale = this.options.locale || detectLocale();
@@ -184,6 +185,7 @@ class CommentOverlay {
     this._captureFlow = new CaptureFlow({
       host: this.shadowRoot,
       autoScreenshot: this.options.autoScreenshot,
+      embedCrossOriginFonts: this.options.embedCrossOriginFonts,
       // The pending-attachments array stays here, next to the comment box
       // that previews it — the flow only reports what a drag captured.
       onRegionCaptured: (dataUrl) => {

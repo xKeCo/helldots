@@ -16,13 +16,21 @@ export class CaptureFlow {
    * @param {{
    *   host: ShadowRoot,
    *   autoScreenshot: boolean,
+   *   embedCrossOriginFonts?: boolean,
    *   onRegionCaptured: (dataUrl: string) => void,
    *   onPlace: (x: number, y: number) => Promise<void>,
    * }} deps `host` is where the selection rectangle mounts.
    */
-  constructor({ host, autoScreenshot, onRegionCaptured, onPlace }) {
+  constructor({
+    host,
+    autoScreenshot,
+    embedCrossOriginFonts = false,
+    onRegionCaptured,
+    onPlace,
+  }) {
     this.host = host;
     this.autoScreenshot = autoScreenshot;
+    this.embedCrossOriginFonts = embedCrossOriginFonts;
     this.onRegionCaptured = onRegionCaptured;
     this.onPlace = onPlace;
 
@@ -96,7 +104,10 @@ export class CaptureFlow {
           // and the automatic JPEG context shot. Unlike the click path this
           // one awaits — the region crop IS what the user asked for, and
           // the box should open with its preview already attached.
-          const full = await renderPage({ scale: 1 });
+          const full = await renderPage({
+            scale: 1,
+            embedCrossOriginFonts: this.embedCrossOriginFonts,
+          });
           const dataUrl = cropRegion(full, { left, top, width, height });
           if (dataUrl) this.onRegionCaptured(dataUrl);
           if (this.autoScreenshot) {
@@ -128,7 +139,10 @@ export class CaptureFlow {
    */
   armClickCapture() {
     if (!this.autoScreenshot || this.pendingCapture) return;
-    this.pendingCapture = renderPage({ scale: AUTO_SCALE })
+    this.pendingCapture = renderPage({
+      scale: AUTO_SCALE,
+      embedCrossOriginFonts: this.embedCrossOriginFonts,
+    })
       .then((full) => cropViewport(full, { sourceScale: AUTO_SCALE }))
       .catch((err) => {
         console.warn("HellDots: automatic screenshot failed", err);

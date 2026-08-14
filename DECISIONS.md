@@ -1355,6 +1355,155 @@ fallback; the adopting path is driven in `test/styles-mount.test.js` by
 declaring the property the way a browser does, and was confirmed for real
 in Chrome under a strict CSP.
 
+## The same CSP also broke the screenshot, one layer down
+
+Styling the widget under `style-src 'self'` was only half of it. Pre-release
+testing of 0.5.0 found the automatic capture still failing under that policy,
+and the cause was not ours: `modern-screenshot` embeds web fonts by parking a
+`<style>` in a document from `createHTMLDocument` and reading back `.sheet`
+to walk its `@font-face` rules. That element inherits the host page's CSP,
+so the browser refuses to parse it, `.sheet` is null, and the render throws
+`Cannot read properties of null (reading 'cssRules')`. The failure was not
+confined to fonts — it took the whole screenshot with it.
+
+The library accepts `font: false`, which skips that path entirely. Measured
+in Chrome on the same page under both policies: strict CSP renders nothing by
+default and renders fine with `font: false`; with no CSP both settings render.
+
+`canEmbedWebFonts()` performs exactly the operation that fails — detached
+document, `<style>`, read `.sheet` — and `renderPage` passes `font: false`
+only when it comes back null. Three things about that shape:
+
+- **Probing beats retrying.** A try-then-retry would render twice on every
+  strict-CSP capture, and the render is the expensive part of the whole
+  feature. A detached document costs nothing next to it.
+- **Not applied unconditionally.** `font: false` means text in a downloaded
+  web font is substituted inside the image. Hosts without a strict policy —
+  nearly all of them — keep full fidelity; the trade is only taken where the
+  alternative is no image at all.
+- **The probe fails safe.** Anything unexpected (a browser that throws, a
+  platform without `createHTMLDocument`) reads as "cannot embed", which
+  degrades a capture rather than losing one.
+
+The limitation that remains is deliberate: under a strict `style-src` the
+capture is faithful in everything except downloaded fonts. A host that wants
+those too can grant `modern-screenshot`'s inline style a hash or nonce.
+
+## The crop paints a backdrop, because a canvas starts transparent
+
+Comparing captures across CSP policies turned up something neither policy
+caused: on a page shorter than the viewport, every automatic screenshot had a
+solid black band under the content. Measured on a 77px body in a 720px
+viewport, the bottom of the image read `1,1,1`.
+
+`domToCanvas` renders the `<body>` box, and `backgroundColor` paints that box
+— not the viewport. `cropViewport` then asks for a viewport-sized rect out of
+a canvas that is far shorter, so most of the output canvas is never drawn to
+and keeps its initial transparent black. PNG hides that; JPEG has no alpha
+channel and flattens it to black. That is why the drag capture never showed
+the bug and the automatic one always did.
+
+The fix is to fill before drawing, with `effectiveBackgroundColor()` — the
+same value handed to the renderer. It is not an arbitrary filler: the browser
+paints html/body across the whole viewport, so below a short page's content
+the background IS what the user is looking at. Both crops do it, so a drag
+selection running past the content behaves the same way.
+
+Order matters and is asserted in the tests: the backdrop goes down first, or
+it erases the render it was meant to sit behind.
+
+## A drag crop is only as correct as the render's typography
+
+Reported against 0.5.0: a short drag over the word "UI" in the playground's
+hero came back with the "U" clipped and dead space beside it. The obvious
+suspect was the crop arithmetic, and it was innocent — dropping two
+uniquely-coloured 6px markers at known page coordinates and finding them in
+the render proved the mapping is exactly 1:1.
+
+The render's _typography_ was wrong. The playground pulls Poppins from
+`fonts.googleapis.com`, a cross-origin `<link>` with no `crossorigin`
+attribute, so `cssRules` on that sheet throws `SecurityError`.
+`modern-screenshot` catches that and skips the sheet, so the `@font-face`
+never reaches the clone. The clone becomes an SVG rendered as an image — an
+isolated document with no network — so an un-inlined font is simply absent
+and the text reflows into `serif`. Different metrics, so every glyph sits at
+a different x than on screen.
+
+That is why the bug looked size-dependent. A large drag spans whole blocks,
+whose positions do not move, so the substitution reads as "the screenshot's
+font looks a bit off". A drag tight around a few glyphs is all inline text,
+where the drift is most of the crop.
+
+`fetch` succeeds where `cssRules` does not — font CDNs serve
+`Access-Control-Allow-Origin: *` — so `shimUnreadableFontRules` fetches those
+sheets, parks their rules in a same-origin `<style>` for the duration of the
+render, and lets `modern-screenshot` inline the binaries itself. Verified in
+Chrome: without it the clone carries `font-family: Poppins` and zero
+`@font-face`; with it, nine rules whose `src` are `data:font/woff2` URLs, and
+the crop frames what was selected.
+
+Four things that shaped the implementation:
+
+- **Only the `@font-face` blocks are injected.** Appending a third party's
+  entire stylesheet to the host's `<head>` would put its layout rules last in
+  the cascade and restyle the page mid-capture.
+- **Passing the CSS as `font.cssText` is not enough.** It reaches the clone,
+  but the `src` URLs stay remote and an SVG-as-image cannot fetch them. The
+  rules have to be readable for the library's own inlining to run.
+- **One request per sheet per session**, cached — the render already costs
+  far more, but a capture should not re-fetch on every drag.
+- **No new hosts are contacted.** The fetch targets URLs the page already
+  loaded. Where it is refused (no CORS, a `connect-src` policy) the capture
+  lands exactly where it did before, and the shim is skipped entirely when
+  the CSP probe already said fonts cannot be embedded.
+
+It ships **opt-in**, behind `embedCrossOriginFonts` (default `false`), which
+is a deliberate trade of correctness for restraint. Mounting a comment widget
+is not consent for it to start requesting third-party stylesheets on your
+users' behalf, and that call belongs to the host — a library that quietly
+adds outbound requests to a page is the kind of thing you find out about in
+an audit. The accepted cost is real and worth stating plainly: with the
+option off, a page whose font is served cross-origin still captures its text
+in a fallback face, and drag crops over that text are still misaligned. The
+README documents the cheaper fix that needs nothing from us — self-host the
+font, or add `crossorigin` to the `<link>` — because a host who does that
+gets a correct capture and no extra requests at all.
+
+## The render is anchored to `<html>`, not `<body>`
+
+Fixing the font above uncovered what it had been hiding. With the typography
+correct, drag crops were still wrong — now uniformly 8px to the right, where
+before the font substitution had dragged them the other way by more.
+
+Painting a landmark element magenta, rendering, and comparing its box in the
+canvas against `getBoundingClientRect` gave the number exactly: every element
+in normal flow landed at `+8, +8`, and the page's full-width band came back
+798px wide instead of 806 — translated inside a canvas that had not grown, so
+the last 8px fell off the right edge.
+
+8px in both axes is the user-agent's `body { margin: 8px }`. The playground
+zeroes it, and `getComputedStyle(document.body).margin` confirmed `0px`, so
+the margin was not coming from the live page: `domToCanvas(document.body)`
+clones the body into a document where the UA default applies to it again.
+Measured on the raw library call, with none of our options: body → content at
+`(7, 8)`, 799px wide; `documentElement` → `(0, 0)`, the full 806px.
+
+`<html>` carries no such margin, so the fix is to anchor the render there.
+Page coordinates and canvas pixels then map 1:1 — the contract `cropRegion`
+and `cropViewport` were already written against.
+
+Two notes for whoever meets this next:
+
+- **Absolutely-positioned probes will not show this.** An earlier pass
+  dropped two coloured 6px markers at known coordinates and found them at
+  exactly those pixels, which looked like proof the mapping was sound. It was
+  not: an absolutely-positioned box resolves against its containing block and
+  skips the body margin entirely, while everything in flow does not. Landmarks
+  used to verify layout have to be in normal flow.
+- **The bug was there before the font fix**, invisible underneath it. Two
+  independent errors in the same pixels, pushing opposite ways, is why the
+  first report read as "shifted left" and the second as "shifted right".
+
 ## Marker placement in containers shorter than the marker
 
 A comment left on a navbar row landed ~10px above where it was clicked (up

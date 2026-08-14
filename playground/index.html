@@ -410,6 +410,12 @@
       autoInit: true,
       persistence: 'localStorage',
       user: { name: 'Kevin Collazos' },
+      // This page pulls Poppins from fonts.googleapis.com, whose cssRules the
+      // renderer cannot read — without this the captured text falls back to a
+      // different face and drag crops come back holding the wrong glyphs. Off
+      // by default in the library; on here because this page is exactly the
+      // case the option exists for. See README, "Web fonts in screenshots".
+      embedCrossOriginFonts: true,
     });
 
     const backdrop = document.getElementById('hd-modal-backdrop');

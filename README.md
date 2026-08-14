@@ -116,6 +116,31 @@ orphaned rather than silently dropped.
 Set `autoScreenshot: false` to skip the capture — the render costs a moment
 on every comment, and some apps would rather not pay it.
 
+### Web fonts in screenshots
+
+A screenshot is not a screen grab: the browser exposes no way to rasterize
+the painted page from JavaScript, so the capture is a re-render of the DOM.
+Anything the re-render cannot reach is missing from it — web fonts included.
+
+A font loaded through a cross-origin `<link>` (Google Fonts and friends) is
+one of those. Reading `cssRules` on such a stylesheet throws `SecurityError`,
+so its `@font-face` never reaches the capture and the text comes out in a
+fallback face. That is not only cosmetic: the fallback's metrics differ, so
+glyphs sit at different positions than on screen, and a drag selection tight
+around a few letters can come back holding the wrong ones.
+
+Three ways out, cheapest first:
+
+- **Self-host the font**, or add `crossorigin` to the `<link>`. The
+  stylesheet becomes readable and the capture matches the page, with no
+  extra requests at capture time.
+- **`embedCrossOriginFonts: true`.** HellDots re-fetches those stylesheets
+  (the same URLs the page already loaded, cached per session) and hands them
+  to the renderer. Off by default: a comment widget making third-party
+  requests on your users' behalf should be your call, not ours.
+- **Leave it.** Captures of such a page stay misaligned where text is
+  concerned; everything else about them is correct.
+
 ## Triage
 
 Comments carry an optional type, priority and free-form tags. All three start
@@ -167,18 +192,19 @@ OS: iOS 17.2
 
 ## Options
 
-| Option                 | Type                             | Default             |                                                           |
-| ---------------------- | -------------------------------- | ------------------- | --------------------------------------------------------- |
-| `user`                 | `{ name: string }`               | `"Anonymous"`       | Author of new comments and replies                        |
-| `persistence`          | `"localStorage"` \| `"none"`     | `"none"`            | Auto save/restore, or handle it yourself via callbacks    |
-| `autoScreenshot`       | `boolean`                        | `true`              | Capture a screenshot and environment snapshot per comment |
-| `locale`               | `string`                         | browser language    | `"en"` and `"es"` ship; anything else falls back per key  |
-| `linkParam`            | `string`                         | `"helldotsComment"` | Query param used by "Copy link" URLs                      |
-| `navigate`             | `(page: string) => void`         | full page load      | SPA router hook for the widget's cross-page jumps         |
-| `autoDetectNavigation` | `boolean`                        | `false`             | Run `notifyNavigation()` on popstate (back/forward)       |
-| `shortcutKey`          | `string`                         | `"c"`               | Key that toggles comment mode                             |
-| `shortcutModifier`     | `"alt"` \| `"ctrl"` \| `"shift"` | `"alt"`             | Modifier for that key                                     |
-| `autoInit`             | `boolean`                        | `true`              | When `false`, returns an initializer to call yourself     |
+| Option                  | Type                             | Default             |                                                                   |
+| ----------------------- | -------------------------------- | ------------------- | ----------------------------------------------------------------- |
+| `user`                  | `{ name: string }`               | `"Anonymous"`       | Author of new comments and replies                                |
+| `persistence`           | `"localStorage"` \| `"none"`     | `"none"`            | Auto save/restore, or handle it yourself via callbacks            |
+| `autoScreenshot`        | `boolean`                        | `true`              | Capture a screenshot and environment snapshot per comment         |
+| `embedCrossOriginFonts` | `boolean`                        | `false`             | Fetch unreadable stylesheets so their web fonts reach the capture |
+| `locale`                | `string`                         | browser language    | `"en"` and `"es"` ship; anything else falls back per key          |
+| `linkParam`             | `string`                         | `"helldotsComment"` | Query param used by "Copy link" URLs                              |
+| `navigate`              | `(page: string) => void`         | full page load      | SPA router hook for the widget's cross-page jumps                 |
+| `autoDetectNavigation`  | `boolean`                        | `false`             | Run `notifyNavigation()` on popstate (back/forward)               |
+| `shortcutKey`           | `string`                         | `"c"`               | Key that toggles comment mode                                     |
+| `shortcutModifier`      | `"alt"` \| `"ctrl"` \| `"shift"` | `"alt"`             | Modifier for that key                                             |
+| `autoInit`              | `boolean`                        | `true`              | When `false`, returns an initializer to call yourself             |
 
 ### Callbacks
 

@@ -2623,7 +2623,13 @@ describe("automatic context capture", () => {
   const fakeOutCanvas = () => ({
     width: 0,
     height: 0,
-    getContext: () => ({ drawImage: vi.fn() }),
+    // fillRect too: the crop paints the page background before drawing the
+    // render over it, so a context without it fails the whole capture.
+    getContext: () => ({
+      drawImage: vi.fn(),
+      fillRect: vi.fn(),
+      fillStyle: "",
+    }),
     toDataURL: vi.fn(() => "data:image/jpeg;base64,auto"),
   });
 
@@ -2650,7 +2656,7 @@ describe("automatic context capture", () => {
 
     expect(domToCanvas).toHaveBeenCalledTimes(1);
     expect(domToCanvas).toHaveBeenCalledWith(
-      document.body,
+      document.documentElement,
       expect.objectContaining({ scale: 0.5 })
     );
   });
