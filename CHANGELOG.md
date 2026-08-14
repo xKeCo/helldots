@@ -1,5 +1,88 @@
 # Changelog
 
+## 0.5.0
+
+### Minor Changes
+
+- a68131b: SPA support: new `notifyNavigation()` re-syncs the widget after a client-side navigation — comments reclassify against the new pathname, anchors re-resolve against the new DOM, markers rebuild and the inbox moves onto the new page (deep links and the cross-page handoff included). New `navigate` option routes the widget's own cross-page jumps through the host's router instead of a full reload, and `autoDetectNavigation: true` opts into automatic re-sync on popstate.
+- db81943: New `onChange` option: one subscription point that fires for every change, typed as a discriminated union on `event.type` (`comment:created`, `reply:added`, `comment:status-changed`, …). The nine existing callbacks are unchanged and keep firing at the same moments — this is additive. Handlers that throw are now caught and warned about instead of propagating out of the mutation that already happened.
+- 34bf6a8: The inbox detail's Context section is now a disclosure you can fold away. It still opens expanded — that view is where you go to read everything — but the automatic screenshot and the environment rows can be collapsed to bring a long thread into view, the same control the thread popover already had. The choice sticks: it survives the rebuilds the detail does on every change, and stays put while stepping through comments with prev/next.
+- 3785b66: Two API additions: `addReply` now accepts a comment id as well as the live object (every sibling mutator already took ids; it returns `null` for an unknown id), and `clearComments()` removes every comment at once — markers, memory and their persisted entries — as the bulk reset a host needs to reconcile against its backend before a fresh `loadComments`. It deliberately fires no per-comment callbacks.
+
+### Patch Changes
+
+- 3785b66: Accessibility: dropdown menus honor the keyboard contract their `role="menu"` promises — Escape closes just the menu (never the popover behind it) and returns focus to its button, and Arrow/Home/End walk the items. Screenshot thumbnails are keyboard-operable (the lightbox was mouse-only). The lightbox announces itself as a dialog, takes focus on open and returns it on close; the inbox panel receives focus when it opens; the delete confirmation announces its message via `aria-describedby`; the page-filter chips sit in a proper `radiogroup`; and an edited comment's marker updates its accessible name.
+- 17c5b9e: Screenshots taken on a page shorter than the viewport no longer come out with
+  a solid black band below the content. The render covers the `<body>` box, so
+  anything past it was left at the canvas's transparent black and JPEG flattened
+  it to black; crops now lay the page's own background down first, which is what
+  the browser paints across the viewport there. Applies to both the automatic
+  capture and drag selections.
+- 60ffb2f: `cleanup()` called while the document is still loading now cancels the deferred mount. Previously the instance kept its `DOMContentLoaded` listener and mounted a zombie UI nobody held a handle to — exactly the construct-then-cleanup shape React 18 StrictMode produces in SSR apps.
+- 146bfdf: The automatic-context screenshot — the one the thread popover and the inbox
+  detail render under "Context" — can now be opened from the keyboard. It wired
+  its own click listener instead of going through the shared thumbnail helper,
+  so unlike every other screenshot in the widget it carried no `role="button"`,
+  no `tabindex` and no Enter/Space handler, leaving it reachable by mouse only.
+- 17c5b9e: The automatic screenshot now works under a strict `style-src` Content
+  Security Policy. `modern-screenshot` embeds web fonts through a `<style>` in
+  a detached document, which inherits the page's CSP; where the policy blocks
+  it the render threw and the capture was lost entirely. The widget now detects
+  that case up front and renders without font embedding, so the screenshot is
+  taken and only downloaded fonts are substituted inside the image. Hosts
+  without such a policy are unaffected and keep full font fidelity.
+- 60ffb2f: Dead code found by the library audit is gone: `debugPosition()` (the only `console.log` in the bundle), the unreachable `captureRegion` export, the never-assigned `comment-circle-wrapper` class and its stylesheet block, and the never-read `data-comment-text` attribute markers duplicated the full comment text into. See DECISIONS.md for what was kept and why.
+- 96f5ae4: Dropdowns now open upward when there is no room below them, instead of being clipped. The ⋯ menu on a thread reply extended past the bottom edge of the thread's scroll container, so reading it meant scrolling the thread first. The measurement is shared by every dropdown in the widget — the status, type and priority pickers, both ⋯ menus and the inbox filter — and is redone on each open. A menu that fits in neither direction still opens downward.
+- 17c5b9e: Drag-selected screenshots no longer come back holding the wrong glyphs on
+  pages whose web font is served cross-origin (Google Fonts and the like).
+  Reading `cssRules` on such a stylesheet throws, so its `@font-face` rules
+  never reached the renderer, the captured text fell back to a different face,
+  and its different metrics shifted every glyph sideways — a short drag over a
+  few letters came out clipped on one side with dead space on the other. Those
+  rules can now be fetched and made readable for the duration of the render, so
+  the capture matches the page.
+
+  This is opt-in through the new `embedCrossOriginFonts` option, default
+  `false`: re-fetching a third party's stylesheet mid-capture is network the
+  host did not sign up for by mounting a comment widget. Left off, such a page
+  captures exactly as it did before. A host that would rather fix it at the
+  source can self-host the font or add `crossorigin` to the `<link>`, which
+  makes the stylesheet readable and costs no requests at capture time.
+
+- 60ffb2f: Host-supplied comment ids containing quotes or backslashes no longer make marker lookups throw. `loadComments` accepts arbitrary ids, and every lookup interpolated them raw into an attribute selector, so a `"` in an id crashed `querySelector` mid-load and inside the position loop.
+- 746092c: The package is now explicitly ESM-only, and the UMD build dropped its misleading CommonJS footer: `module.exports = HellDots.default` implied a `require()` story the exports map never offered, and it exported only the factory, silently losing `CommentOverlay`. Plain `<script>` usage keeps the `HellDots` global via the CDN build; `require("helldots")` was already unsupported and now the docs say so.
+- b496999: Internal: `overlay.js` (~2,500 lines) is split into three modules along its real seams — `capture-flow.js` (drag + screenshot orchestration), `popover-controller.js` (thread popover lifecycle and editing) and `marker-engine.js` (positioning, occlusion, observers). No public API or behavior change; the overlay keeps compatibility facades for its internal surface.
+- c599bcb: The inbox list no longer rebuilds itself from scratch on every refresh: cards reconcile by comment id, unchanged cards (and their decoded thumbnails) are reused, and the scrolling container survives — so the list keeps its scroll position when a comment changes, resolves, or a marker's visibility flips mid-scroll.
+- 7fd0bb8: The widget now works under a strict `style-src` Content Security Policy: styles are delivered as constructed stylesheets (`adoptedStyleSheets`), which CSP does not block, falling back to an injected `<style>` where the platform lacks them. Previously a policy without `'unsafe-inline'` blocked both stylesheets and left the widget unstyled and unusable. `cleanup()` detaches the adopted sheet, and stylesheets the host app had already adopted are preserved.
+- d76c557: `cleanup()` removes the now-empty `helldots-root` host element from the page, and `loadComments` drops non-string entries from comment and reply `screenshots[]` arrays instead of rendering silently broken thumbnails.
+- 5b0c2a7: Fix: the hover tooltip, thread popover and reply-row lookups escape host ids before interpolating them into attribute selectors, matching the marker lookups. A comment or reply id containing a quote or backslash (accepted via `loadComments`) crashed the marker UI on hover.
+- a898a44: Fix: the storage merge and the inbox detail lookups compare ids on their string form like every other entry point, so a numeric legacy id and its string spelling can never duplicate a stored entry or miss the detail view.
+- 16e7546: Accessibility: the screenshot lightbox declares `aria-modal` and traps Tab on its close button — keyboard focus no longer walks into the page behind the backdrop while the dialog is open.
+- 13708a7: Performance: clicking to place a comment opens the comment box immediately — the automatic context capture renders in the background and is awaited at save time, instead of gating the box for hundreds of ms on heavy pages. Captures now exclude the widget from the render via a clone filter rather than hiding the whole UI, so nothing flashes off screen. Saving is guarded against double-submit while a capture is in flight.
+- 0d4e713: Fix: per-comment ResizeObservers are tracked by the id's string form, so deleting a legacy numeric-id comment through its string spelling (or vice versa) disconnects its observer instead of leaking it against a detached marker.
+- 5056c9d: Fix: configuring a custom shortcut now disables the default Alt+C — the hardcoded fallback chords fired unconditionally and could not be turned off. Custom Alt chords also work on macOS now: the matcher accepts the physical key (`e.code`) for Alt combinations, where Option+letter types a dead character and `e.key` never spells the configured letter.
+- 3785b66: i18n hardening: a locale missing individual keys now falls back to English per key instead of rendering literal `undefined`; the hardcoded-string regression test scans every file in `src/` instead of only `components.js`; the `locale` option is typed `string` (unknown codes degrade to English, never break); and the Shift modifier label is localized like Alt and Ctrl always were.
+- 0f9fb09: The inbox no longer leaves its outside-click listener on `document`. Like the thread popover's, it is armed from a timer, so `closeInbox()` — and `cleanup()` through it — could be outrun and leave a listener nothing remained to remove. Re-opening an already-open inbox also overwrote both the pending timer and the handler, orphaning the previous pair; `notifyNavigation()` re-reads the deep link on every route change, so a long-lived SPA session accumulated one dead listener per navigation, each pinning the overlay it closed over.
+- 60ffb2f: `deleteComment`, `deleteReply`, `setCommentStatus`, `setCommentType`, `setCommentPriority` and `setCommentTags` now resolve a legacy numeric id in either spelling (number or string), as the type declarations always promised. They compared ids strictly, so an id that had crossed a JSON or URL boundary could be edited but silently not deleted or reclassified. Every id lookup now goes through one shared helper.
+- eec2cac: Markers no longer drift upward when a comment is left on a short element such as a navbar row. The position was clamped so that the marker's whole 28px box fit inside its anchor container, which is impossible in a container shorter than the marker — so every marker in a 36px navbar was pulled to 8px from its top, roughly 10px above the point the preview circle had just shown, and up to 25px for a click near the row's bottom edge. The clamp now keeps the clicked point inside the container and lets the marker's body overhang it. "Scroll to this comment" derives its target through the same clamp, so it can no longer disagree with where the marker was drawn.
+- b56408b: The injected stylesheet ships minified: esbuild never touches template-literal contents, so the sheet used to travel with its full indentation and internal CSS comments (~15 KB raw / ~2.3 KB gzip). A build plugin now strips comments and collapses whitespace inside `styles.js`'s templates — the ESM bundle drops from 31.8 to 29.5 KB gzip. Both builds also pin `target: "es2022"` so a future esbuild default can't silently raise the browser floor.
+- 875658a: The per-frame position loop no longer degrades with the number of comments: marker circles are indexed in a Map instead of a shadow-tree query per comment per frame, every pass measures all markers before writing any style (no more forced layout per marker), the occlusion hit-test runs at most every 150ms during scroll bursts (with a trailing pass to settle the end state), and flipping N markers in one frame refreshes the inbox once instead of N times. The per-comment MutationObservers — redundant with the page-wide one — are gone, along with their N callbacks per DOM mutation.
+- 875658a: With `persistence: "localStorage"`, every mutation used to re-read and JSON.parse the whole cross-page corpus (megabytes once context screenshots accumulate) before writing it back. The parsed corpus is now cached and kept in step with what the instance writes; a `storage` event from another tab drops the cache so the next sync re-reads instead of clobbering the other tab's write.
+- 95fe9f2: `cleanup()` can no longer be outrun by the thread popover's outside-click listener. The listener is armed from a timer, so tearing the widget down in the same tick as opening a thread left it to land on `document` afterwards, with nothing remaining to remove it — and because it closes over the popover controller, it kept that instance, its shadow root and its comments alive. A host that mounts and unmounts the widget (a route change, a React StrictMode double-invoke) accumulated one dead listener per mount.
+- 60ffb2f: The thread popover's remove-screenshot button regained `type="button"` and its localized `aria-label`, matching the comment-box and inbox copies of the same preview. Its capture warning also gained the `HellDots:` prefix every other diagnostic carries.
+- 17c5b9e: Drag-selected screenshots line up with the selection again. The render was
+  anchored to `<body>`, and the clone lands in a document where the user-agent's
+  `body { margin: 8px }` applies once more — even on a page that zeroed it — so
+  every element in normal flow sat 8px right and 8px down inside a canvas that
+  did not grow, losing 8px off the right edge and putting every crop 8px out.
+  Rendering `<html>` instead removes the offset: page coordinates and canvas
+  pixels now map 1:1, which is what the crops always assumed.
+- ed9af41: A reply's ⋯ menu now offers "Edit reply" as soon as the reply is created. The path that appends a just-submitted reply wired only the delete handler, so editing required closing the thread popover and opening it again — on the reply most likely to need a correction.
+- 3785b66: Schema hardening: serialized comments carry `schemaVersion: 1` (additive — future breaking changes get a hinge to detect newer payloads); an anchor written by a newer schema version resolves as orphaned instead of half-interpreted; malformed replies are dropped on load with the same id+text gate the comment itself passes; and file attachments reject non-images before reading them into data URLs.
+- 875658a: The screenshot-attachment pipeline (preview strip, file input with its 5-attachment cap, lightbox wiring) existed copied three to five times across the comment box, thread popover and inbox — and had already drifted once. It is now one set of shared helpers, and the marker size, caret icon, platform check and inbox filter reset each live in one place.
+- 60ffb2f: Type declarations caught up with the implementation: `addReply` declares its optional `screenshots` parameter (TS hosts no longer need a cast to attach reply screenshots) and `Comment` declares `editedAt`.
+- 66ea445: The UMD bundle's banner now credits modern-screenshot (MIT), which that artifact redistributes — same reasoning as the existing nanoid notice.
+
 ## 0.4.0 — 2026-08-12
 
 ### Upgrading from 0.3.0: locale keys
