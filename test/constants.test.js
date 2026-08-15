@@ -11,6 +11,8 @@ import {
   TYPE_COLORS,
   PRIORITIES,
   PRIORITY_COLORS,
+  STATUSES,
+  STATUS_COLORS,
 } from "../src/constants.js";
 
 const srcDir = resolve(process.cwd(), "src");
@@ -104,5 +106,22 @@ describe("classification constants", () => {
     for (const priority of PRIORITIES) {
       expect(PRIORITY_COLORS[priority]).toMatch(/^#[0-9A-F]{6}$/i);
     }
+  });
+
+  it("exposes the RF09 lifecycle in picker order", () => {
+    expect(STATUSES).toEqual(["open", "in_progress", "in_review", "resolved"]);
+  });
+
+  it("has a colour for every lifecycle state", () => {
+    // Including `open`: unlike type and priority, status is never unset, so
+    // no state may fall through to the transparent "nothing chosen" dot.
+    for (const status of STATUSES) {
+      expect(STATUS_COLORS[status]).toMatch(/^#[0-9A-F]{6}$/i);
+    }
+  });
+
+  it("keeps the lifecycle colours distinct from each other", () => {
+    const colours = Object.values(STATUS_COLORS);
+    expect(new Set(colours).size).toBe(colours.length);
   });
 });

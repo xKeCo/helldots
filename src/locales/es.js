@@ -76,6 +76,7 @@ export default {
   moreOptions: "Más",
   statusOpen: "Abierto",
   statusInProgress: "En progreso",
+  statusInReview: "En revisión",
   statusResolved: "Resuelto",
   durationLessThanMinute: "<1m",
   resolvedInTemplate: "Resuelto en {n}",

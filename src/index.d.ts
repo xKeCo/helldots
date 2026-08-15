@@ -24,7 +24,7 @@ export interface CommentAnchor {
 export type AnchorState = "anchored" | "orphaned" | "inactive";
 
 /** RF09 — comment lifecycle state. */
-export type CommentStatus = "open" | "in_progress" | "resolved";
+export type CommentStatus = "open" | "in_progress" | "in_review" | "resolved";
 
 /** RF3 — comment category. `null` means deliberately unclassified. */
 export type CommentType = "bug" | "suggestion" | "question" | "improvement";

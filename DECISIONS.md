@@ -1715,3 +1715,47 @@ Two things this required:
 The state is deliberately not persisted across sessions: it is a reading
 preference for the panel that is open, and `localStorage` here is the
 comments' store, not the widget's UI settings.
+
+## "In review" joins the lifecycle, and `open` desaturates instead of vanishing
+
+RF09 shipped with three states — `open`, `in_progress`, `resolved` — and a
+colour for each. Adding a review step exposed the problem with that: the
+palette had no blue left that was not already the _default_ state's blue, and
+inventing a fourth hue would have put four saturated dots in a row where only
+three of them ever mean a decision was made.
+
+So `in_review` took the blue, and `open` moved to an unsaturated off-white
+grey (`#D1D1D6`). The three states a person actively moves a comment into keep
+the saturated colours and read as the signal; the state every comment is born
+in is still painted, just quiet.
+
+The rejected alternative was giving `open` no colour at all and letting it
+fall through to the `transparent` dot that type and priority use for their
+unset option. It is tempting — the fallback already exists, and "nobody has
+touched this" is roughly what `open` means — but the two are not the same
+thing. Type and priority genuinely have no value until someone picks one;
+status always has one. An empty ring in a row of filled ones reads as _failed
+to load_, not as _new_, and it is the one state where that misreading costs
+the most, since it is what most comments show most of the time.
+
+Three things this leans on:
+
+- **The label carries the meaning, the dot only ranks it.** `statusLabelOf`
+  runs on every surface, so "Open" is written out next to the dot in the
+  action strip and inside the badge row. Nothing is distinguishable by colour
+  alone (WCAG 1.4.1), which is what makes desaturating a state a matter of
+  emphasis rather than of information.
+- **Order in `STATUSES` is the picker's order.** `in_review` sits between
+  `in_progress` and `resolved` because that is the sequence people describe,
+  not because anything enforces the transitions. `setCommentStatus` still
+  accepts any state from any state.
+- **No migration is needed.** The union in `index.d.ts` grew, and the
+  `loadComments` guard already falls back to `open` for anything it does not
+  recognise, so a store written by an older version loads unchanged and a
+  store written by this one loads into an older version as all-open. The
+  `"closed"` → `"resolved"` fold from the original lifecycle is untouched.
+
+What this accepts: `in_review` shares `#2E90FA` with the marker cursor
+artwork. They never appear in the same slot — one is a page-level pin, the
+other a 12px dot in a menu — and the alternative was a fourth hue chosen only
+to avoid a coincidence.

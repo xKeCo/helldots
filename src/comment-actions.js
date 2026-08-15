@@ -40,6 +40,7 @@ export const statusLabelOf = (status, strings) =>
   ({
     open: strings.statusOpen,
     in_progress: strings.statusInProgress,
+    in_review: strings.statusInReview,
     resolved: strings.statusResolved,
   })[status] || strings.statusOpen;
 
@@ -300,7 +301,9 @@ export const createCommentActions = (
       action: "status",
       options: STATUSES,
       value: comment.status || "open",
-      colorOf: (status) => STATUS_COLORS[status] || "",
+      // Every STATUSES entry has a colour; the fallback only catches a status
+      // this build doesn't know, which loadComments already coerces to `open`.
+      colorOf: (status) => STATUS_COLORS[status] || STATUS_COLORS.open,
       labelOf: (status) => statusLabelOf(status, strings),
       tooltipLabel: strings.statusLabel,
       onSelect: (status) => onSetStatus(comment, status),

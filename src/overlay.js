@@ -1216,7 +1216,7 @@ class CommentOverlay {
 
   /**
    * RF09 — moves a comment through its lifecycle
-   * (open → in_progress → resolved → closed, in any order).
+   * (open → in_progress → in_review → resolved, in any order).
    * @param {import('./index.d.ts').CommentId} id
    * @param {import('./index.d.ts').CommentStatus} status
    * @returns {boolean} false when the id or status is unknown

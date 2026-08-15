@@ -76,7 +76,37 @@ describe("createCommentActions", () => {
     );
   });
 
-  it("opens a menu with the four RF09 states, localized, current one checked", () => {
+  it("paints open its own off-white dot, not the unset type's empty ring", () => {
+    const el = mount(makeComment({ status: "open" }));
+    const statusDot = el
+      .querySelector('[data-action="status"]')
+      .querySelector(`.${CLASSES.INBOX_STATUS_DOT}`);
+    const typeDot = el
+      .querySelector('[data-action="type"]')
+      .querySelector(`.${CLASSES.INBOX_STATUS_DOT}`);
+    const probe = document.createElement("span");
+    probe.style.backgroundColor = STATUS_COLORS.open;
+    expect(statusDot.style.backgroundColor).toBe(probe.style.backgroundColor);
+    // Status is never "unset", so it must not borrow the transparent dot the
+    // type and priority pickers use for their neutral option.
+    expect(typeDot.style.backgroundColor).toBe("transparent");
+    expect(statusDot.style.backgroundColor).not.toBe("transparent");
+  });
+
+  it("paints in_review blue, the colour open used to carry", () => {
+    const el = mount(makeComment({ status: "in_review" }));
+    const dot = el
+      .querySelector('[data-action="status"]')
+      .querySelector(`.${CLASSES.INBOX_STATUS_DOT}`);
+    const probe = document.createElement("span");
+    probe.style.backgroundColor = STATUS_COLORS.in_review;
+    expect(dot.style.backgroundColor).toBe(probe.style.backgroundColor);
+    expect(el.querySelector('[data-action="status"]').dataset.hdTooltip).toBe(
+      "Status: In review"
+    );
+  });
+
+  it("opens a menu with the four RF09 states in lifecycle order, localized, current one checked", () => {
     const el = createCommentActions(makeComment({ status: "in_progress" }), {
       strings: es,
       onCopy: vi.fn(),
@@ -95,6 +125,7 @@ describe("createCommentActions", () => {
     expect(options.map((o) => o.textContent)).toEqual([
       "Abierto",
       "En progreso",
+      "En revisión",
       "Resuelto",
     ]);
     const checked = options.find(

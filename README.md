@@ -151,6 +151,12 @@ neutral: the person reporting can classify, or not.
 | `type`     | `bug`, `suggestion`, `question`, `improvement`, or `null` |
 | `priority` | `high`, `medium`, `low`, or `null`                        |
 | `tags`     | any strings — trimmed, lowercased and de-duplicated       |
+| `status`   | `open`, `in_progress`, `in_review`, `resolved`            |
+
+The status is the one field that is never neutral: every comment starts `open`
+and moves through the lifecycle in any order. `open` is the only state painted
+in an unsaturated off-white, so the three states somebody actually moved a
+comment into are the ones that stand out.
 
 The inbox filters on all of them, combined with page and status. Resolved
 comments show how long they took, measured from creation to resolution.
@@ -227,17 +233,17 @@ TypeScript narrows the payload. The specific callbacks below carry the same
 events at the same moments — subscribe either way, or both. A handler that
 throws is caught and warned about, never rolling back the change.
 
-| Callback                          | Fires when                                         |
-| --------------------------------- | -------------------------------------------------- |
-| `onCommentCreated(comment)`       | A new comment is saved                             |
-| `onReplyAdded(comment, reply)`    | A reply is added to any comment                    |
-| `onReplyDeleted(comment, reply)`  | A reply is removed                                 |
-| `onCommentEdited(comment)`        | A comment's text is rewritten                      |
-| `onReplyEdited(comment, reply)`   | A reply's text is rewritten                        |
-| `onCommentStatusChanged(comment)` | Status moves between open / in progress / resolved |
-| `onCommentUpdated(comment)`       | Type, priority or tags change                      |
-| `onCommentDeleted(id)`            | A comment is removed                               |
-| `onAnchorLost(comment)`           | A comment could not be re-anchored on load         |
+| Callback                          | Fires when                                 |
+| --------------------------------- | ------------------------------------------ |
+| `onCommentCreated(comment)`       | A new comment is saved                     |
+| `onReplyAdded(comment, reply)`    | A reply is added to any comment            |
+| `onReplyDeleted(comment, reply)`  | A reply is removed                         |
+| `onCommentEdited(comment)`        | A comment's text is rewritten              |
+| `onReplyEdited(comment, reply)`   | A reply's text is rewritten                |
+| `onCommentStatusChanged(comment)` | Status moves along the lifecycle           |
+| `onCommentUpdated(comment)`       | Type, priority or tags change              |
+| `onCommentDeleted(id)`            | A comment is removed                       |
+| `onAnchorLost(comment)`           | A comment could not be re-anchored on load |
 
 ## API
 

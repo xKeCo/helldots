@@ -128,8 +128,6 @@ export const IDS = {
   ATTACH_IMAGE_INPUT: "attach-image-input",
 };
 
-// RF09 — comment lifecycle. Order matters: it's the order shown in the
-// status picker menu.
 // Marker circle size in px. The stylesheet's .comment-circle rule and the
 // positioning math (center offsets, edge clamps) must agree on this number.
 export const MARKER_SIZE = 28;
@@ -138,11 +136,20 @@ export const MARKER_SIZE = 28;
 // attachment surface (comment box, thread popover, inbox reply input).
 export const MAX_SCREENSHOTS = 5;
 
-export const STATUSES = ["open", "in_progress", "resolved"];
+// RF09 — comment lifecycle. Order matters: it's the order shown in the
+// status picker menu and in the inbox's status filter. Nothing enforces the
+// transitions — setCommentStatus accepts any state from any state.
+export const STATUSES = ["open", "in_progress", "in_review", "resolved"];
 
+// Every lifecycle state is painted — status is never "unset", so an empty
+// ring would read as missing rather than as new. `open` takes an off-white
+// grey: present and legible, but the only unsaturated entry, so the three
+// states somebody actually moved a comment into are the ones that carry
+// colour. That frees the blue for `in_review`.
 export const STATUS_COLORS = {
-  open: "#2E90FA",
+  open: "#D1D1D6",
   in_progress: "#FF9F0A",
+  in_review: "#2E90FA",
   resolved: "#30D158",
 };
 
