@@ -113,8 +113,13 @@ export const CLASSES = {
   REACTION_PILL_EMOJI: "reaction-pill-emoji",
   REACTION_PILL_COUNT: "reaction-pill-count",
   REACTION_ADD: "reaction-add",
+  REACTION_TRIGGER: "reaction-trigger",
   REACTION_PALETTE: "reaction-palette",
   REACTION_PALETTE_ITEM: "reaction-palette-item",
+  // The action strip splits in two: classification on the left, icon buttons
+  // (react, copy, ⋯) on the right.
+  ACTIONS_GROUP: "actions-group",
+  ACTIONS_GROUP_END: "actions-group--end",
 };
 
 // The only classes HellDots puts on elements of the host page — everything

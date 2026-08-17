@@ -18,6 +18,7 @@ import {
 } from "./components.js";
 import { createCommentActions, copyToClipboard } from "./comment-actions.js";
 import { createContextBlock } from "./context-block.js";
+import { createReactionsUi } from "./reactions.js";
 import { buildAgentContext } from "./agent-context.js";
 import { buildCommentLink } from "./link.js";
 import { createInlineEditor, confirmDiscard } from "./inline-editor.js";
@@ -337,20 +338,22 @@ export class PopoverController {
     // edit — until the popover was reopened and the full render wired both.
     const onEditReply = (reply) => this.startEditing(comment.id, reply.id);
 
-    // One handler for the whole thread: the bar reports which target was
-    // clicked, so the root comment and any reply route to their own toggle.
-    // Built once, and reused by submitReply below so a reply created in this
-    // session gets the same bar a reopened popover would render.
-    const reactions = {
-      actorKey: this.deps.actorKey(),
-      onToggle: (target, emoji) => {
-        if (target === comment) {
-          this.deps.actions.toggleCommentReaction(comment.id, emoji);
-        } else {
-          this.deps.actions.toggleReplyReaction(comment.id, target.id, emoji);
-        }
-      },
-    };
+    // One reaction UI for the whole thread: it reports which target was
+    // clicked, so the root comment and any reply route to their own toggle,
+    // and it keeps the pill rows in step with the triggers above them — the
+    // comment's trigger lives in the action row, which is assembled below,
+    // after createThreadPopover has already built its pill row.
+    //
+    // Reused by submitReply too, so a reply created in this session gets the
+    // same controls a reopened popover would render.
+    const reactions = createReactionsUi({
+      actorKey: this.deps.actorKey,
+      strings,
+      onToggle: (target, emoji) =>
+        target === comment
+          ? this.deps.actions.toggleCommentReaction(comment.id, emoji)
+          : this.deps.actions.toggleReplyReaction(comment.id, target.id, emoji),
+    });
 
     const popover = createThreadPopover(comment, strings, locale, {
       onDeleteReply,
@@ -364,6 +367,7 @@ export class PopoverController {
     const headerEl = popover.querySelector(`.${CLASSES.THREAD_HEADER}`);
     const actionsEl = createCommentActions(comment, {
       strings,
+      reactions,
       onCopy: (c) =>
         copyToClipboard(
           buildAgentContext(c, {

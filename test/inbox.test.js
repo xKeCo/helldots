@@ -2013,21 +2013,33 @@ describe("inbox reactions", () => {
       },
     ]);
 
-  it("shows read-only pills on a list card", () => {
-    // The card navigates on click and already carries four controls; the
-    // signal belongs there, the affordance does not.
+  it("makes the list card's pills toggles, like every other surface", () => {
+    // The strip that adds a reaction is shared with the popover, so a card
+    // that could add one but not remove it would be the odd surface out.
     overlay = makeOverlay({ user: { name: "Me" } });
     seedReacted(overlay);
     const panel = openInbox(overlay);
 
     const card = panel.querySelector(`.${CLASSES.INBOX_CARD}`);
     const pill = card.querySelector(`.${CLASSES.REACTION_PILL}`);
-    expect(pill.tagName).toBe("SPAN");
-    expect(pill.getAttribute("aria-pressed")).toBeNull();
-    expect(card.querySelector(`.${CLASSES.REACTION_ADD}`)).toBeNull();
+    expect(pill.tagName).toBe("BUTTON");
+    expect(pill.getAttribute("aria-pressed")).toBe("false");
+    expect(card.querySelector(`.${CLASSES.REACTION_ADD}`)).not.toBeNull();
   });
 
-  it("grows no reaction row on a card nobody has reacted to", () => {
+  it("reacting from a list card does not open the detail view", () => {
+    // The card navigates on click; a pill inside it must not.
+    overlay = makeOverlay({ user: { name: "Me" } });
+    seedReacted(overlay);
+    const panel = openInbox(overlay);
+
+    click(panel.querySelector(`.${CLASSES.REACTION_PILL}`));
+
+    expect(panel.querySelector(`.${CLASSES.INBOX_DETAIL}`)).toBeNull();
+    expect(overlay.comments[0].reactions["\u{1F44D}"]).toEqual(["ana", "Me"]);
+  });
+
+  it("hides the reaction row on a card nobody has reacted to", () => {
     overlay = makeOverlay({ user: { name: "Me" } });
     overlay.loadComments([
       {
@@ -2043,20 +2055,65 @@ describe("inbox reactions", () => {
       },
     ]);
     const panel = openInbox(overlay);
-    expect(panel.querySelector(`.${CLASSES.REACTION_BAR}`)).toBeNull();
+    expect(panel.querySelector(`.${CLASSES.REACTION_BAR}`).hidden).toBe(true);
+    // ...and the only way in is the trigger in the action strip.
+    expect(
+      panel.querySelector(
+        `.${CLASSES.INBOX_CARD_ACTIONS} [data-action="react"]`
+      )
+    ).not.toBeNull();
   });
 
-  it("offers an interactive bar for the comment and each reply in the detail view", () => {
+  it("offers a trigger and a bar for the comment and each reply in the detail view", () => {
     overlay = makeOverlay({ user: { name: "Me" } });
     seedReacted(overlay);
     const panel = openInbox(overlay);
     click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
 
     const detail = panel.querySelector(`.${CLASSES.INBOX_DETAIL}`);
-    expect(detail.querySelectorAll(`.${CLASSES.REACTION_ADD}`)).toHaveLength(2);
+    // Three triggers, one per place the mockup puts one: the comment's action
+    // strip, the end of its pill row (it has a reaction), and the reply's meta
+    // line. The reply has no reaction, so its row carries no trailing one.
     expect(
-      detail.querySelector(`.${CLASSES.THREAD_REPLY} .${CLASSES.REACTION_ADD}`)
-    ).toBeTruthy();
+      detail.querySelectorAll(
+        `.${CLASSES.INBOX_CARD_ACTIONS} [data-action="react"]`
+      )
+    ).toHaveLength(1);
+    expect(
+      detail.querySelectorAll(
+        `.${CLASSES.INBOX_CARD} .${CLASSES.REACTION_BAR} [data-action="react"]`
+      )
+    ).toHaveLength(1);
+    expect(
+      detail.querySelectorAll(
+        `.${CLASSES.THREAD_REPLY} .${CLASSES.THREAD_REPLY_ACTIONS} [data-action="react"]`
+      )
+    ).toHaveLength(1);
+    expect(
+      detail.querySelector(`.${CLASSES.THREAD_REPLY} .${CLASSES.REACTION_BAR}`)
+        .hidden
+    ).toBe(true);
+  });
+
+  it("adds the first reaction to a reply from its meta-line trigger", () => {
+    overlay = makeOverlay({ user: { name: "Me" } });
+    seedReacted(overlay);
+    const panel = openInbox(overlay);
+    click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
+
+    const row = panel.querySelector(`.${CLASSES.THREAD_REPLY}`);
+    click(row.querySelector('[data-action="react"]'));
+    click(row.querySelector(`.${CLASSES.REACTION_PALETTE_ITEM}`));
+
+    expect(overlay.comments[0].replies[0].reactions).toEqual({
+      "\u{1F44D}": ["Me"],
+    });
+    // The row it belongs to came out of hiding with it.
+    const bar = panel.querySelector(
+      `.${CLASSES.THREAD_REPLY} .${CLASSES.REACTION_BAR}`
+    );
+    expect(bar.hidden).toBe(false);
+    expect(bar.querySelector(`.${CLASSES.REACTION_PILL}`)).not.toBeNull();
   });
 
   it("reacting from the detail view reaches the overlay, for the comment and for a reply", () => {

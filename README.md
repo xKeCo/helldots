@@ -178,6 +178,11 @@ can agree, flag "watching this" or mark something shipped without adding a
 reply. The set is fixed: a searchable picker would need an emoji dataset
 larger than the whole widget.
 
+The emoji button in a comment's action strip (or on a reply's meta line) is
+where a reaction starts. Once there is one, a row of pills sits under the
+comment — below its screenshot when it has one — and carries its own button for
+adding another. Nothing is shown there until somebody reacts.
+
 ```js
 overlay.toggleCommentReaction(id, "👍");
 overlay.toggleReplyReaction(commentId, replyId, "🎉");

@@ -3169,12 +3169,24 @@ describe("emoji reactions", () => {
     overlay.showThreadPopover(circle, comment);
     const popover = overlay.activeThreadPopover;
 
+    // The first reaction can only come from the action row's trigger; the
+    // pill row below is mounted hidden and waiting for it.
     const scrollBar = popover.querySelector(
       `.${CLASSES.THREAD_SCROLL} > .${CLASSES.REACTION_BAR}`
     );
-    scrollBar.querySelector(`.${CLASSES.REACTION_PALETTE_ITEM}`).click();
+    expect(scrollBar.hidden).toBe(true);
+
+    const trigger = popover.querySelector(
+      `.${CLASSES.THREAD_ACTIONS_ROW} [data-action="react"]`
+    );
+    trigger.click();
+    trigger.parentElement
+      .querySelector(`.${CLASSES.REACTION_PALETTE_ITEM}`)
+      .click();
 
     expect(comment.reactions).toEqual({ "\u{1F44D}": ["Ana"] });
+    // The row the trigger does not own came out of hiding with the reaction.
+    expect(scrollBar.hidden).toBe(false);
     const pill = scrollBar.querySelector(`.${CLASSES.REACTION_PILL}`);
     expect(pill.getAttribute("aria-pressed")).toBe("true");
     expect(

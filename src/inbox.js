@@ -28,7 +28,7 @@ import {
   getShortcutText,
 } from "./components.js";
 import { sameId } from "./id.js";
-import { createReactionBar, reactionEntriesOf } from "./reactions.js";
+import { createReactionsUi, reactionEntriesOf } from "./reactions.js";
 import { createInlineEditor, confirmDiscard } from "./inline-editor.js";
 import { buildCommentLink } from "./link.js";
 
@@ -106,6 +106,11 @@ export class InboxView {
     this._highlightedEl = null;
     /** @type {HTMLElement | null} */
     this._activeMarkerEl = null;
+    /**
+     * Built on first use by _reactionsUi().
+     * @type {import("./reactions.js").ReactionsUi | null}
+     */
+    this._reactions = null;
   }
 
   isOpen() {
@@ -424,6 +429,34 @@ export class InboxView {
    * objects: a reused card whose closures held the stale object would
    * mutate a comment the overlay no longer owns.
    */
+  /**
+   * The panel's reaction UI, built once so a toggle in the detail view also
+   * repaints the list card's pill row when that card is still on screen.
+   *
+   * The parent comment of a reply is looked up rather than captured: one UI
+   * then serves the list, the detail and every reply row in it, and the rows
+   * stay registered against the same targets across refreshes.
+   */
+  _reactionsUi() {
+    if (!this._reactions) {
+      this._reactions = createReactionsUi({
+        actorKey: () => this.callbacks.actorKey(),
+        strings: this.strings,
+        onToggle: (target, emoji) => {
+          const parent = this.getComments().find((comment) =>
+            (comment.replies || []).includes(target)
+          );
+          if (parent) {
+            this.callbacks.onToggleReplyReaction(parent.id, target.id, emoji);
+          } else {
+            this.callbacks.onToggleCommentReaction(target.id, emoji);
+          }
+        },
+      });
+    }
+    return this._reactions;
+  }
+
   _cardFingerprint(comment) {
     return JSON.stringify([
       comment.text,
@@ -817,20 +850,11 @@ export class InboxView {
     });
     if (badges) card.appendChild(badges);
 
-    // `interactive` here means "list card that navigates on click", which is
-    // exactly the surface where reactions are read-only: it already carries a
-    // header, four controls, text, badges and a replies link, and one more
-    // dropdown would turn it into a form. The detail view (interactive:
-    // false) is where reacting happens.
-    const reactionBar = createReactionBar({
-      target: comment,
-      actorKey: this.callbacks.actorKey(),
-      strings: this.strings,
-      interactive: !interactive,
-      onToggle: (emoji) =>
-        this.callbacks.onToggleCommentReaction(comment.id, emoji),
-    });
-    if (reactionBar) card.appendChild(reactionBar);
+    // Hidden until something has been reacted to; the trigger in the action
+    // strip above is the only way in. Identical on the list card and in the
+    // detail view — the strip is shared, so a card that could add a reaction
+    // but not remove one would be the odd surface out.
+    card.appendChild(this._reactionsUi().bar(comment));
 
     const tag = this._buildTag(comment);
     if (tag) card.appendChild(tag);
@@ -889,6 +913,7 @@ export class InboxView {
   _buildCardActions(comment) {
     return createCommentActions(comment, {
       strings: this.strings,
+      reactions: this._reactionsUi(),
       onCopy: (c) =>
         copyToClipboard(
           buildAgentContext(c, {
@@ -1003,11 +1028,7 @@ export class InboxView {
         },
         onEdit: (r) => this.startEditing(comment.id, r.id),
         editing: editingThisReply ? this._editorHandlers() : null,
-        reactions: {
-          actorKey: this.callbacks.actorKey(),
-          onToggle: (target, emoji) =>
-            this.callbacks.onToggleReplyReaction(comment.id, target.id, emoji),
-        },
+        reactions: this._reactionsUi(),
       });
       wireScreenshotLightbox(replyEl, (src) =>
         this.callbacks.onShowLightbox(src)

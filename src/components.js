@@ -18,7 +18,6 @@ import {
   priorityLabelOf,
 } from "./comment-actions.js";
 import { createInlineEditor } from "./inline-editor.js";
-import { createReactionBar } from "./reactions.js";
 
 const formatRelativeTime = (date, strings) => {
   const diff = Date.now() - new Date(date).getTime();
@@ -685,9 +684,10 @@ export const createTooltip = (comment, strings = defaultStrings, locale) => {
  * `editing`, when present, replaces the body with the inline editor. The
  * draft it renders belongs to the caller — see `inline-editor.js` for why.
  *
- * `reactions`, when present, appends the reaction bar. Optional for the same
- * reason as the handlers above: a caller that never wires a toggle gets the
- * plain row rather than a control that does nothing.
+ * `reactions`, when present, is the thread's reaction UI: it puts the palette
+ * trigger on the meta line, next to the ⋯, and the pill row under the text.
+ * Optional for the same reason as the handlers above: a caller that never
+ * wires it gets the plain row rather than controls that do nothing.
  *
  * @param {any} reply
  * @param {object} [strings]
@@ -701,11 +701,7 @@ export const createTooltip = (comment, strings = defaultStrings, locale) => {
  *     onSave: (text: string) => void,
  *     onCancel: () => void,
  *   } | null,
- *   reactions?: {
- *     actorKey: string,
- *     onToggle: (target: any, emoji: string) => void,
- *     interactive?: boolean,
- *   } | null,
+ *   reactions?: import("./reactions.js").ReactionsUi | null,
  * }} [handlers]
  */
 export const createReplyElement = (
@@ -746,11 +742,22 @@ export const createReplyElement = (
       }),
     });
   }
-  if (items.length > 0) {
-    const actions = createMoreMenu({ label: strings.replyOptions, items });
-    actions.classList.add(CLASSES.THREAD_REPLY_ACTIONS);
-    meta.appendChild(actions);
+  // The reply's own tools, mirroring the comment's action row one level down:
+  // react, then the ⋯. Wrapped so `margin-left: auto` pushes the pair right
+  // as one unit instead of only the first of them.
+  const replyTools = document.createElement("div");
+  replyTools.className = `${CLASSES.ACTIONS_GROUP} ${CLASSES.THREAD_REPLY_ACTIONS}`;
+  if (reactions) {
+    replyTools.appendChild(
+      reactions.trigger(reply, { className: CLASSES.INBOX_ACTION_BTN })
+    );
   }
+  if (items.length > 0) {
+    replyTools.appendChild(
+      createMoreMenu({ label: strings.replyOptions, items })
+    );
+  }
+  if (replyTools.children.length > 0) meta.appendChild(replyTools);
 
   let text;
   if (editing) {
@@ -775,16 +782,7 @@ export const createReplyElement = (
   }
   // Last child of the block it belongs to — after the text and after the
   // thumbnails. One rule, every surface.
-  if (reactions) {
-    const bar = createReactionBar({
-      target: reply,
-      actorKey: reactions.actorKey,
-      strings,
-      interactive: reactions.interactive,
-      onToggle: (emoji) => reactions.onToggle(reply, emoji),
-    });
-    if (bar) replyEl.appendChild(bar);
-  }
+  if (reactions) replyEl.appendChild(reactions.bar(reply));
   return replyEl;
 };
 
@@ -795,10 +793,7 @@ export const createReplyElement = (
  * @param {{
  *   onDeleteReply?: (reply: any, replyEl: HTMLElement) => void,
  *   onEditReply?: (reply: any) => void,
- *   reactions?: {
- *     actorKey: string,
- *     onToggle: (target: any, emoji: string) => void,
- *   } | null,
+ *   reactions?: import("./reactions.js").ReactionsUi | null,
  * }} [handlers]
  */
 export const createThreadPopover = (
@@ -876,15 +871,7 @@ export const createThreadPopover = (
   }
   // The root comment's own bar, before the replies: it belongs to the text
   // above it, not to the conversation below.
-  if (reactions) {
-    const bar = createReactionBar({
-      target: comment,
-      actorKey: reactions.actorKey,
-      strings,
-      onToggle: (emoji) => reactions.onToggle(comment, emoji),
-    });
-    if (bar) scroll.appendChild(bar);
-  }
+  if (reactions) scroll.appendChild(reactions.bar(comment));
   scroll.appendChild(replies);
   popover.appendChild(scroll);
   popover.appendChild(inputArea);

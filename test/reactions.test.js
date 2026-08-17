@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   actorKeyOf,
   reactionEntriesOf,
-  createReactionBar,
+  createReactionsUi,
   normalizeReactions,
   toggleReactionOn,
   serializeReactions,
@@ -12,14 +12,15 @@ import en from "../src/locales/en.js";
 
 const STRINGS = { anonymous: "Anonymous" };
 
-const barFor = (reactions, actorKey = "me", extra = {}) =>
-  createReactionBar({
-    target: { reactions },
-    actorKey,
-    strings: en,
-    onToggle: () => {},
-    ...extra,
-  });
+// The UI object is per-thread, so every helper below builds its own and the
+// tests stay independent of each other's repaint registrations.
+const uiFor = (onToggle = () => {}, actorKey = "me") =>
+  createReactionsUi({ actorKey: () => actorKey, strings: en, onToggle });
+
+const barFor = (reactions, actorKey = "me", onToggle = () => {}) => {
+  const target = { reactions };
+  return uiFor((t, emoji) => onToggle(t, emoji), actorKey).bar(target);
+};
 
 const pillsOf = (bar) => [...bar.querySelectorAll(`.${CLASSES.REACTION_PILL}`)];
 
@@ -69,11 +70,11 @@ describe("REACTION_EMOJIS", () => {
   });
 });
 
-describe("createReactionBar", () => {
+describe("the reaction bar", () => {
   it("renders the emoji decoratively and the count as text", () => {
     // The count is what satisfies WCAG 1.4.1 — no pill may carry its meaning
     // through colour alone.
-    const pill = pillsOf(barFor({ "👍": ["ana", "me"] }))[0];
+    const pill = pillsOf(barFor({ "\u{1F44D}": ["ana", "me"] }))[0];
     expect(
       pill
         .querySelector(`.${CLASSES.REACTION_PILL_EMOJI}`)
@@ -85,7 +86,9 @@ describe("createReactionBar", () => {
   });
 
   it("marks the pill the current actor holds, and only that one", () => {
-    const [mine, theirs] = pillsOf(barFor({ "👍": ["me"], "🚀": ["ana"] }));
+    const [mine, theirs] = pillsOf(
+      barFor({ "\u{1F44D}": ["me"], "\u{1F680}": ["ana"] })
+    );
     expect(mine.getAttribute("aria-pressed")).toBe("true");
     expect(mine.classList.contains(CLASSES.REACTION_PILL_MINE)).toBe(true);
     expect(theirs.getAttribute("aria-pressed")).toBe("false");
@@ -95,58 +98,82 @@ describe("createReactionBar", () => {
   it("names the pill by the action it performs, never by a stored actor key", () => {
     // Stored keys are opaque ids when the host passes user.id, so they must
     // never reach the UI.
-    const label = pillsOf(barFor({ "👍": ["u_8123", "me"] }))[0].getAttribute(
-      "aria-label"
-    );
+    const label = pillsOf(
+      barFor({ "\u{1F44D}": ["u_8123", "me"] })
+    )[0].getAttribute("aria-label");
     expect(label).toContain(en.reactionToggleOff);
     expect(label).not.toContain("u_8123");
   });
 
   it("keeps pill order stable when a count changes", () => {
-    const target = { reactions: { "🚀": ["ana"], "👍": ["ana"] } };
-    const bar = createReactionBar({
-      target,
-      actorKey: "me",
-      strings: en,
-      onToggle: (emoji) => target.reactions[emoji].push("me"),
-    });
+    const target = {
+      reactions: { "\u{1F680}": ["ana"], "\u{1F44D}": ["ana"] },
+    };
+    const bar = uiFor((t, emoji) => t.reactions[emoji].push("me")).bar(target);
+    document.body.appendChild(bar);
     pillsOf(bar)[0].click();
     expect(pillsOf(bar).map((p) => p.dataset.reactionEmoji)).toEqual([
-      "👍",
-      "🚀",
+      "\u{1F44D}",
+      "\u{1F680}",
     ]);
+    bar.remove();
   });
 
   it("repaints its own count after a toggle", () => {
-    const target = { reactions: {} };
-    const bar = createReactionBar({
-      target,
-      actorKey: "me",
-      strings: en,
-      onToggle: (emoji) => {
-        target.reactions[emoji] = ["me"];
-      },
-    });
-    bar.querySelector(`.${CLASSES.REACTION_PALETTE_ITEM}`).click();
+    const target = { reactions: { "\u{1F44D}": ["ana"] } };
+    const bar = uiFor((t, emoji) => t.reactions[emoji].push("me")).bar(target);
+    document.body.appendChild(bar);
+    pillsOf(bar)[0].click();
     expect(
       bar.querySelector(`.${CLASSES.REACTION_PILL_COUNT}`).textContent
-    ).toBe("1");
+    ).toBe("2");
+    bar.remove();
+  });
+
+  it("is hidden and empty until something has been reacted to", () => {
+    // The row is mounted but silent: the first reaction can only arrive from
+    // the trigger in the action row above it.
+    const bar = barFor({});
+    expect(bar.hidden).toBe(true);
+    expect(bar.children.length).toBe(0);
+  });
+
+  it("appears when the first reaction arrives from a trigger elsewhere", () => {
+    const target = { reactions: {} };
+    const ui = uiFor((t, emoji) => {
+      t.reactions[emoji] = ["me"];
+    });
+    const bar = ui.bar(target);
+    const trigger = ui.trigger(target, {
+      className: CLASSES.INBOX_ACTION_BTN,
+    });
+    document.body.append(bar, trigger);
+
+    trigger.querySelector(`.${CLASSES.REACTION_PALETTE_ITEM}`).click();
+
+    expect(bar.hidden).toBe(false);
+    expect(pillsOf(bar)).toHaveLength(1);
+    bar.remove();
+    trigger.remove();
+  });
+
+  it("carries a trailing trigger only while it has pills", () => {
+    expect(barFor({}).querySelector(`.${CLASSES.REACTION_ADD}`)).toBeNull();
+    expect(
+      barFor({ "\u{1F44D}": ["ana"] }).querySelector(`.${CLASSES.REACTION_ADD}`)
+    ).not.toBeNull();
   });
 
   it("closes the palette before the mutation runs", () => {
     // The inbox detail rebuilds itself on every refresh, so a palette left
     // open during that rebuild would vanish mid-click.
     let expandedWhileToggling = null;
-    const bar = createReactionBar({
-      target: { reactions: {} },
-      actorKey: "me",
-      strings: en,
-      onToggle: () => {
-        expandedWhileToggling = bar
-          .querySelector(`.${CLASSES.REACTION_ADD}`)
-          .getAttribute("aria-expanded");
-      },
-    });
+    const target = { reactions: { "\u{1F44D}": ["ana"] } };
+    const bar = uiFor(() => {
+      expandedWhileToggling = bar
+        .querySelector(`.${CLASSES.REACTION_ADD}`)
+        .getAttribute("aria-expanded");
+    }).bar(target);
     document.body.appendChild(bar);
     bar.querySelector(`.${CLASSES.REACTION_ADD}`).click();
     bar.querySelector(`.${CLASSES.REACTION_PALETTE_ITEM}`).click();
@@ -156,22 +183,29 @@ describe("createReactionBar", () => {
 
   it("offers every emoji of the set in the palette", () => {
     const items = [
-      ...barFor({}).querySelectorAll(`.${CLASSES.REACTION_PALETTE_ITEM}`),
+      ...uiFor()
+        .trigger({}, { className: CLASSES.INBOX_ACTION_BTN })
+        .querySelectorAll(`.${CLASSES.REACTION_PALETTE_ITEM}`),
     ];
     expect(items.map((i) => i.dataset.reactionEmoji)).toEqual(REACTION_EMOJIS);
   });
 
-  it("renders a read-only bar with no buttons and no add control", () => {
-    const bar = barFor({ "👍": ["ana"] }, "me", { interactive: false });
-    expect(bar.querySelector("button")).toBeNull();
-    expect(bar.querySelector(`.${CLASSES.REACTION_ADD}`)).toBeNull();
-    expect(pillsOf(bar)[0].getAttribute("aria-pressed")).toBeNull();
-  });
-
-  it("renders nothing at all when a read-only target has no reactions", () => {
-    // An inbox list card must not grow an empty row for a comment nobody has
-    // reacted to.
-    expect(barFor({}, "me", { interactive: false })).toBeNull();
+  it("reads the actor key at paint time, not at build time", () => {
+    // A host may swap `user` while the widget is mounted.
+    let who = "ana";
+    const target = { reactions: { "\u{1F44D}": ["ana"] } };
+    const ui = createReactionsUi({
+      actorKey: () => who,
+      strings: en,
+      onToggle: () => {},
+    });
+    expect(
+      pillsOf(ui.bar(target))[0].classList.contains(CLASSES.REACTION_PILL_MINE)
+    ).toBe(true);
+    who = "someone-else";
+    expect(
+      pillsOf(ui.bar(target))[0].classList.contains(CLASSES.REACTION_PILL_MINE)
+    ).toBe(false);
   });
 });
 

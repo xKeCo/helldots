@@ -1891,3 +1891,62 @@ One jsdom quirk, recorded so it is not rediscovered: its selector engine does
 not match attribute values containing astral-plane characters, so
 `[data-reaction-emoji="🎉"]` finds nothing in tests. Browsers match it fine and
 no selector in `src/` depends on it, but tests have to filter on `dataset`.
+
+## The reaction UI moves into the action strip (amends the entry above)
+
+A high-fidelity mockup arrived after the first cut shipped, and it changes
+where reactions live rather than what they are. The data model, the identity
+rule and the event are untouched; this entry records what the UI became and
+what that cost.
+
+**The action strip is now two groups.** What the comment _is_ — status, type,
+priority — sits on the left; what you can _do_ with it — react, copy its
+context, the `⋯` — sits on the right, with `justify-content: space-between`
+between them. That is why the copy button moved: mixed in among three labelled
+pickers it read as a fourth classification rather than an action.
+
+**The first reaction can only be added from the strip.** The pill row appears
+_with_ the first reaction and disappears with the last, so it cannot be the
+entry point for one. Two affordances, same palette: the strip's button starts a
+reaction, and once pills exist the row carries a trailing button for one more.
+A reply gets the same pair, its trigger sitting left of its `⋯`.
+
+**The icon is a smiley with a plus, not a bare plus.** In a row that is already
+made of emoji, a lone `+` read as "add something" rather than "add a reaction".
+
+**The row is hidden, not absent.** It renders as an empty `[hidden]` element
+and only fills in when there is something to show. Returning null instead
+would have been tidier markup, but then the first pick from the strip would
+have nowhere to land — the row has to be mounted and waiting.
+
+**A `createReactionsUi` controller replaced the standalone bar factory.** The
+pick that changes a row now comes from a control that does not own it, and on a
+comment those two are built by different modules: `createThreadPopover` builds
+the pill row, while the action strip is assembled by the popover controller
+_after_ that function has already returned. Threading refresh handles through
+both was the alternative; instead each row registers itself with the
+thread's UI object (a `WeakMap` keyed on the target) and any pick repaints
+whatever rows for that target are still connected — detached ones are dropped
+on the next pass, since the inbox rebuilds its detail view on every refresh.
+The same registry is what makes a toggle in the detail view update the list
+card behind it.
+
+`actorKey` became a getter in the process. It was read once at build time,
+which would have gone stale on a host that swaps `user` while the widget is
+mounted — the exact failure the single-resolver rule exists to prevent.
+
+**Read-only pills on inbox list cards are reversed.** The previous entry made
+them static spans, reasoning that a card which navigates on click should carry
+the signal but not the affordance. That no longer holds: the action strip is
+shared, so the card now has the button that _adds_ a reaction, and a surface
+that can add one but not remove it is incoherent. The pills are buttons
+everywhere, and every one of them stops propagation so a pill press never opens
+the detail view — the same guard the pickers in that strip already had.
+
+What this accepts: nested interactive controls inside a `role="button"` card,
+which was already true of the three pickers and the `⋯` there.
+
+One test needed narrowing rather than weakening, again: a reply-row assertion
+listed every `button` inside the row's tool group, which now includes the six
+palette items. It is scoped to `button[data-action]` — the controls themselves,
+not the menus they open.

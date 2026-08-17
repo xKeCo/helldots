@@ -14,6 +14,7 @@ import {
 } from "../src/components.js";
 import { getStrings } from "../src/i18n.js";
 import { CLASSES, IDS } from "../src/constants.js";
+import { createReactionsUi } from "../src/reactions.js";
 
 describe("components", () => {
   describe("getShortcutText", () => {
@@ -354,6 +355,13 @@ describe("components", () => {
   });
 
   describe("reactions in the thread", () => {
+    const uiFor = (onToggle = () => {}) =>
+      createReactionsUi({
+        actorKey: () => "me",
+        strings: getStrings("en"),
+        onToggle,
+      });
+
     const threadComment = () => ({
       id: 12,
       text: "root",
@@ -375,11 +383,30 @@ describe("components", () => {
         threadComment(),
         getStrings("en"),
         "en",
-        { reactions: { actorKey: "me", onToggle: () => {} } }
+        { reactions: uiFor() }
       );
       expect(popover.querySelectorAll(`.${CLASSES.REACTION_BAR}`).length).toBe(
         2
       );
+    });
+
+    it("puts the reply's palette trigger on its meta line, before the ⋯", () => {
+      const popover = createThreadPopover(
+        threadComment(),
+        getStrings("en"),
+        "en",
+        { reactions: uiFor(), onEditReply: () => {} }
+      );
+      const tools = popover.querySelector(
+        `.${CLASSES.THREAD_REPLY} .${CLASSES.THREAD_REPLY_ACTIONS}`
+      );
+      // Scoped to the controls themselves: each wrapper also holds the menu
+      // (or palette) it opens, whose items are buttons too.
+      expect(
+        [...tools.querySelectorAll("button[data-action]")].map(
+          (b) => b.dataset.action
+        )
+      ).toEqual(["react", "menu"]);
     });
 
     it("renders no bar at all when no handler is given", () => {
@@ -404,24 +431,21 @@ describe("components", () => {
       };
       const calls = [];
       const el = createReplyElement(reply, getStrings("en"), "en", {
-        reactions: {
-          actorKey: "me",
-          onToggle: (target, emoji) => calls.push([target.id, emoji]),
-        },
+        reactions: uiFor((target, emoji) => calls.push([target.id, emoji])),
       });
+      document.body.appendChild(el);
       el.querySelector(`.${CLASSES.REACTION_PILL}`).click();
       expect(calls).toEqual([["r1", "👍"]]);
+      el.remove();
     });
 
     it("routes a comment pill click to the toggle with the comment", () => {
       const comment = { ...threadComment(), reactions: { "🎉": ["ann"] } };
       const calls = [];
       const popover = createThreadPopover(comment, getStrings("en"), "en", {
-        reactions: {
-          actorKey: "me",
-          onToggle: (target, emoji) => calls.push([target.id, emoji]),
-        },
+        reactions: uiFor((target, emoji) => calls.push([target.id, emoji])),
       });
+      document.body.appendChild(popover);
       // The comment's own bar is the one inside the scroll container, not the
       // reply's.
       popover
@@ -430,6 +454,7 @@ describe("components", () => {
         )
         .click();
       expect(calls).toEqual([[12, "🎉"]]);
+      popover.remove();
     });
   });
 });

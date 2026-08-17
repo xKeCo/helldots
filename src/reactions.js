@@ -110,115 +110,85 @@ export const serializeReactions = (reactions) => {
     : null;
 };
 
-const PLUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
+// The "add reaction" affordance, in both places it appears: the action row at
+// the top of a comment (or a reply's meta line) and, once something has been
+// reacted to, at the end of the pill row. A smiley with a plus rather than a
+// bare plus — the bar sits among pills that are already emoji, and a lone "+"
+// there read as "add something", not "add a reaction".
+const EMOJI_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.94 11.08A9 9 0 1 1 12.92 3.06"/><path d="M8.5 14.2a4.6 4.6 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01"/><path d="M19 2.6v4M17 4.6h4"/></svg>`;
 
 /**
- * The reaction bar for one comment or one reply — `target` is anything with a
- * `reactions` map, so both levels share this component and neither knows
- * which one it is.
+ * @typedef {Object} ReactionsUi
+ * @property {(target: any) => HTMLElement} bar the pill row for one target
+ * @property {(target: any, config: { className: string, tooltip?: boolean }) => HTMLElement} trigger
+ *   a button that opens the emoji palette
+ * @property {(target: any) => void} refresh repaint the target's live rows
+ */
+
+/**
+ * A reaction UI bound to one thread: it hands out the palette buttons and the
+ * pill rows, and keeps every row it created for a given target in step.
  *
- * The bar owns its own repaint: the thread popover is built once and mutated
- * in place, so a toggle there has nothing else that would re-render it.
+ * It exists because a reaction can now be added from a control that does not
+ * own the row it changes — the action row's button sits above the pills, and
+ * on a comment those two are built by different modules (the popover header is
+ * assembled after `createThreadPopover` returns). Rather than thread refresh
+ * handles through both, each row registers itself here and any pick repaints
+ * whatever rows for that target are still on screen.
  *
- * A pill's accessible name is composed from the action, the emoji and the
- * count ("Remove your reaction: 👍 (3)") rather than translated as a
- * sentence: `formatTemplate` has no plural forms, and the repo already
- * decided against pluralising counts in copy. Stored actor keys never reach
- * the UI — they are display names when the host passes no `user.id` and
- * opaque ids when it does, so rendering them would be inconsistent at best.
- *
- * `interactive: false` is the inbox list card: static spans, no add button,
- * and null when nothing has been reacted to, so a card does not grow an empty
- * row.
+ * `actorKey` is a getter, not a value: a host may swap `user` while the widget
+ * is mounted, and a key captured at build time would leave pills nobody can
+ * switch off.
  *
  * @param {{
- *   target: { reactions?: Record<string, string[]> },
- *   actorKey: string,
+ *   actorKey: () => string,
  *   strings: Record<string, string>,
- *   onToggle: (emoji: string) => void,
- *   interactive?: boolean,
+ *   onToggle: (target: any, emoji: string) => void,
  * }} config
- * @returns {HTMLElement | null}
+ * @returns {ReactionsUi}
  */
-export const createReactionBar = ({
-  target,
-  actorKey,
-  strings,
-  onToggle,
-  interactive = true,
-}) => {
-  if (!interactive && reactionEntriesOf(target).length === 0) return null;
+export const createReactionsUi = ({ actorKey, strings, onToggle }) => {
+  /**
+   * target → the repaints of its live rows. A WeakMap so entries die with the
+   * comments they belong to; detached rows are dropped on the next repaint,
+   * since the inbox rebuilds its detail view on every refresh.
+   * @type {WeakMap<object, Set<{ el: HTMLElement, repaint: () => void }>>}
+   */
+  const rows = new WeakMap();
 
-  const bar = document.createElement("div");
-  bar.className = CLASSES.REACTION_BAR;
-  bar.setAttribute("role", "group");
-  bar.setAttribute("aria-label", strings.reactionsLabel);
-
-  /** The add-button wrapper, so repainted pills stay in front of it. */
-  let addWrapper = /** @type {HTMLElement | null} */ (null);
-
-  const renderPills = () => {
-    bar
-      .querySelectorAll(`.${CLASSES.REACTION_PILL}`)
-      .forEach((pill) => pill.remove());
-
-    for (const { emoji, authors } of reactionEntriesOf(target)) {
-      const mine = authors.includes(actorKey);
-      const pill = document.createElement(interactive ? "button" : "span");
-      pill.className = CLASSES.REACTION_PILL;
-      if (mine) pill.classList.add(CLASSES.REACTION_PILL_MINE);
-      pill.dataset.reactionEmoji = emoji;
-
-      if (interactive) {
-        /** @type {HTMLButtonElement} */ (pill).type = "button";
-        const action = mine
-          ? strings.reactionToggleOff
-          : strings.reactionToggleOn;
-        // A toggle has to say which way it is about to flip; the count alone
-        // does not, and the highlight is colour, which never stands alone.
-        pill.setAttribute("aria-pressed", String(mine));
-        pill.dataset.hdTooltip = action;
-        pill.setAttribute(
-          "aria-label",
-          `${action}: ${emoji} (${authors.length})`
-        );
-        pill.addEventListener("click", (e) => {
-          // The inbox list card navigates on click, and the popover closes on
-          // an outside click — neither may fire because a pill was pressed.
-          e.stopPropagation();
-          onToggle(emoji);
-          renderPills();
-        });
-      }
-
-      const emojiEl = document.createElement("span");
-      emojiEl.className = CLASSES.REACTION_PILL_EMOJI;
-      emojiEl.textContent = emoji;
-      // Decorative: the accessible name above already spells out the reaction
-      // and its count, and screen readers announce emoji unevenly.
-      emojiEl.setAttribute("aria-hidden", "true");
-
-      const count = document.createElement("span");
-      count.className = CLASSES.REACTION_PILL_COUNT;
-      count.textContent = String(authors.length);
-
-      pill.appendChild(emojiEl);
-      pill.appendChild(count);
-      if (addWrapper) bar.insertBefore(pill, addWrapper);
-      else bar.appendChild(pill);
+  const refresh = (target) => {
+    const set = rows.get(target);
+    if (!set) return;
+    for (const entry of set) {
+      if (entry.el.isConnected) entry.repaint();
+      else set.delete(entry);
     }
   };
 
-  if (interactive) {
-    addWrapper = document.createElement("div");
-    addWrapper.style.position = "relative";
+  const pick = (target, emoji) => {
+    onToggle(target, emoji);
+    refresh(target);
+  };
 
-    const addBtn = document.createElement("button");
-    addBtn.type = "button";
-    addBtn.className = CLASSES.REACTION_ADD;
-    addBtn.dataset.hdTooltip = strings.addReaction;
-    addBtn.setAttribute("aria-label", strings.addReaction);
-    addBtn.innerHTML = PLUS_ICON_SVG;
+  /**
+   * A button that opens the emoji palette. `className` decides which of the
+   * two looks it takes: the action row's icon button or the pill row's
+   * trailing one.
+   * @param {any} target
+   * @param {{ className: string, tooltip?: boolean }} config
+   * @returns {HTMLElement} a positioned wrapper holding the button and its menu
+   */
+  const trigger = (target, { className, tooltip = true }) => {
+    const wrapper = document.createElement("div");
+    wrapper.className = CLASSES.REACTION_TRIGGER;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = className;
+    btn.dataset.action = "react";
+    if (tooltip) btn.dataset.hdTooltip = strings.addReaction;
+    btn.setAttribute("aria-label", strings.addReaction);
+    btn.innerHTML = EMOJI_ICON_SVG;
 
     const palette = document.createElement("div");
     palette.className = CLASSES.REACTION_PALETTE;
@@ -229,7 +199,7 @@ export const createReactionBar = ({
     // single-open rule, aria-expanded, the upward flip when it would be
     // clipped, and outside-click close — and the resolved-card dim, which
     // keys off a generic [aria-expanded="true"], then covers it for free.
-    const toggle = attachMenuToggle(addBtn, palette);
+    const toggle = attachMenuToggle(btn, palette);
 
     for (const emoji of REACTION_EMOJIS) {
       const item = document.createElement("button");
@@ -245,17 +215,99 @@ export const createReactionBar = ({
         // refresh, and a palette still open through that rebuild is left
         // orphaned mid-click.
         toggle.close();
-        onToggle(emoji);
-        renderPills();
+        pick(target, emoji);
       });
       palette.appendChild(item);
     }
 
-    addWrapper.appendChild(addBtn);
-    addWrapper.appendChild(palette);
-    bar.appendChild(addWrapper);
-  }
+    wrapper.appendChild(btn);
+    wrapper.appendChild(palette);
+    return wrapper;
+  };
 
-  renderPills();
-  return bar;
+  /**
+   * The pill row for one target. Always returns an element — hidden while
+   * nothing has been reacted to, because the first reaction arrives from a
+   * control outside this row and the row has to be there to receive it.
+   *
+   * A pill's accessible name is composed from the action, the emoji and the
+   * count ("Remove your reaction: 👍 (3)") rather than translated as a
+   * sentence: `formatTemplate` has no plural forms, and the repo already
+   * decided against pluralising counts in copy. Stored actor keys never reach
+   * the UI — they are display names when the host passes no `user.id` and
+   * opaque ids when it does, so rendering them would be inconsistent at best.
+   *
+   * @param {any} target
+   * @returns {HTMLElement}
+   */
+  const bar = (target) => {
+    const el = document.createElement("div");
+    el.className = CLASSES.REACTION_BAR;
+    el.setAttribute("role", "group");
+    el.setAttribute("aria-label", strings.reactionsLabel);
+
+    const repaint = () => {
+      el.replaceChildren();
+      const entries = reactionEntriesOf(target);
+      const me = actorKey();
+      // Nothing reacted to means no row at all: the only way in is the
+      // trigger in the action row above.
+      el.hidden = entries.length === 0;
+      if (el.hidden) return;
+
+      for (const { emoji, authors } of entries) {
+        const mine = authors.includes(me);
+        const pill = document.createElement("button");
+        pill.type = "button";
+        pill.className = CLASSES.REACTION_PILL;
+        if (mine) pill.classList.add(CLASSES.REACTION_PILL_MINE);
+        pill.dataset.reactionEmoji = emoji;
+
+        const action = mine
+          ? strings.reactionToggleOff
+          : strings.reactionToggleOn;
+        // A toggle has to say which way it is about to flip; the count alone
+        // does not, and the highlight is colour, which never stands alone.
+        pill.setAttribute("aria-pressed", String(mine));
+        pill.dataset.hdTooltip = action;
+        pill.setAttribute(
+          "aria-label",
+          `${action}: ${emoji} (${authors.length})`
+        );
+        pill.addEventListener("click", (e) => {
+          // The inbox list card navigates on click, and the popover closes on
+          // an outside click — neither may fire because a pill was pressed.
+          e.stopPropagation();
+          pick(target, emoji);
+        });
+
+        const emojiEl = document.createElement("span");
+        emojiEl.className = CLASSES.REACTION_PILL_EMOJI;
+        emojiEl.textContent = emoji;
+        // Decorative: the accessible name above already spells out the
+        // reaction and its count, and screen readers announce emoji unevenly.
+        emojiEl.setAttribute("aria-hidden", "true");
+
+        const count = document.createElement("span");
+        count.className = CLASSES.REACTION_PILL_COUNT;
+        count.textContent = String(authors.length);
+
+        pill.appendChild(emojiEl);
+        pill.appendChild(count);
+        el.appendChild(pill);
+      }
+
+      // Trailing "one more" affordance, only ever next to existing pills.
+      el.appendChild(trigger(target, { className: CLASSES.REACTION_ADD }));
+    };
+
+    let set = rows.get(target);
+    if (!set) rows.set(target, (set = new Set()));
+    set.add({ el, repaint });
+
+    repaint();
+    return el;
+  };
+
+  return { bar, trigger, refresh };
 };

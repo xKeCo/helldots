@@ -255,14 +255,20 @@ export const createMoreMenu = ({ label, tooltip, items }) => {
 };
 
 /**
+ * The per-comment action strip, in two groups: what the comment *is* on the
+ * left (status, type, priority) and what you can *do* with it on the right
+ * (react, copy its context, the ⋯ menu). The split is why the copy button
+ * moved: mixed in among the pickers it read as a fourth classification.
+ *
  * @param {Object} comment
- * @param {{ strings: Object, onCopy: Function, onCopyLink?: Function, onEdit?: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onDelete: Function }} deps
+ * @param {{ strings: Object, reactions?: { trigger: Function }, onCopy: Function, onCopyLink?: Function, onEdit?: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onDelete: Function }} deps
  * @returns {HTMLElement}
  */
 export const createCommentActions = (
   comment,
   {
     strings,
+    reactions,
     onCopy,
     onCopyLink,
     onEdit,
@@ -274,6 +280,22 @@ export const createCommentActions = (
 ) => {
   const actions = document.createElement("div");
   actions.className = CLASSES.INBOX_CARD_ACTIONS;
+
+  const classification = document.createElement("div");
+  classification.className = CLASSES.ACTIONS_GROUP;
+  const tools = document.createElement("div");
+  tools.className = `${CLASSES.ACTIONS_GROUP} ${CLASSES.ACTIONS_GROUP_END}`;
+  actions.appendChild(classification);
+  actions.appendChild(tools);
+
+  // --- add reaction ---
+  // The only way to leave the FIRST reaction: the pill row below appears with
+  // the reaction, not before it, so it cannot be the entry point.
+  if (reactions) {
+    tools.appendChild(
+      reactions.trigger(comment, { className: CLASSES.INBOX_ACTION_BTN })
+    );
+  }
 
   // --- copy agent context ---
   const copyBtn = document.createElement("button");
@@ -293,10 +315,10 @@ export const createCommentActions = (
       copyBtn.dataset.hdTooltip = strings.copyAgentContext;
     }, 1500);
   });
-  actions.appendChild(copyBtn);
+  tools.appendChild(copyBtn);
 
   // --- lifecycle status picker (RF09) ---
-  actions.appendChild(
+  classification.appendChild(
     createPicker({
       action: "status",
       options: STATUSES,
@@ -315,7 +337,7 @@ export const createCommentActions = (
   );
 
   // --- category picker (RF3) ---
-  actions.appendChild(
+  classification.appendChild(
     createPicker({
       action: "type",
       // `null` first: returning to the neutral state must be reachable.
@@ -330,7 +352,7 @@ export const createCommentActions = (
   );
 
   // --- priority picker (RF4) ---
-  actions.appendChild(
+  classification.appendChild(
     createPicker({
       action: "priority",
       options: [null, ...PRIORITIES],
@@ -344,7 +366,7 @@ export const createCommentActions = (
   );
 
   // --- more (⋯) menu ---
-  actions.appendChild(
+  tools.appendChild(
     createMoreMenu({
       label: strings.commentOptions,
       tooltip: strings.moreOptions,

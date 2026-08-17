@@ -622,12 +622,25 @@ ${webkitScrollbar(
     /* Labels made the strip wide enough to overflow a narrow card in the
        worst case ("In progress" + "Improvement" + "Medium"), so it wraps to
        a second line rather than pushing the card sideways. */
+    /* Classification on the left, tools on the right. The two groups let the
+       row split without either half wrapping into the other's space. */
     .${CLASSES.INBOX_CARD_ACTIONS} {
         display: flex;
         align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .${CLASSES.ACTIONS_GROUP} {
+        display: flex;
+        align-items: center;
         flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 6px;
+        gap: 8px;
+    }
+    /* The tools never wrap: three 24px icons always fit, and wrapping them
+       under the pickers put the ⋯ on a line of its own. */
+    .${CLASSES.ACTIONS_GROUP_END} {
+        flex-wrap: nowrap;
+        gap: 2px;
     }
 
     .${CLASSES.INBOX_ACTION_BTN} {
@@ -806,68 +819,73 @@ ${webkitScrollbar(
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 4px;
-        margin-top: 6px;
+        gap: 6px;
+        margin-top: 10px;
     }
-    /* Same pill geometry as .helldots-badge, one size up: these are hit
-       targets, not labels, and a 22px control is the smallest the rest of
-       the strip uses. */
+    /* Hidden rather than absent: the first reaction arrives from the trigger
+       in the action row, so the row has to be mounted and waiting for it. */
+    .${CLASSES.REACTION_BAR}[hidden] {
+        display: none;
+    }
+    .${CLASSES.REACTION_TRIGGER} {
+        position: relative;
+        display: inline-flex;
+    }
     .${CLASSES.REACTION_PILL} {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        height: 22px;
+        gap: 5px;
+        height: 24px;
         padding: 0 8px;
         border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 11px;
-        background: rgba(255, 255, 255, 0.06);
+        border-radius: 8px;
+        background: transparent;
         color: #F2F2F7;
         font-family: inherit;
-        font-size: 11px;
+        font-size: 12px;
         line-height: 1;
         cursor: pointer;
         transition: background 0.12s ease, border-color 0.12s ease;
     }
-    /* A span on inbox list cards, where the pill reports and does not act. */
-    span.${CLASSES.REACTION_PILL} {
-        cursor: default;
+    .${CLASSES.REACTION_PILL}:hover {
+        background: rgba(255, 255, 255, 0.08);
     }
-    button.${CLASSES.REACTION_PILL}:hover {
-        background: rgba(255, 255, 255, 0.12);
-    }
-    /* The blue is the same one the active marker and \`in_review\` carry, and
-       it never stands alone: the count is text and aria-pressed says the
-       rest (WCAG 1.4.1). */
+    /* The blue the active marker and \`in_review\` already carry. It never
+       stands alone: the count is text and aria-pressed says the rest
+       (WCAG 1.4.1). */
     .${CLASSES.REACTION_PILL_MINE} {
         border-color: #2E90FA;
-        background: rgba(46, 144, 250, 0.18);
+        background: rgba(46, 144, 250, 0.16);
+    }
+    .${CLASSES.REACTION_PILL_MINE}:hover {
+        background: rgba(46, 144, 250, 0.24);
     }
     /* The platform emoji face, named explicitly: the widget's own stack is a
        UI sans that renders some of these as monochrome glyphs. */
     .${CLASSES.REACTION_PILL_EMOJI} {
         font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
-        font-size: 12px;
+        font-size: 13px;
     }
     .${CLASSES.REACTION_PILL_COUNT} {
         font-variant-numeric: tabular-nums;
-        opacity: 0.85;
     }
+    /* Same box as a pill, so the row reads as one strip of controls. */
     .${CLASSES.REACTION_ADD} {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 22px;
-        height: 22px;
+        width: 28px;
+        height: 24px;
         padding: 0;
-        border: 1px dashed rgba(255, 255, 255, 0.22);
-        border-radius: 11px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 8px;
         background: transparent;
         color: #8E8E93;
         cursor: pointer;
     }
     .${CLASSES.REACTION_ADD}:hover {
         color: #F2F2F7;
-        border-color: rgba(255, 255, 255, 0.4);
+        border-color: rgba(255, 255, 255, 0.35);
     }
     /* No \`display\` here on purpose: attachMenuToggle drives it inline
        (none/block), so the row is held together by inline-flex items and
@@ -883,6 +901,13 @@ ${webkitScrollbar(
         padding: 4px;
         z-index: 1;
         box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    /* The action-row trigger sits at the right edge, so its palette opens
+       leftward instead of pushing the popover wider. */
+    .${CLASSES.ACTIONS_GROUP_END} .${CLASSES.REACTION_PALETTE},
+    .${CLASSES.THREAD_REPLY_ACTIONS} .${CLASSES.REACTION_PALETTE} {
+        left: auto;
+        right: 0;
     }
     .${CLASSES.REACTION_PALETTE}.${CLASSES.INBOX_MENU_UP} {
         top: auto;
