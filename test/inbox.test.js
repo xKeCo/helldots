@@ -1973,3 +1973,139 @@ describe("keyed list reconciliation", () => {
     expect(ids).toEqual(["b", "a"]);
   });
 });
+
+describe("inbox reactions", () => {
+  let overlay;
+
+  beforeEach(() => {
+    document.elementFromPoint = () => null;
+    document.body.innerHTML = `<section id="target">Compare our plans</section>`;
+    giveSize(document.getElementById("target"));
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  const seedReacted = (instance) =>
+    instance.loadComments([
+      {
+        id: "rx",
+        text: "reacted comment",
+        page: location.pathname,
+        anchor: null,
+        author: "Ana",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        screenshots: [],
+        status: "open",
+        reactions: { "👍": ["ana"] },
+        replies: [
+          {
+            id: "rr",
+            text: "a reply",
+            author: "Bo",
+            timestamp: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      },
+    ]);
+
+  it("shows read-only pills on a list card", () => {
+    // The card navigates on click and already carries four controls; the
+    // signal belongs there, the affordance does not.
+    overlay = makeOverlay({ user: { name: "Me" } });
+    seedReacted(overlay);
+    const panel = openInbox(overlay);
+
+    const card = panel.querySelector(`.${CLASSES.INBOX_CARD}`);
+    const pill = card.querySelector(`.${CLASSES.REACTION_PILL}`);
+    expect(pill.tagName).toBe("SPAN");
+    expect(pill.getAttribute("aria-pressed")).toBeNull();
+    expect(card.querySelector(`.${CLASSES.REACTION_ADD}`)).toBeNull();
+  });
+
+  it("grows no reaction row on a card nobody has reacted to", () => {
+    overlay = makeOverlay({ user: { name: "Me" } });
+    overlay.loadComments([
+      {
+        id: "plain",
+        text: "no reactions",
+        page: location.pathname,
+        anchor: null,
+        author: "Ana",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        screenshots: [],
+        status: "open",
+        replies: [],
+      },
+    ]);
+    const panel = openInbox(overlay);
+    expect(panel.querySelector(`.${CLASSES.REACTION_BAR}`)).toBeNull();
+  });
+
+  it("offers an interactive bar for the comment and each reply in the detail view", () => {
+    overlay = makeOverlay({ user: { name: "Me" } });
+    seedReacted(overlay);
+    const panel = openInbox(overlay);
+    click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
+
+    const detail = panel.querySelector(`.${CLASSES.INBOX_DETAIL}`);
+    expect(detail.querySelectorAll(`.${CLASSES.REACTION_ADD}`)).toHaveLength(2);
+    expect(
+      detail.querySelector(`.${CLASSES.THREAD_REPLY} .${CLASSES.REACTION_ADD}`)
+    ).toBeTruthy();
+  });
+
+  it("reacting from the detail view reaches the overlay, for the comment and for a reply", () => {
+    overlay = makeOverlay({ user: { name: "Me" } });
+    seedReacted(overlay);
+    const panel = openInbox(overlay);
+    click(panel.querySelector(`.${CLASSES.INBOX_CARD}`));
+
+    const detail = () => panel.querySelector(`.${CLASSES.INBOX_DETAIL}`);
+    // Found by dataset rather than by an [data-reaction-emoji="..."] selector:
+    // jsdom's selector engine does not match attribute values containing
+    // astral-plane characters, which every one of these emoji is. Browsers do,
+    // and no selector in src/ depends on it either way.
+    const byEmoji = (root, selector, emoji) =>
+      [...root.querySelectorAll(selector)].find(
+        (el) => el.dataset.reactionEmoji === emoji
+      );
+
+    // The comment's bar is the card's; the reply's lives inside its row.
+    click(
+      byEmoji(
+        detail(),
+        `.${CLASSES.INBOX_CARD} .${CLASSES.REACTION_PILL}`,
+        "👍"
+      )
+    );
+    expect(overlay.comments[0].reactions["👍"]).toEqual(["ana", "Me"]);
+
+    click(
+      byEmoji(
+        detail(),
+        `.${CLASSES.THREAD_REPLY} .${CLASSES.REACTION_PALETTE_ITEM}`,
+        "🎉"
+      )
+    );
+    expect(overlay.comments[0].replies[0].reactions).toEqual({ "🎉": ["Me"] });
+  });
+
+  it("re-renders a cached card when only its reactions changed", () => {
+    // The list reuses a card node whose fingerprint is unchanged, so the
+    // fingerprint has to carry the reaction counts or they freeze on screen.
+    overlay = makeOverlay({ user: { name: "Me" } });
+    seedReacted(overlay);
+    const panel = openInbox(overlay);
+    const countOf = () =>
+      panel.querySelector(`.${CLASSES.REACTION_PILL_COUNT}`).textContent;
+
+    expect(countOf()).toBe("1");
+    overlay.toggleCommentReaction("rx", "👍");
+    expect(countOf()).toBe("2");
+  });
+});

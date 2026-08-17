@@ -864,6 +864,11 @@ class CommentOverlay {
             if (!this.editReply(commentId, replyId, text)) return;
             this._popover.refreshCommentViews(commentId);
           },
+          actorKey: () => this._actorKey(),
+          onToggleCommentReaction: (id, emoji) =>
+            this.toggleCommentReaction(id, emoji),
+          onToggleReplyReaction: (commentId, replyId, emoji) =>
+            this.toggleReplyReaction(commentId, replyId, emoji),
           onSetStatus: (id, status) => this.setCommentStatus(id, status),
           onSetType: (id, type) => this.setCommentType(id, type),
           onSetPriority: (id, priority) =>

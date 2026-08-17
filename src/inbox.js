@@ -28,6 +28,7 @@ import {
   getShortcutText,
 } from "./components.js";
 import { sameId } from "./id.js";
+import { createReactionBar, reactionEntriesOf } from "./reactions.js";
 import { createInlineEditor, confirmDiscard } from "./inline-editor.js";
 import { buildCommentLink } from "./link.js";
 
@@ -44,7 +45,7 @@ export class InboxView {
    * @param {string} deps.currentPage
    * @param {() => Array<Object>} deps.getComments
    * @param {{ shortcutKey?: string, shortcutModifier?: string, linkParam?: string }} [deps.options]
-   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onDeleteReply: Function, onEditComment: Function, onEditReply: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function }} deps.callbacks
+   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onDeleteReply: Function, onEditComment: Function, onEditReply: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function, actorKey: () => string, onToggleCommentReaction: Function, onToggleReplyReaction: Function }} deps.callbacks
    */
   constructor({
     shadowRoot,
@@ -436,6 +437,13 @@ export class InboxView {
       comment.hidden === true,
       comment.page,
       comment.screenshots?.length ?? 0,
+      // Counts, not actor keys: what the card renders is the pill and its
+      // number. Without this entry a card whose reactions changed keeps its
+      // cached node and the counts freeze on screen.
+      reactionEntriesOf(comment).map(({ emoji, authors }) => [
+        emoji,
+        authors.length,
+      ]),
     ]);
   }
 
@@ -809,6 +817,21 @@ export class InboxView {
     });
     if (badges) card.appendChild(badges);
 
+    // `interactive` here means "list card that navigates on click", which is
+    // exactly the surface where reactions are read-only: it already carries a
+    // header, four controls, text, badges and a replies link, and one more
+    // dropdown would turn it into a form. The detail view (interactive:
+    // false) is where reacting happens.
+    const reactionBar = createReactionBar({
+      target: comment,
+      actorKey: this.callbacks.actorKey(),
+      strings: this.strings,
+      interactive: !interactive,
+      onToggle: (emoji) =>
+        this.callbacks.onToggleCommentReaction(comment.id, emoji),
+    });
+    if (reactionBar) card.appendChild(reactionBar);
+
     const tag = this._buildTag(comment);
     if (tag) card.appendChild(tag);
 
@@ -980,6 +1003,11 @@ export class InboxView {
         },
         onEdit: (r) => this.startEditing(comment.id, r.id),
         editing: editingThisReply ? this._editorHandlers() : null,
+        reactions: {
+          actorKey: this.callbacks.actorKey(),
+          onToggle: (target, emoji) =>
+            this.callbacks.onToggleReplyReaction(comment.id, target.id, emoji),
+        },
       });
       wireScreenshotLightbox(replyEl, (src) =>
         this.callbacks.onShowLightbox(src)
