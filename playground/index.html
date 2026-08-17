@@ -409,7 +409,10 @@
     const overlay = createCommentOverlay({
       autoInit: true,
       persistence: 'localStorage',
-      user: { name: 'Kevin Collazos' },
+      // `id` is what reactions are keyed on; the name is what gets displayed.
+      // Set here so the playground exercises the option the way a real host
+      // with accounts would. See README, "Reactions".
+      user: { name: 'Kevin Collazos', id: 'u_kevin' },
       // This page pulls Poppins from fonts.googleapis.com, whose cssRules the
       // renderer cannot read — without this the captured text falls back to a
       // different face and drag crops come back holding the wrong glyphs. Off
