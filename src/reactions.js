@@ -269,7 +269,10 @@ export const createReactionsUi = ({ actorKey, strings, onToggle }) => {
         // A toggle has to say which way it is about to flip; the count alone
         // does not, and the highlight is colour, which never stands alone.
         pill.setAttribute("aria-pressed", String(mine));
-        pill.dataset.hdTooltip = action;
+        // No hover bubble on a pill the actor already holds: the highlight
+        // says it is theirs, and the tooltip only repeated what clicking it
+        // would do. The accessible name still carries the action.
+        if (!mine) pill.dataset.hdTooltip = action;
         pill.setAttribute(
           "aria-label",
           `${action}: ${emoji} (${authors.length})`

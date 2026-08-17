@@ -105,6 +105,18 @@ describe("the reaction bar", () => {
     expect(label).not.toContain("u_8123");
   });
 
+  it("gives a hover tooltip only to a pill the actor does not hold", () => {
+    // On their own pill the highlight already says it is theirs, and the
+    // bubble only repeated what clicking would do. The accessible name keeps
+    // carrying the action either way.
+    const [mine, theirs] = pillsOf(
+      barFor({ "\u{1F44D}": ["me"], "\u{1F680}": ["ana"] })
+    );
+    expect(mine.dataset.hdTooltip).toBeUndefined();
+    expect(mine.getAttribute("aria-label")).toContain(en.reactionToggleOff);
+    expect(theirs.dataset.hdTooltip).toBe(en.reactionToggleOn);
+  });
+
   it("keeps pill order stable when a count changes", () => {
     const target = {
       reactions: { "\u{1F680}": ["ana"], "\u{1F44D}": ["ana"] },

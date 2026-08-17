@@ -628,13 +628,14 @@ ${webkitScrollbar(
         display: flex;
         align-items: center;
         justify-content: space-between;
+        width: 100%;
         gap: 8px;
     }
     .${CLASSES.ACTIONS_GROUP} {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 5px;
     }
     /* The tools never wrap: three 24px icons always fit, and wrapping them
        under the pickers put the ⋯ on a line of its own. */
@@ -820,7 +821,8 @@ ${webkitScrollbar(
         align-items: center;
         flex-wrap: wrap;
         gap: 6px;
-        margin-top: 10px;
+        margin-top: 2px;
+        margin-bottom: 12px;
     }
     /* Hidden rather than absent: the first reaction arrives from the trigger
        in the action row, so the row has to be mounted and waiting for it. */
@@ -1171,7 +1173,7 @@ ${webkitScrollbar(
         border-top: 1px solid rgba(255,255,255,0.1);
         white-space: pre-wrap;
         word-break: break-word;
-        font-size: 13px;
+        font-size: 14px;
         color: rgba(255,255,255,0.85);
     }
 
