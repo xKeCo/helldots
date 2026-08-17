@@ -94,17 +94,19 @@ export interface SerializedComment {
   /** RF1 — automatic viewport capture (JPEG data-URL). */
   contextScreenshot: string | null;
   /**
-   * RF6 — emoji → authors who reacted. Reserved, not implemented yet.
-   * Optional and absent by default, so shipping it later needs no migration.
+   * RF6 — emoji → the actor keys that reacted (see the `user` option). Always
+   * one of the six emoji in the fixed set; anything else is dropped on load.
+   * Null when nobody has reacted, so an untouched corpus carries no extra
+   * payload.
    */
-  reactions?: Record<string, string[]>;
+  reactions: Record<string, string[]> | null;
 }
 
 /**
  * Everything that can change, as one discriminated union. Switch on `type`
  * and TypeScript narrows the rest of the fields for you.
  *
- * The nine specific callbacks below carry exactly the same events at
+ * The ten specific callbacks below carry exactly the same events at
  * exactly the same moments; subscribe either way, or both.
  */
 export type ChangeEvent =
@@ -129,6 +131,12 @@ export type ChangeEvent =
       type: "reply:edited";
       comment: SerializedComment;
       reply: CommentReply;
+    }
+  /** `reply` is null when the reaction is on the root comment. */
+  | {
+      type: "reaction:toggled";
+      comment: SerializedComment;
+      reply: CommentReply | null;
     };
 
 export interface CommentOverlayOptions {
@@ -164,8 +172,15 @@ export interface CommentOverlayOptions {
    * font or adding `crossorigin` to the `<link>`.
    */
   embedCrossOriginFonts?: boolean;
-  /** Identity used as the author of new comments and replies. */
-  user?: { name: string };
+  /**
+   * Identity used as the author of new comments and replies.
+   *
+   * `name` is what gets displayed. `id` is optional and never rendered: it is
+   * what a reaction is keyed on, so two teammates who share a display name do
+   * not share one reaction. Without it the name is used, and without any
+   * `user` at all every actor collapses into one.
+   */
+  user?: { name: string; id?: string };
   /**
    * Query parameter carrying a comment id in "Copy link" URLs, and read back
    * on startup to open that comment. Default: "helldotsComment". Override it
@@ -211,6 +226,14 @@ export interface CommentOverlayOptions {
   onCommentStatusChanged?: (comment: SerializedComment) => void;
   /** Fired after type, priority or tags change on any comment. */
   onCommentUpdated?: (comment: SerializedComment) => void;
+  /**
+   * Fired after a reaction is added to or removed from a comment or a reply.
+   * `reply` is null when the reaction is on the root comment.
+   */
+  onReactionToggled?: (
+    comment: SerializedComment,
+    reply: CommentReply | null
+  ) => void;
 }
 
 export interface CommentReply {
@@ -221,6 +244,11 @@ export interface CommentReply {
   screenshots?: string[];
   /** ISO timestamp of the last edit; null when never edited. */
   editedAt?: string | null;
+  /**
+   * RF6 — emoji → the actor keys that reacted. Same shape and same rules as a
+   * comment's; null when nobody has reacted.
+   */
+  reactions?: Record<string, string[]> | null;
 }
 
 export interface Comment {
@@ -262,10 +290,12 @@ export interface Comment {
   /** RF1 — automatic viewport capture (JPEG data-URL). */
   contextScreenshot: string | null;
   /**
-   * RF6 — emoji → authors who reacted. Reserved, not implemented yet.
-   * Optional and absent by default, so shipping it later needs no migration.
+   * RF6 — emoji → the actor keys that reacted (see the `user` option). Always
+   * one of the six emoji in the fixed set; anything else is dropped on load.
+   * Null when nobody has reacted, so an untouched corpus carries no extra
+   * payload.
    */
-  reactions?: Record<string, string[]>;
+  reactions: Record<string, string[]> | null;
 }
 
 export declare class CommentOverlay {
@@ -319,6 +349,18 @@ export declare class CommentOverlay {
   setCommentType(id: CommentId, type: CommentType | null): boolean;
   setCommentPriority(id: CommentId, priority: CommentPriority | null): boolean;
   setCommentTags(id: CommentId, tags: string[]): boolean;
+  /**
+   * RF6 — flips the current actor's reaction on a comment: present, it is
+   * removed; absent, it is added. The actor is `user.id ?? user.name`.
+   * Returns false when the id or the emoji is unknown.
+   */
+  toggleCommentReaction(id: CommentId, emoji: string): boolean;
+  /** Same contract as toggleCommentReaction, one level down. */
+  toggleReplyReaction(
+    commentId: CommentId,
+    replyId: CommentId,
+    emoji: string
+  ): boolean;
   cleanup(): void;
 }
 

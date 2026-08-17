@@ -28,6 +28,12 @@ import {
 } from "./storage.js";
 import { createId, sameId } from "./id.js";
 import {
+  actorKeyOf,
+  toggleReactionOn,
+  normalizeReactions,
+  serializeReactions,
+} from "./reactions.js";
+import {
   buildCommentLink,
   readCommentLinkParam,
   DEFAULT_LINK_PARAM,
@@ -81,6 +87,7 @@ const CHANGE_CALLBACKS = {
   "reply:added": "onReplyAdded",
   "reply:deleted": "onReplyDeleted",
   "reply:edited": "onReplyEdited",
+  "reaction:toggled": "onReactionToggled",
 };
 
 class CommentOverlay {
@@ -1169,7 +1176,17 @@ class CommentOverlay {
     return true;
   }
 
-  _serializeReply({ id, text, author, timestamp, screenshots, editedAt }) {
+  _serializeReply({
+    id,
+    text,
+    author,
+    timestamp,
+    screenshots,
+    editedAt,
+    // Defaulted, not just optional: addReply builds a reply without the field,
+    // and a fresh reply has nothing to serialize yet.
+    reactions = null,
+  }) {
     return {
       id,
       text,
@@ -1177,6 +1194,7 @@ class CommentOverlay {
       timestamp,
       screenshots: screenshots || [],
       editedAt: editedAt || null,
+      reactions: serializeReactions(reactions),
     };
   }
 
@@ -1208,6 +1226,9 @@ class CommentOverlay {
       // Copied rather than referenced: a host mutating serializeComments()
       // output must not be able to reach back into overlay internals.
       tags: comment.tags ? [...comment.tags] : [],
+      // Copied for the same reason as `tags`, and null rather than `{}` when
+      // nobody reacted, so an untouched corpus costs no extra bytes.
+      reactions: serializeReactions(comment.reactions),
       resolvedAt: comment.resolvedAt || null,
       context: comment.context ? { ...comment.context } : null,
       contextScreenshot: comment.contextScreenshot || null,
@@ -1246,6 +1267,67 @@ class CommentOverlay {
     const changed = this._serializeComment(comment);
     this._emit("comment:status-changed", [changed], { comment: changed });
     return true;
+  }
+
+  /**
+   * The key the current actor's reactions are stored under. `user.id` when the
+   * host supplies one, the display name otherwise — see actorKeyOf, which is
+   * the only place this is decided so the toggle and the "mine" render can
+   * never disagree.
+   * @returns {string}
+   */
+  _actorKey() {
+    return actorKeyOf(this.options.user, this.strings);
+  }
+
+  /**
+   * Shared tail of both reaction toggles: persist, keep an open inbox in step,
+   * and hand the host the comment plus whichever reply carried the reaction.
+   * @param {any} comment
+   * @param {any | null} reply
+   * @returns {true}
+   */
+  _commitReaction(comment, reply) {
+    this._syncStorage();
+    // A pill lives on the card, in the detail and in the popover at once, so a
+    // toggle anywhere has to reach the copies it did not repaint itself.
+    if (this.inboxView?.isOpen()) this.inboxView.refresh();
+    const serialized = this._serializeComment(comment);
+    const serializedReply = reply ? this._serializeReply(reply) : null;
+    this._emit("reaction:toggled", [serialized, serializedReply], {
+      comment: serialized,
+      reply: serializedReply,
+    });
+    return true;
+  }
+
+  /**
+   * Flips the current actor's reaction on a comment: present, it is removed;
+   * absent, it is added.
+   * @param {import('./index.d.ts').CommentId} id
+   * @param {string} emoji one of REACTION_EMOJIS
+   * @returns {boolean} false when the id or the emoji is unknown
+   */
+  toggleCommentReaction(id, emoji) {
+    const comment = this._findComment(id);
+    if (!comment) return false;
+    if (!toggleReactionOn(comment, emoji, this._actorKey())) return false;
+    return this._commitReaction(comment, null);
+  }
+
+  /**
+   * Same contract as toggleCommentReaction, one level down.
+   * @param {import('./index.d.ts').CommentId} commentId
+   * @param {import('./index.d.ts').CommentId} replyId
+   * @param {string} emoji one of REACTION_EMOJIS
+   * @returns {boolean} false when either id, or the emoji, is unknown
+   */
+  toggleReplyReaction(commentId, replyId, emoji) {
+    const comment = this._findComment(commentId);
+    const reply = comment?.replies?.find((r) => sameId(r.id, replyId));
+    if (!reply) return false;
+    if (!toggleReactionOn(reply, emoji, this._actorKey())) return false;
+    return this._commitReaction(comment, reply);
   }
 
   /**
@@ -1409,14 +1491,13 @@ class CommentOverlay {
                   reply.id != null &&
                   typeof reply.text === "string"
               )
-              .map((reply) =>
-                Array.isArray(reply.screenshots)
-                  ? {
-                      ...reply,
-                      screenshots: onlyStrings(reply.screenshots),
-                    }
-                  : reply
-              )
+              .map((reply) => ({
+                ...reply,
+                ...(Array.isArray(reply.screenshots)
+                  ? { screenshots: onlyStrings(reply.screenshots) }
+                  : {}),
+                reactions: normalizeReactions(reply.reactions),
+              }))
           : [],
         author: item.author || this.strings.anonymous,
         createdAt: item.createdAt || new Date().toISOString(),
@@ -1438,6 +1519,10 @@ class CommentOverlay {
         priority: PRIORITIES.includes(item.priority) ? item.priority : null,
         tags: Array.isArray(item.tags) ? [...item.tags] : [],
         resolvedAt: item.resolvedAt || null,
+        // Reactions come from localStorage or from the host's backend, so the
+        // map is scrubbed before any renderer sees it: unknown glyphs and
+        // duplicated actor keys both survive a round trip otherwise.
+        reactions: normalizeReactions(item.reactions),
         context: item.context || null,
         contextScreenshot: item.contextScreenshot || null,
       };

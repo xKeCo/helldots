@@ -3043,3 +3043,149 @@ describe("CSS-hostile ids in marker UI lookups", () => {
     ).toBeTruthy();
   });
 });
+
+describe("emoji reactions", () => {
+  let overlay;
+
+  const seed = (instance) =>
+    instance.loadComments([
+      {
+        id: 30,
+        text: "t",
+        anchor: null,
+        page: location.pathname,
+        replies: [
+          {
+            id: "r1",
+            text: "agreed",
+            author: "Bo",
+            timestamp: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        author: "Ana",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        screenshots: [],
+        status: "open",
+      },
+    ]);
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    vi.restoreAllMocks();
+  });
+
+  it("toggles a reaction on a comment and fires the paired event and callback", () => {
+    const onReactionToggled = vi.fn();
+    const onChange = vi.fn();
+    overlay = makeOverlay({
+      user: { name: "Ana" },
+      onReactionToggled,
+      onChange,
+    });
+    seed(overlay);
+
+    expect(overlay.toggleCommentReaction(30, "👍")).toBe(true);
+    expect(overlay.comments[0].reactions).toEqual({ "👍": ["Ana"] });
+    expect(onReactionToggled).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 30, reactions: { "👍": ["Ana"] } }),
+      null
+    );
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "reaction:toggled" })
+    );
+  });
+
+  it("keys the reaction on user.id when the host supplies one", () => {
+    // Two teammates called "Ana" must not share one reaction.
+    overlay = makeOverlay({ user: { name: "Ana", id: "u_8123" } });
+    seed(overlay);
+    overlay.toggleCommentReaction(30, "👍");
+    expect(overlay.comments[0].reactions).toEqual({ "👍": ["u_8123"] });
+  });
+
+  it("attributes the reaction to the anonymous string with no user", () => {
+    overlay = makeOverlay();
+    seed(overlay);
+    overlay.toggleCommentReaction(30, "👍");
+    expect(overlay.comments[0].reactions).toEqual({ "👍": [en.anonymous] });
+  });
+
+  it("a second toggle by the same actor removes the reaction entirely", () => {
+    overlay = makeOverlay({ user: { name: "Ana" } });
+    seed(overlay);
+    overlay.toggleCommentReaction(30, "👍");
+    expect(overlay.toggleCommentReaction(30, "👍")).toBe(true);
+    expect(overlay.comments[0].reactions["👍"]).toBeUndefined();
+  });
+
+  it("carries the reply on a reply-level reaction", () => {
+    const onReactionToggled = vi.fn();
+    overlay = makeOverlay({ user: { name: "Ana" }, onReactionToggled });
+    seed(overlay);
+
+    expect(overlay.toggleReplyReaction(30, "r1", "🎉")).toBe(true);
+    expect(overlay.comments[0].replies[0].reactions).toEqual({
+      "🎉": ["Ana"],
+    });
+    expect(onReactionToggled).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 30 }),
+      expect.objectContaining({ id: "r1", reactions: { "🎉": ["Ana"] } })
+    );
+  });
+
+  it("returns false for an unknown emoji, comment or reply, with no side effects", () => {
+    const onReactionToggled = vi.fn();
+    overlay = makeOverlay({ user: { name: "Ana" }, onReactionToggled });
+    seed(overlay);
+
+    expect(overlay.toggleCommentReaction(30, "💩")).toBe(false);
+    expect(overlay.toggleCommentReaction(999, "👍")).toBe(false);
+    expect(overlay.toggleReplyReaction(30, "nope", "👍")).toBe(false);
+    expect(overlay.toggleReplyReaction(999, "r1", "👍")).toBe(false);
+
+    // loadComments normalises the field for every record, so "nothing here"
+    // is spelled null rather than left absent.
+    expect(overlay.comments[0].reactions).toBeNull();
+    expect(onReactionToggled).not.toHaveBeenCalled();
+  });
+
+  it("serializes reactions, and omits the field when there are none", () => {
+    overlay = makeOverlay({ user: { name: "Ana" } });
+    seed(overlay);
+    expect(overlay.serializeComments()[0].reactions).toBeNull();
+
+    overlay.toggleCommentReaction(30, "👀");
+    const [serialized] = overlay.serializeComments();
+    expect(serialized.reactions).toEqual({ "👀": ["Ana"] });
+    expect(serialized.replies[0].reactions).toBeNull();
+  });
+
+  it("normalises hostile persisted reactions on load", () => {
+    overlay = makeOverlay();
+    overlay.loadComments([
+      {
+        id: 31,
+        text: "t",
+        anchor: null,
+        page: location.pathname,
+        author: "Ana",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        // An unknown glyph, a non-array, a duplicated actor and a non-string.
+        reactions: { "💩": ["x"], "👎": "nope", "👍": ["ana", "ana", 7] },
+        replies: [
+          {
+            id: "r1",
+            text: "y",
+            author: "Bo",
+            timestamp: "2026-01-01T00:00:00.000Z",
+            reactions: { "🚀": ["bo", "bo"] },
+          },
+        ],
+      },
+    ]);
+
+    expect(overlay.comments[0].reactions).toEqual({ "👍": ["ana"] });
+    expect(overlay.comments[0].replies[0].reactions).toEqual({ "🚀": ["bo"] });
+  });
+});

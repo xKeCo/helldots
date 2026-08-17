@@ -39,6 +39,77 @@ export const reactionEntriesOf = (target) => {
   );
 };
 
+/**
+ * Persisted reactions arrive from localStorage or from the host's backend, so
+ * nothing about their shape can be trusted: an unknown glyph would render a
+ * pill this build cannot toggle, and a duplicated actor key would inflate a
+ * count that looks like consensus. Returns null when there is nothing worth
+ * keeping, so callers leave the field absent instead of storing `{}`.
+ *
+ * @param {unknown} raw
+ * @returns {Record<string, string[]> | null}
+ */
+export const normalizeReactions = (raw) => {
+  if (!raw || typeof raw !== "object") return null;
+  const out = /** @type {Record<string, string[]>} */ ({});
+  for (const emoji of REACTION_EMOJIS) {
+    const authors = raw[emoji];
+    if (!Array.isArray(authors)) continue;
+    const kept = [];
+    for (const author of authors) {
+      if (typeof author !== "string") continue;
+      const clean = author.trim();
+      if (clean && !kept.includes(clean)) kept.push(clean);
+    }
+    if (kept.length > 0) out[emoji] = kept;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+};
+
+/**
+ * Flips one actor's reaction on a comment or a reply, in place, and reports
+ * whether anything changed so the caller decides what to persist and emit.
+ *
+ * @param {{ reactions?: Record<string, string[]> }} target
+ * @param {string} emoji
+ * @param {string} actorKey
+ * @returns {boolean} false when the emoji is not in the set, or there is no
+ *   actor to attribute the reaction to
+ */
+export const toggleReactionOn = (target, emoji, actorKey) => {
+  if (!REACTION_EMOJIS.includes(emoji) || !actorKey) return false;
+  if (!target.reactions) target.reactions = {};
+  const authors = target.reactions[emoji] || [];
+  const index = authors.indexOf(actorKey);
+  if (index >= 0) authors.splice(index, 1);
+  else authors.push(actorKey);
+  // Never store an empty array: absent and "nobody" are the same state, and
+  // keeping one spelling of it is what lets the serializer omit the field.
+  if (authors.length > 0) target.reactions[emoji] = authors;
+  else delete target.reactions[emoji];
+  return true;
+};
+
+/**
+ * Serializer half. Copied rather than referenced, like `tags`: a host mutating
+ * serializeComments() output must not be able to reach back into overlay
+ * internals. Null (not `{}`) when there is nothing, so a corpus nobody reacted
+ * to costs no bytes.
+ *
+ * @param {Record<string, string[]> | undefined | null} reactions
+ * @returns {Record<string, string[]> | null}
+ */
+export const serializeReactions = (reactions) => {
+  const entries = Object.entries(reactions || {}).filter(
+    ([, authors]) => authors?.length > 0
+  );
+  return entries.length > 0
+    ? Object.fromEntries(
+        entries.map(([emoji, authors]) => [emoji, [...authors]])
+      )
+    : null;
+};
+
 const PLUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
 
 /**

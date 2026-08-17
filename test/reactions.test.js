@@ -3,6 +3,9 @@ import {
   actorKeyOf,
   reactionEntriesOf,
   createReactionBar,
+  normalizeReactions,
+  toggleReactionOn,
+  serializeReactions,
 } from "../src/reactions.js";
 import { CLASSES, REACTION_EMOJIS } from "../src/constants.js";
 import en from "../src/locales/en.js";
@@ -169,5 +172,72 @@ describe("createReactionBar", () => {
     // An inbox list card must not grow an empty row for a comment nobody has
     // reacted to.
     expect(barFor({}, "me", { interactive: false })).toBeNull();
+  });
+});
+
+describe("normalizeReactions", () => {
+  it("drops emoji outside the fixed set", () => {
+    // A glyph this build has no palette entry for would render a pill nobody
+    // can toggle off.
+    expect(normalizeReactions({ "💩": ["ana"], "👍": ["ana"] })).toEqual({
+      "👍": ["ana"],
+    });
+  });
+
+  it("drops values that are not arrays and entries that are not strings", () => {
+    expect(normalizeReactions({ "👍": "ana", "🚀": ["ana", 7, null] })).toEqual(
+      {
+        "🚀": ["ana"],
+      }
+    );
+  });
+
+  it("de-duplicates actor keys so a count cannot be inflated", () => {
+    expect(normalizeReactions({ "👍": ["ana", "ana", " ana "] })).toEqual({
+      "👍": ["ana"],
+    });
+  });
+
+  it("returns null for junk and for an empty result", () => {
+    expect(normalizeReactions(undefined)).toBeNull();
+    expect(normalizeReactions("nope")).toBeNull();
+    expect(normalizeReactions({ "👍": [] })).toBeNull();
+  });
+});
+
+describe("toggleReactionOn", () => {
+  it("adds, then removes, deleting the emoji key when the last actor leaves", () => {
+    const target = {};
+    expect(toggleReactionOn(target, "👍", "me")).toBe(true);
+    expect(target.reactions).toEqual({ "👍": ["me"] });
+    expect(toggleReactionOn(target, "👍", "me")).toBe(true);
+    expect(target.reactions["👍"]).toBeUndefined();
+  });
+
+  it("leaves other actors alone when one of them leaves", () => {
+    const target = { reactions: { "👍": ["ana", "me", "bo"] } };
+    toggleReactionOn(target, "👍", "me");
+    expect(target.reactions["👍"]).toEqual(["ana", "bo"]);
+  });
+
+  it("refuses an emoji outside the set and an empty actor key", () => {
+    const target = {};
+    expect(toggleReactionOn(target, "💩", "me")).toBe(false);
+    expect(toggleReactionOn(target, "👍", "")).toBe(false);
+    expect(target.reactions).toBeUndefined();
+  });
+});
+
+describe("serializeReactions", () => {
+  it("omits an empty map entirely", () => {
+    expect(serializeReactions({})).toBeNull();
+    expect(serializeReactions(undefined)).toBeNull();
+    expect(serializeReactions({ "👍": [] })).toBeNull();
+  });
+
+  it("copies rather than references the stored arrays", () => {
+    const reactions = { "👍": ["ana"] };
+    serializeReactions(reactions)["👍"].push("mallory");
+    expect(reactions["👍"]).toEqual(["ana"]);
   });
 });
