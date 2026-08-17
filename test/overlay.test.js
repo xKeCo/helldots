@@ -1166,13 +1166,17 @@ describe("CommentOverlay", () => {
         .dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
       const row = popover.querySelector(`.${CLASSES.THREAD_REPLY}`);
-      const labels = [...row.querySelectorAll('[role="menuitem"]')].map(
-        (item) => item.textContent
-      );
+      // Scoped to the ⋯ menu, which is what this assertion is about: the
+      // reaction palette in the same row is a role="menu" too, so a bare
+      // [role="menuitem"] sweep also returns its six emoji.
+      const menuItems = () => [
+        ...row.querySelectorAll(`.${CLASSES.INBOX_MENU} [role="menuitem"]`),
+      ];
+      const labels = menuItems().map((item) => item.textContent);
       expect(labels).toEqual([en.editReply, en.deleteReply]);
 
       // And the item actually opens the editor, rather than being inert.
-      const editItem = [...row.querySelectorAll('[role="menuitem"]')].find(
+      const editItem = menuItems().find(
         (item) => item.textContent === en.editReply
       );
       editItem.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -3148,6 +3152,34 @@ describe("emoji reactions", () => {
     // is spelled null rather than left absent.
     expect(overlay.comments[0].reactions).toBeNull();
     expect(onReactionToggled).not.toHaveBeenCalled();
+  });
+
+  it("reacting from the thread popover reaches the overlay and repaints the pill", () => {
+    // Covers the deps wiring end to end: the bar the popover mounts has to be
+    // holding the real toggle, not a handler pointing at nothing.
+    stubBodyRect();
+    overlay = makeOverlay({ user: { name: "Ana" } });
+    seed(overlay);
+    const comment = overlay.comments[0];
+    comment.container = document.body;
+    comment.anchorState = "anchored";
+    overlay.renderCommentCircle(comment);
+
+    const circle = overlay.shadowRoot.querySelector('[data-comment-id="30"]');
+    overlay.showThreadPopover(circle, comment);
+    const popover = overlay.activeThreadPopover;
+
+    const scrollBar = popover.querySelector(
+      `.${CLASSES.THREAD_SCROLL} > .${CLASSES.REACTION_BAR}`
+    );
+    scrollBar.querySelector(`.${CLASSES.REACTION_PALETTE_ITEM}`).click();
+
+    expect(comment.reactions).toEqual({ "\u{1F44D}": ["Ana"] });
+    const pill = scrollBar.querySelector(`.${CLASSES.REACTION_PILL}`);
+    expect(pill.getAttribute("aria-pressed")).toBe("true");
+    expect(
+      pill.querySelector(`.${CLASSES.REACTION_PILL_COUNT}`).textContent
+    ).toBe("1");
   });
 
   it("serializes reactions, and omits the field when there are none", () => {

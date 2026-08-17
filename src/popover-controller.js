@@ -105,11 +105,13 @@ export class PopoverController {
    *   isInsideLightbox: (target: any) => boolean,
    *   linkParam: () => string,
    *   refreshInbox: () => void,
+   *   actorKey: () => string,
    *   actions: {
    *     addReply: Function, deleteReply: Function,
    *     editComment: Function, editReply: Function,
    *     setStatus: Function, setType: Function, setPriority: Function,
    *     deleteComment: Function,
+   *     toggleCommentReaction: Function, toggleReplyReaction: Function,
    *   },
    * }} deps
    */
@@ -335,9 +337,25 @@ export class PopoverController {
     // edit — until the popover was reopened and the full render wired both.
     const onEditReply = (reply) => this.startEditing(comment.id, reply.id);
 
+    // One handler for the whole thread: the bar reports which target was
+    // clicked, so the root comment and any reply route to their own toggle.
+    // Built once, and reused by submitReply below so a reply created in this
+    // session gets the same bar a reopened popover would render.
+    const reactions = {
+      actorKey: this.deps.actorKey(),
+      onToggle: (target, emoji) => {
+        if (target === comment) {
+          this.deps.actions.toggleCommentReaction(comment.id, emoji);
+        } else {
+          this.deps.actions.toggleReplyReaction(comment.id, target.id, emoji);
+        }
+      },
+    };
+
     const popover = createThreadPopover(comment, strings, locale, {
       onDeleteReply,
       onEditReply,
+      reactions,
     });
     this.deps.shadowRoot.appendChild(popover);
 
@@ -475,6 +493,7 @@ export class PopoverController {
       const replyEl = createReplyElement(reply, strings, locale, {
         onDelete: onDeleteReply,
         onEdit: onEditReply,
+        reactions,
       });
       repliesContainer.appendChild(replyEl);
 

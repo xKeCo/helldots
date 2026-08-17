@@ -216,6 +216,7 @@ class CommentOverlay {
       refreshInbox: () => {
         if (this.inboxView?.isOpen()) this.inboxView.refresh();
       },
+      actorKey: () => this._actorKey(),
       actions: {
         addReply: (comment, text, screenshots) =>
           this.addReply(comment, text, screenshots),
@@ -228,6 +229,10 @@ class CommentOverlay {
         setType: (id, type) => this.setCommentType(id, type),
         setPriority: (id, priority) => this.setCommentPriority(id, priority),
         deleteComment: (id) => this.deleteComment(id),
+        toggleCommentReaction: (id, emoji) =>
+          this.toggleCommentReaction(id, emoji),
+        toggleReplyReaction: (commentId, replyId, emoji) =>
+          this.toggleReplyReaction(commentId, replyId, emoji),
       },
     });
 

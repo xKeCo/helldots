@@ -352,6 +352,86 @@ describe("components", () => {
       expect(gallery).toBeTruthy();
     });
   });
+
+  describe("reactions in the thread", () => {
+    const threadComment = () => ({
+      id: 12,
+      text: "root",
+      author: "Ann",
+      createdAt: new Date().toISOString(),
+      replies: [
+        {
+          id: "r1",
+          author: "Bob",
+          timestamp: new Date().toISOString(),
+          text: "r1",
+          reactions: { "👍": ["bob"] },
+        },
+      ],
+    });
+
+    it("mounts a bar for the comment and for every reply when a handler is given", () => {
+      const popover = createThreadPopover(
+        threadComment(),
+        getStrings("en"),
+        "en",
+        { reactions: { actorKey: "me", onToggle: () => {} } }
+      );
+      expect(popover.querySelectorAll(`.${CLASSES.REACTION_BAR}`).length).toBe(
+        2
+      );
+    });
+
+    it("renders no bar at all when no handler is given", () => {
+      // Every existing caller passes no reactions handler, and none of them
+      // should grow a control they never asked for.
+      const popover = createThreadPopover(
+        threadComment(),
+        getStrings("en"),
+        "en",
+        {}
+      );
+      expect(popover.querySelector(`.${CLASSES.REACTION_BAR}`)).toBeNull();
+    });
+
+    it("routes a reply pill click to the toggle with that reply and emoji", () => {
+      const reply = {
+        id: "r1",
+        author: "Bob",
+        timestamp: new Date().toISOString(),
+        text: "r1",
+        reactions: { "👍": ["bob"] },
+      };
+      const calls = [];
+      const el = createReplyElement(reply, getStrings("en"), "en", {
+        reactions: {
+          actorKey: "me",
+          onToggle: (target, emoji) => calls.push([target.id, emoji]),
+        },
+      });
+      el.querySelector(`.${CLASSES.REACTION_PILL}`).click();
+      expect(calls).toEqual([["r1", "👍"]]);
+    });
+
+    it("routes a comment pill click to the toggle with the comment", () => {
+      const comment = { ...threadComment(), reactions: { "🎉": ["ann"] } };
+      const calls = [];
+      const popover = createThreadPopover(comment, getStrings("en"), "en", {
+        reactions: {
+          actorKey: "me",
+          onToggle: (target, emoji) => calls.push([target.id, emoji]),
+        },
+      });
+      // The comment's own bar is the one inside the scroll container, not the
+      // reply's.
+      popover
+        .querySelector(
+          `.${CLASSES.THREAD_SCROLL} > .${CLASSES.REACTION_BAR} .${CLASSES.REACTION_PILL}`
+        )
+        .click();
+      expect(calls).toEqual([[12, "🎉"]]);
+    });
+  });
 });
 
 describe("createBadgeRow", () => {
