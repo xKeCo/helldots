@@ -83,8 +83,18 @@ the default branch.
 It applies to new commits. History before it is plain Conventional Commits
 without an emoji and stays that way — nothing is rewritten.
 
-There is no automated check: the convention lives in this document and is
-enforced at review time.
+A `commit-msg` hook checks every new message against the table above.
+`npm install` points git at `.githooks/` for you; nothing else to set up. The
+guard **parses the table in this document** rather than keeping its own copy,
+so editing the table here is what changes what the hook accepts.
+
+Check a message without committing:
+
+```bash
+npm run check:commit path/to/message.txt
+```
+
+`--no-verify` skips the hook when you genuinely mean to.
 
 ## Versioning and changelog (changesets)
 

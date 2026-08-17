@@ -53,9 +53,11 @@
     "build": "node scripts/build.mjs",
     "size": "node scripts/check-size.mjs",
     "verify": "npm run lint && npm run typecheck && npm run format:check && npm test && npm run build && npm run size",
+    "check:commit": "node scripts/check-commit-msg.mjs",
     "prepublishOnly": "npm run verify",
     "changeset": "changeset",
-    "release": "changeset version"
+    "release": "changeset version",
+    "prepare": "node scripts/install-hooks.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",

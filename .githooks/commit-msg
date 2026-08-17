@@ -1,0 +1,4 @@
+#!/bin/sh
+# Installed by `npm install` (see scripts/install-hooks.mjs). Bypass with
+# --no-verify only when you mean to.
+exec node "$(dirname "$0")/../scripts/check-commit-msg.mjs" "$1"

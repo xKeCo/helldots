@@ -1950,3 +1950,41 @@ One test needed narrowing rather than weakening, again: a reply-row assertion
 listed every `button` inside the row's tool group, which now includes the six
 palette items. It is scoped to `button[data-action]` — the controls themselves,
 not the menus they open.
+
+## The commit convention gets a hook (amends "enforced at review time")
+
+`CONTRIBUTING.md` said the convention had no automated check and lived on
+review. It did not survive contact: two commits landed as
+`:lipstick: style(...)` when this repo's table assigns `:art:` to `style`.
+`:lipstick:` is what gitmoji's _own_ convention puts on UI work, so the wrong
+emoji was not a typo — it was a plausible answer from the wrong table, which
+is the kind of mistake review catches late and inconsistently.
+
+So there is now a `commit-msg` hook. Three things about how it is built:
+
+- **The guard parses the table out of `CONTRIBUTING.md` instead of holding its
+  own copy.** A second list is a second source of truth, and the two drift the
+  first time someone edits one — the exact failure being guarded against.
+  Editing the table in the document is what changes what the hook accepts, and
+  a test asserts the parse still finds `style` → `:art:`.
+- **`npm install` installs it, via `core.hooksPath`.** Hooks in `.git/hooks`
+  are not versioned and would have to be copied by hand on every clone; a
+  `prepare` script pointing git at the committed `.githooks/` directory needs
+  no ceremony. It no-ops silently outside a git work tree so a tarball install
+  can never fail on it.
+- **It checks shape, not taste.** Format, the type→emoji pair, a trailing
+  period, and a 72-char subject ceiling. Imperative mood and the 50–60 char
+  guidance stay with the reviewer, because a guard that fires on judgment
+  calls gets bypassed, and a bypassed guard protects nothing.
+
+What this accepts: `--no-verify` still exists, and the hook only runs for
+people who ran `npm install`. It is a fast local check, not a gate — CI does
+not re-check messages, since squash-merge titles are written in the GitHub UI
+where this hook cannot reach.
+
+The two offending commits were rewritten (they had not been pushed): the
+larger one became `feat`, since it restructured the DOM and reversed a
+documented decision rather than only changing presentation — `style` in this
+repo means presentation only. `CLAUDE.md` now carries the table itself, with a
+note that gitmoji's general convention disagrees with it, because that file is
+the one an agent reads at the start of every session.

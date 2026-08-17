@@ -20,6 +20,18 @@ Follow the format in `CONTRIBUTING.md`:
 (`:bug:`, not 🐛). When the change closes a GitHub issue, add `Closes #N` in
 the body.
 
+**Never fill the emoji in from memory.** This repo's table is not gitmoji's
+general convention — most notably `style` is `:art:` here, while gitmoji puts
+`:lipstick:` on UI work. The table is the contract:
+
+| `feat` `:sparkles:` | `fix` `:bug:` | `docs` `:memo:` | `refactor` `:recycle:` | `build` `:construction_worker:` |
+| `test` `:white_check_mark:` | `ci` `:green_heart:` | `style` `:art:` | `perf` `:zap:` | `chore` `:wrench:` |
+
+A `commit-msg` hook rejects a mismatch, and it reads the table straight out of
+`CONTRIBUTING.md` — so that document stays the single source of truth. Pick
+the type from the dominant nature of the change: `style` means presentation
+only, so a commit that also changes behaviour is not `style`.
+
 ## Verification before claiming completion
 
 `npm run verify` chains every gate: lint → typecheck → format → test → build →
