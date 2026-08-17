@@ -98,4 +98,9 @@ export default {
   contextScreen: "Screen",
   contextBrowser: "Browser",
   contextOs: "OS",
+  reactionsLabel: "Reactions",
+  addReaction: "Add reaction",
+  reactionToggleOn: "Add your reaction",
+  reactionToggleOff: "Remove your reaction",
+  reactionPickerLabel: "Choose a reaction",
 };

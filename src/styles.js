@@ -802,6 +802,110 @@ ${webkitScrollbar(
         border-style: dashed;
     }
 
+    .${CLASSES.REACTION_BAR} {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 6px;
+    }
+    /* Same pill geometry as .helldots-badge, one size up: these are hit
+       targets, not labels, and a 22px control is the smallest the rest of
+       the strip uses. */
+    .${CLASSES.REACTION_PILL} {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 22px;
+        padding: 0 8px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #F2F2F7;
+        font-family: inherit;
+        font-size: 11px;
+        line-height: 1;
+        cursor: pointer;
+        transition: background 0.12s ease, border-color 0.12s ease;
+    }
+    /* A span on inbox list cards, where the pill reports and does not act. */
+    span.${CLASSES.REACTION_PILL} {
+        cursor: default;
+    }
+    button.${CLASSES.REACTION_PILL}:hover {
+        background: rgba(255, 255, 255, 0.12);
+    }
+    /* The blue is the same one the active marker and \`in_review\` carry, and
+       it never stands alone: the count is text and aria-pressed says the
+       rest (WCAG 1.4.1). */
+    .${CLASSES.REACTION_PILL_MINE} {
+        border-color: #2E90FA;
+        background: rgba(46, 144, 250, 0.18);
+    }
+    /* The platform emoji face, named explicitly: the widget's own stack is a
+       UI sans that renders some of these as monochrome glyphs. */
+    .${CLASSES.REACTION_PILL_EMOJI} {
+        font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+        font-size: 12px;
+    }
+    .${CLASSES.REACTION_PILL_COUNT} {
+        font-variant-numeric: tabular-nums;
+        opacity: 0.85;
+    }
+    .${CLASSES.REACTION_ADD} {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: 1px dashed rgba(255, 255, 255, 0.22);
+        border-radius: 11px;
+        background: transparent;
+        color: #8E8E93;
+        cursor: pointer;
+    }
+    .${CLASSES.REACTION_ADD}:hover {
+        color: #F2F2F7;
+        border-color: rgba(255, 255, 255, 0.4);
+    }
+    /* No \`display\` here on purpose: attachMenuToggle drives it inline
+       (none/block), so the row is held together by inline-flex items and
+       nowrap instead of a flex container it would overwrite. */
+    .${CLASSES.REACTION_PALETTE} {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        white-space: nowrap;
+        background: #2C2C2E;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        padding: 4px;
+        z-index: 1;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    .${CLASSES.REACTION_PALETTE}.${CLASSES.INBOX_MENU_UP} {
+        top: auto;
+        bottom: calc(100% + 4px);
+    }
+    .${CLASSES.REACTION_PALETTE_ITEM} {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+        font-size: 15px;
+        cursor: pointer;
+    }
+    .${CLASSES.REACTION_PALETTE_ITEM}:hover {
+        background: rgba(255, 255, 255, 0.12);
+    }
+
     .${CLASSES.CONTEXT_BLOCK} {
         display: flex;
         flex-direction: column;

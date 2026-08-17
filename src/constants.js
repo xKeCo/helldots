@@ -107,6 +107,14 @@ export const CLASSES = {
   CONTEXT_SCREENSHOT_CAPTION: "inbox-context-screenshot-caption",
   CONTEXT_TOGGLE: "inbox-context-toggle",
   HIGHLIGHT: "helldots-highlight",
+  REACTION_BAR: "reaction-bar",
+  REACTION_PILL: "reaction-pill",
+  REACTION_PILL_MINE: "reaction-pill--mine",
+  REACTION_PILL_EMOJI: "reaction-pill-emoji",
+  REACTION_PILL_COUNT: "reaction-pill-count",
+  REACTION_ADD: "reaction-add",
+  REACTION_PALETTE: "reaction-palette",
+  REACTION_PALETTE_ITEM: "reaction-palette-item",
 };
 
 // The only classes HellDots puts on elements of the host page — everything
@@ -175,6 +183,12 @@ export const PRIORITY_COLORS = {
   medium: "#FF9F0A",
   low: "#8E8E93",
 };
+
+// Emoji reactions. The order is load-bearing twice over: it is the order of
+// the palette AND of the pills, so a pill never moves out from under the
+// pointer when a count changes. Fixed rather than host-configurable, and
+// deliberately small enough to need no emoji dataset — see DECISIONS.md.
+export const REACTION_EMOJIS = ["👍", "👎", "❤️", "🎉", "👀", "🚀"];
 
 export const SELECTORS = {
   CONTAINER: 'section, div[class*="container"], div[class*="content"]',

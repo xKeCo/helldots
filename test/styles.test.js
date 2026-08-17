@@ -28,6 +28,12 @@ describe("styles", () => {
       CLASSES.ATTACH_IMAGE_BTN,
       CLASSES.THREAD_SUBMIT,
       CLASSES.LIGHTBOX,
+      // Added with the reactions bar: this list is hardcoded, so it silently
+      // stops covering new interactive classes unless they are named here —
+      // the same lesson the constants guard already recorded.
+      CLASSES.REACTION_PILL,
+      CLASSES.REACTION_ADD,
+      CLASSES.REACTION_PALETTE_ITEM,
     ].forEach((className) => {
       expect(css.includes(`.${className}`)).toBe(true);
     });

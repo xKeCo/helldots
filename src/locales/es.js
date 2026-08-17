@@ -99,4 +99,9 @@ export default {
   contextScreen: "Pantalla",
   contextBrowser: "Navegador",
   contextOs: "SO",
+  reactionsLabel: "Reacciones",
+  addReaction: "Añadir reacción",
+  reactionToggleOn: "Añadir tu reacción",
+  reactionToggleOff: "Quitar tu reacción",
+  reactionPickerLabel: "Elegir una reacción",
 };
