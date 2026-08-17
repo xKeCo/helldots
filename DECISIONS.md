@@ -1759,3 +1759,48 @@ What this accepts: `in_review` shares `#2E90FA` with the marker cursor
 artwork. They never appear in the same slot — one is a page-level pin, the
 other a 12px dot in a menu — and the alternative was a fourth hue chosen only
 to avoid a coincidence.
+
+## Dimming resolved cards with `opacity` needs an escape hatch for dropdowns
+
+Resolved inbox cards are dimmed with `opacity: 0.75`. That reads correctly at
+rest, but `opacity` is not a paint-order property — it composites the element
+and every descendant into one layer and then makes the whole layer
+translucent. A dropdown opened from a resolved card is a descendant, so it
+came out see-through: painted _above_ the context block, and still showing it
+through itself.
+
+The tell was that `elementFromPoint` disagreed with the eye. Hit-testing named
+the menu item at every point down the menu's column, so it genuinely was on
+top; nothing about z-index or stacking order was wrong, and raising either
+would have changed nothing. Only the compositing was.
+
+The fix is to stop the group existing while a menu is open:
+
+```css
+.inbox-card--resolved:has([aria-expanded="true"]) {
+  opacity: 1;
+}
+```
+
+Keyed on `aria-expanded` because `menus.js` already toggles it on every
+dropdown button it wires — the status/type/priority pickers and the `...`
+menu alike — so no new state had to be invented for the stylesheet to read.
+
+Two things worth recording:
+
+- **The list hid this by accident, the detail view did not.** The existing
+  `.inbox-list .inbox-card--resolved:hover { opacity: 1 }` meant that reaching
+  the button with a pointer had already lifted the dim, so the bug only
+  surfaced where that rule does not apply — and would have surfaced on touch
+  in the list too. The new rule is hover-independent and covers both.
+- **The alternative was giving up group opacity.** Dimming the card's text and
+  meta individually would avoid the compositing layer entirely, but it means
+  hand-picking every child that should fade and keeping that list correct as
+  the card grows. Lifting the dim for the duration of a menu is a smaller
+  promise to keep, and the momentary jump to full opacity reads as feedback
+  rather than as a glitch — the list has behaved that way on hover all along.
+
+What this accepts: `:has()` in shipped CSS. The README already scopes support
+to modern evergreen browsers, where it has been baseline since 2023; an engine
+without it simply keeps the old translucent-menu behaviour rather than
+breaking.

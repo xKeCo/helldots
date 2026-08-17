@@ -598,6 +598,20 @@ ${webkitScrollbar(
         opacity: 1;
     }
 
+    /* \`opacity\` composites the card and everything inside it as one
+       translucent layer, so a dropdown opened from a resolved card came out
+       see-through: it was painted above the context block (hit-testing agreed)
+       and still showed it through itself. A child cannot opt out of its
+       group's opacity, so the group has to stop existing while a menu is open.
+       Keyed on aria-expanded, which menus.js already toggles on every dropdown
+       button — the picker strip and the \`...\` menu alike.
+       The list hid this by accident: hovering the card to click its button
+       already lifted the dim. The detail view has no such rule, which is
+       where it showed. */
+    .${CLASSES.INBOX_CARD}--resolved:has([aria-expanded="true"]) {
+        opacity: 1;
+    }
+
     .${CLASSES.INBOX_CARD_HEADER} {
         display: flex;
         align-items: center;

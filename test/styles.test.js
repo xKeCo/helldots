@@ -1,6 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { getStyles, getGlobalStyles } from "../src/styles.js";
 import { CLASSES, IDS } from "../src/constants.js";
+import { createCommentActions } from "../src/comment-actions.js";
+import en from "../src/locales/en.js";
 
 describe("styles", () => {
   it("returns a CSS string starting with a :host reset", () => {
@@ -57,6 +59,82 @@ describe("styles", () => {
 
   it("does not style the comment-cursor class (that's host-page-only, see getGlobalStyles)", () => {
     expect(getStyles()).not.toContain(`.${CLASSES.COMMENT_CURSOR}`);
+  });
+});
+
+// Behavioural, not a string match: the bug this guards against was a real
+// cascade/compositing interaction, and asserting that the rule's *text* is
+// present would have passed just as happily while the menu stayed see-through.
+describe("the resolved dim and open dropdowns", () => {
+  /** @type {HTMLStyleElement} */
+  let styleEl;
+
+  beforeEach(() => {
+    styleEl = document.createElement("style");
+    styleEl.textContent = getStyles();
+    document.head.appendChild(styleEl);
+  });
+
+  afterEach(() => {
+    styleEl.remove();
+    document.body.innerHTML = "";
+  });
+
+  const mountResolvedCard = () => {
+    const card = document.createElement("div");
+    card.className = `${CLASSES.INBOX_CARD} ${CLASSES.INBOX_CARD}--resolved`;
+    card.appendChild(
+      createCommentActions(
+        { id: 1, text: "resolved comment", status: "resolved" },
+        {
+          strings: en,
+          onCopy: () => {},
+          onSetStatus: () => {},
+          onSetType: () => {},
+          onSetPriority: () => {},
+          onDelete: () => {},
+        }
+      )
+    );
+    document.body.appendChild(card);
+    return card;
+  };
+
+  it("dims a resolved card at rest", () => {
+    expect(getComputedStyle(mountResolvedCard()).opacity).toBe("0.75");
+  });
+
+  it("drops the dim while a dropdown inside the card is open", () => {
+    const card = mountResolvedCard();
+    card
+      .querySelector('[data-action="status"]')
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    // `opacity` composites the card and every descendant as one translucent
+    // layer, so a dropdown opened from a resolved card was painted on top of
+    // the context block (hit-testing agreed) and still showed it through
+    // itself. Group opacity cannot be undone by a child, so the only fix is
+    // for the group to stop existing while a menu is open.
+    expect(getComputedStyle(card).opacity).toBe("1");
+  });
+
+  it("restores the dim once the dropdown closes", () => {
+    const card = mountResolvedCard();
+    const btn = card.querySelector('[data-action="status"]');
+    btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(getComputedStyle(card).opacity).toBe("0.75");
+  });
+
+  it("covers every dropdown in the strip, not just the status one", () => {
+    for (const action of ["type", "priority", "menu"]) {
+      const card = mountResolvedCard();
+      card
+        .querySelector(`[data-action="${action}"]`)
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(getComputedStyle(card).opacity).toBe("1");
+      card.remove();
+    }
   });
 });
 
