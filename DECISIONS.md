@@ -1804,3 +1804,90 @@ What this accepts: `:has()` in shipped CSS. The README already scopes support
 to modern evergreen browsers, where it has been baseline since 2023; an engine
 without it simply keeps the old translucent-menu behaviour rather than
 breaking.
+
+## Emoji reactions ship without an emoji library (amends "out of scope")
+
+The earlier entry reserved `reactions?: Record<string, string[]>` and left the
+feature unbuilt. Building it needed a handful of choices worth recording,
+because each had a defensible alternative.
+
+**A fixed set of six, not a picker.** `👍 👎 ❤️ 🎉 👀 🚀`, hardcoded in
+`constants.js`. The measured cost of the whole feature is **+2.07 KB gzip** on
+`dist/helldots.esm.js` — bundled against the real entry with the real build
+options before a line was written, so the budget question was answered rather
+than estimated. A searchable picker would have to carry an emoji dataset:
+~1,800 entries with keywords, which alone is several times the ~15 KB of
+headroom the 50 KB budget has left. `emoji-picker-element` also mounts its own
+Shadow DOM and fetches its data at runtime, which the self-contained UMD
+artifact cannot do. Rendering is the platform emoji font — no sprites, no
+Twemoji, no third-party requests from inside the widget.
+
+Host-configurable sets (`reactionEmojis?: string[]`) were rejected for now: a
+public option to validate and document, plus an unanswered question about
+reactions whose emoji is no longer in the configured set.
+
+**Order is load-bearing.** `REACTION_EMOJIS` orders both the palette and the
+pills, so a pill never moves out from under the pointer when a count changes.
+Sorting by count would reshuffle the row mid-click.
+
+**Identity is `user.id ?? user.name ?? anonymous`, resolved in one place.**
+`user` gained an optional `id`; it is never rendered — the display name stays
+what gets shown as an author. `actorKeyOf` is the only place this is decided,
+because the toggle and the "this one is mine" render have to agree: resolved
+separately in two spots, a host that swaps `user` at runtime would paint pills
+nobody can switch off.
+
+What this accepts: with no `user` at all, every actor collapses into the
+anonymous string and reactions are effectively single-actor. That is the same
+limitation authorship already had, and it is the host's to fix by passing
+`user` — HellDots inventing a per-browser id would mean persisting an identity
+of its own invention outside the comment corpus.
+
+**Pills never show who reacted.** Stored keys are display names when the host
+passes no `id` and opaque ids when it does, so rendering them would be
+inconsistent at best and a leak at worst. The tooltip carries the action
+("Add/Remove your reaction"), the count is the visible digit, and "mine" is
+`aria-pressed` plus the highlight. No prose carries a number anywhere:
+`formatTemplate` has no plural forms, and this repo already decided against
+pluralising counts in copy. Storing `{ id, name }` per reaction was the
+alternative — real names in the tooltip, at the cost of duplicating a name into
+every reaction and putting more personal data into `localStorage`, which today
+holds the author's name once per comment.
+
+**A dedicated `reaction:toggled`, not `onCommentUpdated`.** The precedent
+("one `onCommentUpdated` for type/priority/tags; three callbacks would have
+been API noise") points the other way, but replies are in scope and
+`onCommentUpdated(comment)` cannot say _which_ reply changed — a host syncing
+to a backend would have to diff the thread. The event carries
+`(comment, reply | null)`, and the `CHANGE_CALLBACKS` table keeps it and its
+callback from drifting apart.
+
+**Read-only pills on inbox list cards.** The card navigates on click and
+already carries a header, four controls, text, badges and a replies link;
+another dropdown would turn it into a form. Pills render as `<span>` there —
+the signal while triaging, without the affordance. Reacting happens in the
+detail view and in the thread popover.
+
+**The palette rides on `attachMenuToggle`.** That buys the single-open rule,
+`aria-expanded`, the upward flip when it would be clipped, and outside-click
+close — and, because the resolved-card escape hatch keys off a generic
+`:has([aria-expanded="true"])`, the dim behaves correctly with no new CSS. Two
+consequences worth knowing: the helper drives `display` inline (`none`/`block`),
+so the palette lays itself out with inline-flex items and `nowrap` rather than
+a flex container it would overwrite; and the toggle closes the palette
+_before_ mutating, because the inbox detail rebuilds itself on every refresh
+and a palette still open through that rebuild is orphaned mid-click.
+
+**Two guards needed teaching, one test needed narrowing.** `_cardFingerprint`
+now carries the reaction counts — the inbox reuses a card node whose
+fingerprint is unchanged, so without them a card whose reactions moved kept its
+cached node and the counts froze. `test/styles.test.js` keeps a hardcoded list
+of interactive classes, which silently stops covering new ones, so the pill,
+the add button and the palette items were added to it. And a reply-row test
+swept for `[role="menuitem"]`; the palette is a `role="menu"` too, so it is now
+scoped to the `⋯` menu it was always about.
+
+One jsdom quirk, recorded so it is not rediscovered: its selector engine does
+not match attribute values containing astral-plane characters, so
+`[data-reaction-emoji="🎉"]` finds nothing in tests. Browsers match it fine and
+no selector in `src/` depends on it, but tests have to filter on `dataset`.

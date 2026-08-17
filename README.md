@@ -171,6 +171,32 @@ overlay.setCommentStatus(id, "resolved"); // stamps the resolution time
 Passing `null` to `setCommentType` or `setCommentPriority` returns the field to
 its neutral state. Reopening a resolved comment clears its resolution time.
 
+### Reactions
+
+Comments and replies take one of six reactions — 👍 👎 ❤️ 🎉 👀 🚀 — so a team
+can agree, flag "watching this" or mark something shipped without adding a
+reply. The set is fixed: a searchable picker would need an emoji dataset
+larger than the whole widget.
+
+```js
+overlay.toggleCommentReaction(id, "👍");
+overlay.toggleReplyReaction(commentId, replyId, "🎉");
+```
+
+Both toggle: reacting again with the same emoji removes it. A reaction is
+stored against `user.id` when you pass one, and against `user.name`
+otherwise — so give HellDots an `id` if two people on your team can share a
+display name:
+
+```js
+createCommentOverlay({ user: { name: currentUser.name, id: currentUser.id } });
+```
+
+Reactions ride along in `serializeComments()` output as `reactions`, an
+`{ emoji: actorKey[] }` map that is `null` when nobody has reacted. The pills
+show counts, never who reacted: the stored keys are your ids, and they stay
+out of the UI.
+
 ## Handing a comment to a coding agent
 
 Every comment has a **copy** button that puts a plain-text context block on the
@@ -200,7 +226,7 @@ OS: iOS 17.2
 
 | Option                  | Type                             | Default             |                                                                   |
 | ----------------------- | -------------------------------- | ------------------- | ----------------------------------------------------------------- |
-| `user`                  | `{ name: string }`               | `"Anonymous"`       | Author of new comments and replies                                |
+| `user`                  | `{ name: string, id?: string }`  | `"Anonymous"`       | Author of new comments and replies; `id` keys reactions           |
 | `persistence`           | `"localStorage"` \| `"none"`     | `"none"`            | Auto save/restore, or handle it yourself via callbacks            |
 | `autoScreenshot`        | `boolean`                        | `true`              | Capture a screenshot and environment snapshot per comment         |
 | `embedCrossOriginFonts` | `boolean`                        | `false`             | Fetch unreadable stylesheets so their web fonts reach the capture |
@@ -223,6 +249,7 @@ createCommentOverlay({
     // "comment:created" | "comment:edited" | "comment:deleted"
     // "comment:status-changed" | "comment:updated" | "comment:anchor-lost"
     // "reply:added" | "reply:deleted" | "reply:edited"
+    // "reaction:toggled"
     api.post("/helldots-events", event);
   },
 });
@@ -233,17 +260,18 @@ TypeScript narrows the payload. The specific callbacks below carry the same
 events at the same moments — subscribe either way, or both. A handler that
 throws is caught and warned about, never rolling back the change.
 
-| Callback                          | Fires when                                 |
-| --------------------------------- | ------------------------------------------ |
-| `onCommentCreated(comment)`       | A new comment is saved                     |
-| `onReplyAdded(comment, reply)`    | A reply is added to any comment            |
-| `onReplyDeleted(comment, reply)`  | A reply is removed                         |
-| `onCommentEdited(comment)`        | A comment's text is rewritten              |
-| `onReplyEdited(comment, reply)`   | A reply's text is rewritten                |
-| `onCommentStatusChanged(comment)` | Status moves along the lifecycle           |
-| `onCommentUpdated(comment)`       | Type, priority or tags change              |
-| `onCommentDeleted(id)`            | A comment is removed                       |
-| `onAnchorLost(comment)`           | A comment could not be re-anchored on load |
+| Callback                            | Fires when                                                     |
+| ----------------------------------- | -------------------------------------------------------------- |
+| `onCommentCreated(comment)`         | A new comment is saved                                         |
+| `onReplyAdded(comment, reply)`      | A reply is added to any comment                                |
+| `onReplyDeleted(comment, reply)`    | A reply is removed                                             |
+| `onCommentEdited(comment)`          | A comment's text is rewritten                                  |
+| `onReplyEdited(comment, reply)`     | A reply's text is rewritten                                    |
+| `onCommentStatusChanged(comment)`   | Status moves along the lifecycle                               |
+| `onCommentUpdated(comment)`         | Type, priority or tags change                                  |
+| `onCommentDeleted(id)`              | A comment is removed                                           |
+| `onAnchorLost(comment)`             | A comment could not be re-anchored on load                     |
+| `onReactionToggled(comment, reply)` | A reaction is added or removed (`reply` is `null` at the root) |
 
 ## API
 
@@ -267,6 +295,8 @@ overlay.setCommentStatus(id, status); // → boolean
 overlay.setCommentType(id, type); // → boolean
 overlay.setCommentPriority(id, priority); // → boolean
 overlay.setCommentTags(id, tags); // → boolean
+overlay.toggleCommentReaction(id, emoji); // → boolean
+overlay.toggleReplyReaction(commentId, replyId, emoji); // → boolean
 overlay.cleanup(); // remove the widget entirely
 ```
 

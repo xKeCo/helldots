@@ -21,11 +21,11 @@ A draft of this exact shape (component, toggles, normalizer, serializer,
 6 i18n keys in both locales, CSS block) was bundled against `src/index.js`
 with the real build options, including the CSS-in-template minifier:
 
-| | raw | gzip |
-|---|---|---|
-| baseline | 119.62 KB | 32.77 KB |
-| with reactions | 125.88 KB | 34.84 KB |
-| delta | +6.26 KB | **+2.07 KB** |
+|                | raw       | gzip         |
+| -------------- | --------- | ------------ |
+| baseline       | 119.62 KB | 32.77 KB     |
+| with reactions | 125.88 KB | 34.84 KB     |
+| delta          | +6.26 KB  | **+2.07 KB** |
 
 Budget is 50 KB gzip, so roughly 15 KB of headroom survives. No new runtime
 dependency: a fixed emoji set is six string literals, and glyphs render in the
@@ -84,7 +84,7 @@ number in every locale").
 
 ### A dedicated event, not `onCommentUpdated`
 
-Replies are in scope, and `onCommentUpdated(comment)` cannot say *which*
+Replies are in scope, and `onCommentUpdated(comment)` cannot say _which_
 reply changed — a host syncing to a backend would have to diff the thread.
 So: a new `reaction:toggled` entry in the `CHANGE_CALLBACKS` table paired with
 
@@ -131,7 +131,7 @@ already drops the cache, so reactions ride along.
 ### `src/reactions.js` (new)
 
 ```js
-createReactionBar({ target, actorKey, strings, onToggle, interactive })
+createReactionBar({ target, actorKey, strings, onToggle, interactive });
 ```
 
 `target` is anything carrying `reactions` — comment or reply; the component
@@ -157,11 +157,11 @@ after the text and after any screenshot thumbnails.
 
 ### Surfaces
 
-| Surface | Comment | Replies |
-|---|---|---|
-| Thread popover | full bar | full bar |
-| Inbox detail | full bar | full bar |
-| Inbox card | read-only pills, no add button | — |
+| Surface        | Comment                        | Replies  |
+| -------------- | ------------------------------ | -------- |
+| Thread popover | full bar                       | full bar |
+| Inbox detail   | full bar                       | full bar |
+| Inbox card     | read-only pills, no add button | —        |
 
 The card stays read-only on purpose: it already carries a header, four
 controls, text, badges and a replies link, and another dropdown would turn it
@@ -171,8 +171,8 @@ thread is read.
 ### Overlay API
 
 ```js
-overlay.toggleCommentReaction(commentId, emoji)         // → boolean
-overlay.toggleReplyReaction(commentId, replyId, emoji)  // → boolean
+overlay.toggleCommentReaction(commentId, emoji); // → boolean
+overlay.toggleReplyReaction(commentId, replyId, emoji); // → boolean
 ```
 
 One method per level, matching `addReply`/`editReply`/`deleteReply`. Both
@@ -192,13 +192,13 @@ emits nothing. Both call `_syncStorage()` before emitting.
 
 Five keys, in both `src/locales/en.js` and `src/locales/es.js`:
 
-| key | used on | en | es |
-|---|---|---|---|
-`reactionsLabel` | the bar's group label | Reactions | Reacciones
-`addReaction` | the `+` button | Add reaction | Añadir reacción
-`reactionToggleOn` | a pill that is not mine | Add your reaction | Añadir tu reacción
-`reactionToggleOff` | a pill that is mine | Remove your reaction | Quitar tu reacción
-`reactionPickerLabel` | the palette | Choose a reaction | Elegir una reacción
+| key                   | used on                 | en                   | es                  |
+| --------------------- | ----------------------- | -------------------- | ------------------- |
+| `reactionsLabel`      | the bar's group label   | Reactions            | Reacciones          |
+| `addReaction`         | the `+` button          | Add reaction         | Añadir reacción     |
+| `reactionToggleOn`    | a pill that is not mine | Add your reaction    | Añadir tu reacción  |
+| `reactionToggleOff`   | a pill that is mine     | Remove your reaction | Quitar tu reacción  |
+| `reactionPickerLabel` | the palette             | Choose a reaction    | Elegir una reacción |
 
 A pill's accessible name is composed, not translated: the toggle string, the
 emoji, and the count — `Add your reaction: 👍 (3)`. The emoji stays in the
@@ -232,13 +232,13 @@ Additions to existing suites:
 
 ## Gates
 
-| Gate | Requirement |
-|---|---|
-`constants.test.js` | the new classes live in `CLASSES` (not a separate object) and are referenced from `src/` |
-`styles.test.js` | its interactive-class list is hardcoded — add `REACTION_PILL` and `REACTION_ADD` or the guard silently stops covering them |
-`typecheck` | declare `toggleCommentReaction`, `toggleReplyReaction`, `onReactionToggled`, `user.id`, and `reactions` on `SerializedComment` / `CommentReply` / `Comment` |
-`size` | expected ~34.8 KB gzip of 50; verified with `npm run size`, never assumed |
-Docs | changeset, `DECISIONS.md` entry (identity, tooltip, fixed set, no library), README (`user` row, methods, callbacks table) |
+| Gate                | Requirement                                                                                                                                                 |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `constants.test.js` | the new classes live in `CLASSES` (not a separate object) and are referenced from `src/`                                                                    |
+| `styles.test.js`    | its interactive-class list is hardcoded — add `REACTION_PILL` and `REACTION_ADD` or the guard silently stops covering them                                  |
+| `typecheck`         | declare `toggleCommentReaction`, `toggleReplyReaction`, `onReactionToggled`, `user.id`, and `reactions` on `SerializedComment` / `CommentReply` / `Comment` |
+| `size`              | expected ~34.8 KB gzip of 50; verified with `npm run size`, never assumed                                                                                   |
+| Docs                | changeset, `DECISIONS.md` entry (identity, tooltip, fixed set, no library), README (`user` row, methods, callbacks table)                                   |
 
 Focus rings are deliberately not added — a known, documented gap.
 

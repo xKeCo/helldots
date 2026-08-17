@@ -25,12 +25,14 @@
 ### Task 1: Constants, locale keys and the identity resolver
 
 **Files:**
+
 - Modify: `src/constants.js` (add `REACTION_EMOJIS`; add 8 keys to `CLASSES`)
 - Modify: `src/locales/en.js`, `src/locales/es.js` (5 keys each)
 - Create: `src/reactions.js` (only `actorKeyOf` and `reactionEntriesOf` in this task)
 - Test: `test/reactions.test.js`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces:
   - `REACTION_EMOJIS: string[]`
@@ -47,7 +49,9 @@ import { REACTION_EMOJIS } from "../src/constants.js";
 
 describe("actorKeyOf", () => {
   it("prefers the host-supplied id over the display name", () => {
-    expect(actorKeyOf({ name: "Ana", id: "u_8123" }, { anonymous: "Anonymous" })).toBe("u_8123");
+    expect(
+      actorKeyOf({ name: "Ana", id: "u_8123" }, { anonymous: "Anonymous" })
+    ).toBe("u_8123");
   });
 
   it("falls back to the name when no id is given", () => {
@@ -61,7 +65,9 @@ describe("actorKeyOf", () => {
 
 describe("reactionEntriesOf", () => {
   it("returns entries in REACTION_EMOJIS order, not insertion order", () => {
-    const entries = reactionEntriesOf({ reactions: { "🚀": ["a"], "👍": ["b"] } });
+    const entries = reactionEntriesOf({
+      reactions: { "🚀": ["a"], "👍": ["b"] },
+    });
     expect(entries.map((e) => e.emoji)).toEqual(["👍", "🚀"]);
   });
 
@@ -176,12 +182,14 @@ git commit -m ":sparkles: feat(reactions): Add the emoji set, locale keys and id
 ### Task 2: The reaction bar component and its stylesheet
 
 **Files:**
+
 - Modify: `src/reactions.js` (add `createReactionBar`)
 - Modify: `src/styles.js` (CSS block)
 - Modify: `test/styles.test.js:21` (extend the hardcoded interactive-class list)
 - Test: `test/reactions.test.js`
 
 **Interfaces:**
+
 - Consumes: `actorKeyOf`, `reactionEntriesOf`, `CLASSES.REACTION_*`, `REACTION_EMOJIS`, `attachMenuToggle(button, menu)` from `src/menus.js`.
 - Produces: `createReactionBar({ target, actorKey, strings, onToggle, interactive })` → `HTMLElement`. `onToggle(emoji: string) => void`. `interactive` defaults to `true`; `false` renders `<span>` pills, no `aria-pressed`, no add button.
 
@@ -205,8 +213,14 @@ describe("createReactionBar", () => {
   it("renders the emoji decoratively and the count as text", () => {
     const bar = barFor({ "👍": ["ana", "me"] });
     const pill = bar.querySelector(`.${CLASSES.REACTION_PILL}`);
-    expect(pill.querySelector(`.${CLASSES.REACTION_PILL_EMOJI}`).getAttribute("aria-hidden")).toBe("true");
-    expect(pill.querySelector(`.${CLASSES.REACTION_PILL_COUNT}`).textContent).toBe("2");
+    expect(
+      pill
+        .querySelector(`.${CLASSES.REACTION_PILL_EMOJI}`)
+        .getAttribute("aria-hidden")
+    ).toBe("true");
+    expect(
+      pill.querySelector(`.${CLASSES.REACTION_PILL_COUNT}`).textContent
+    ).toBe("2");
   });
 
   it("marks the pill the current actor holds, and only that one", () => {
@@ -220,18 +234,27 @@ describe("createReactionBar", () => {
 
   it("names the pill by the action it performs, never by a stored actor key", () => {
     const bar = barFor({ "👍": ["u_8123", "me"] });
-    const label = bar.querySelector(`.${CLASSES.REACTION_PILL}`).getAttribute("aria-label");
+    const label = bar
+      .querySelector(`.${CLASSES.REACTION_PILL}`)
+      .getAttribute("aria-label");
     expect(label).toContain(en.reactionToggleOff);
     expect(label).not.toContain("u_8123");
   });
 
   it("keeps pill order stable when a count changes", () => {
     const target = { reactions: { "🚀": ["ana"], "👍": ["ana"] } };
-    const bar = createReactionBar({ target, actorKey: "me", strings: en, onToggle: (emoji) => {
-      target.reactions[emoji] = [...(target.reactions[emoji] || []), "me"];
-    }});
+    const bar = createReactionBar({
+      target,
+      actorKey: "me",
+      strings: en,
+      onToggle: (emoji) => {
+        target.reactions[emoji] = [...(target.reactions[emoji] || []), "me"];
+      },
+    });
     bar.querySelector(`.${CLASSES.REACTION_PILL}`).click();
-    const order = [...bar.querySelectorAll(`.${CLASSES.REACTION_PILL}`)].map((p) => p.dataset.reactionEmoji);
+    const order = [...bar.querySelectorAll(`.${CLASSES.REACTION_PILL}`)].map(
+      (p) => p.dataset.reactionEmoji
+    );
     expect(order).toEqual(["👍", "🚀"]);
   });
 
@@ -258,7 +281,11 @@ describe("createReactionBar", () => {
     const bar = barFor({ "👍": ["ana"] }, "me", { interactive: false });
     expect(bar.querySelector("button")).toBeNull();
     expect(bar.querySelector(`.${CLASSES.REACTION_ADD}`)).toBeNull();
-    expect(bar.querySelector(`.${CLASSES.REACTION_PILL}`).getAttribute("aria-pressed")).toBeNull();
+    expect(
+      bar
+        .querySelector(`.${CLASSES.REACTION_PILL}`)
+        .getAttribute("aria-pressed")
+    ).toBeNull();
   });
 
   it("renders nothing at all when a read-only target has no reactions", () => {
@@ -455,12 +482,14 @@ git commit -m ":sparkles: feat(reactions): Add the reaction bar component"
 ### Task 3: Overlay data plumbing — normalize, serialize, toggle, emit
 
 **Files:**
+
 - Modify: `src/reactions.js` (add `normalizeReactions`, `toggleReactionOn`, `serializeReactions`)
 - Modify: `src/overlay.js` (`CHANGE_CALLBACKS`, `_serializeComment`, `_serializeReply`, `loadComments` normalisation, two public methods)
 - Modify: `src/index.d.ts`
 - Test: `test/reactions.test.js`, `test/overlay.test.js`, `test/persistence.test.js`
 
 **Interfaces:**
+
 - Consumes: `reactionEntriesOf`, `actorKeyOf`, `REACTION_EMOJIS`.
 - Produces:
   - `normalizeReactions(raw: unknown): Record<string,string[]> | null`
@@ -473,19 +502,29 @@ git commit -m ":sparkles: feat(reactions): Add the reaction bar component"
 - [ ] **Step 1: Write the failing unit tests for the pure helpers**
 
 ```js
-import { normalizeReactions, toggleReactionOn, serializeReactions } from "../src/reactions.js";
+import {
+  normalizeReactions,
+  toggleReactionOn,
+  serializeReactions,
+} from "../src/reactions.js";
 
 describe("normalizeReactions", () => {
   it("drops emoji outside the fixed set", () => {
-    expect(normalizeReactions({ "💩": ["ana"], "👍": ["ana"] })).toEqual({ "👍": ["ana"] });
+    expect(normalizeReactions({ "💩": ["ana"], "👍": ["ana"] })).toEqual({
+      "👍": ["ana"],
+    });
   });
 
   it("drops values that are not arrays and entries that are not strings", () => {
-    expect(normalizeReactions({ "👍": "ana", "🚀": ["ana", 7, null] })).toEqual({ "🚀": ["ana"] });
+    expect(normalizeReactions({ "👍": "ana", "🚀": ["ana", 7, null] })).toEqual(
+      { "🚀": ["ana"] }
+    );
   });
 
   it("de-duplicates actor keys so a count cannot be inflated", () => {
-    expect(normalizeReactions({ "👍": ["ana", "ana", " ana "] })).toEqual({ "👍": ["ana"] });
+    expect(normalizeReactions({ "👍": ["ana", "ana", " ana "] })).toEqual({
+      "👍": ["ana"],
+    });
   });
 
   it("returns null for junk and for an empty result", () => {
@@ -586,7 +625,9 @@ export const serializeReactions = (reactions) => {
     ([, authors]) => authors?.length > 0
   );
   return entries.length > 0
-    ? Object.fromEntries(entries.map(([emoji, authors]) => [emoji, [...authors]]))
+    ? Object.fromEntries(
+        entries.map(([emoji, authors]) => [emoji, [...authors]])
+      )
     : null;
 };
 ```
@@ -640,8 +681,12 @@ describe("reactions", () => {
 And to `test/persistence.test.js`:
 
 ```js
-it("round-trips reactions and omits the field when there are none", () => { /* serializeComments → loadComments */ });
-it("normalises hostile persisted reactions on load", () => { /* unknown emoji, non-array, dupes dropped */ });
+it("round-trips reactions and omits the field when there are none", () => {
+  /* serializeComments → loadComments */
+});
+it("normalises hostile persisted reactions on load", () => {
+  /* unknown emoji, non-array, dupes dropped */
+});
 ```
 
 - [ ] **Step 5: Run them to make sure they fail**
@@ -708,12 +753,14 @@ git commit -m ":sparkles: feat(reactions): Persist, serialize and expose reactio
 ### Task 4: Thread popover wiring
 
 **Files:**
+
 - Modify: `src/components.js` (`createThreadPopover`, `createReplyElement`)
 - Modify: `src/popover-controller.js` (open path, `submitReply` path, deps)
 - Modify: `src/overlay.js` (`PopoverController` deps: two more actions)
 - Test: `test/components.test.js`
 
 **Interfaces:**
+
 - Consumes: `createReactionBar`, `overlay.toggleCommentReaction`, `overlay.toggleReplyReaction`.
 - Produces: both component factories accept an optional
   `reactions?: { actorKey: string, onToggle: (target, emoji) => void }` handler.
@@ -723,7 +770,20 @@ git commit -m ":sparkles: feat(reactions): Persist, serialize and expose reactio
 
 ```js
 it("mounts a reaction bar for the comment and for each reply when handlers are given", () => {
-  const comment = { id: "c1", text: "hi", author: "Ana", createdAt: new Date().toISOString(), replies: [{ id: "r1", text: "yes", author: "Bo", timestamp: new Date().toISOString() }] };
+  const comment = {
+    id: "c1",
+    text: "hi",
+    author: "Ana",
+    createdAt: new Date().toISOString(),
+    replies: [
+      {
+        id: "r1",
+        text: "yes",
+        author: "Bo",
+        timestamp: new Date().toISOString(),
+      },
+    ],
+  };
   const popover = createThreadPopover(comment, en, "en", {
     reactions: { actorKey: "me", onToggle: () => {} },
   });
@@ -731,15 +791,35 @@ it("mounts a reaction bar for the comment and for each reply when handlers are g
 });
 
 it("renders no reaction bar when no handler is given", () => {
-  const popover = createThreadPopover({ id: "c1", text: "hi", author: "Ana", createdAt: new Date().toISOString(), replies: [] }, en, "en", {});
+  const popover = createThreadPopover(
+    {
+      id: "c1",
+      text: "hi",
+      author: "Ana",
+      createdAt: new Date().toISOString(),
+      replies: [],
+    },
+    en,
+    "en",
+    {}
+  );
   expect(popover.querySelector(`.${CLASSES.REACTION_BAR}`)).toBeNull();
 });
 
 it("routes a pill click to the toggle with the clicked target and emoji", () => {
-  const reply = { id: "r1", text: "yes", author: "Bo", timestamp: new Date().toISOString(), reactions: { "👍": ["bo"] } };
+  const reply = {
+    id: "r1",
+    text: "yes",
+    author: "Bo",
+    timestamp: new Date().toISOString(),
+    reactions: { "👍": ["bo"] },
+  };
   const calls = [];
   const el = createReplyElement(reply, en, "en", {
-    reactions: { actorKey: "me", onToggle: (target, emoji) => calls.push([target.id, emoji]) },
+    reactions: {
+      actorKey: "me",
+      onToggle: (target, emoji) => calls.push([target.id, emoji]),
+    },
   });
   el.querySelector(`.${CLASSES.REACTION_PILL}`).click();
   expect(calls).toEqual([["r1", "👍"]]);
@@ -757,15 +837,15 @@ In `createReplyElement`, after the screenshots block, so the bar is the last
 child of the reply:
 
 ```js
-  if (reactions) {
-    const bar = createReactionBar({
-      target: reply,
-      actorKey: reactions.actorKey,
-      strings,
-      onToggle: (emoji) => reactions.onToggle(reply, emoji),
-    });
-    if (bar) replyEl.appendChild(bar);
-  }
+if (reactions) {
+  const bar = createReactionBar({
+    target: reply,
+    actorKey: reactions.actorKey,
+    strings,
+    onToggle: (emoji) => reactions.onToggle(reply, emoji),
+  });
+  if (bar) replyEl.appendChild(bar);
+}
 ```
 
 In `createThreadPopover`, the same for the root comment, appended to `scroll`
@@ -778,13 +858,13 @@ every `createReplyElement` call.
 `createThreadPopover` and the `createReplyElement` call inside `submitReply`:
 
 ```js
-    const reactions = {
-      actorKey: this.deps.actorKey(),
-      onToggle: (target, emoji) =>
-        target === comment
-          ? this.deps.actions.toggleCommentReaction(comment.id, emoji)
-          : this.deps.actions.toggleReplyReaction(comment.id, target.id, emoji),
-    };
+const reactions = {
+  actorKey: this.deps.actorKey(),
+  onToggle: (target, emoji) =>
+    target === comment
+      ? this.deps.actions.toggleCommentReaction(comment.id, emoji)
+      : this.deps.actions.toggleReplyReaction(comment.id, target.id, emoji),
+};
 ```
 
 After a toggle the controller calls `this.deps.refreshInbox()` so open inbox
@@ -808,11 +888,13 @@ git commit -m ":sparkles: feat(reactions): Wire reactions into the thread popove
 ### Task 5: Inbox wiring — read-only pills on cards, full bars in the detail
 
 **Files:**
+
 - Modify: `src/inbox.js` (`_buildCard`, `_renderDetail`, `_cardFingerprint`, callbacks)
 - Modify: `src/overlay.js` (inbox callbacks)
 - Test: `test/inbox.test.js`
 
 **Interfaces:**
+
 - Consumes: `createReactionBar`, `reactionEntriesOf`, `callbacks.onToggleCommentReaction(commentId, emoji)`, `callbacks.onToggleReplyReaction(commentId, replyId, emoji)`, `callbacks.actorKey()`.
 - Produces: nothing new for later tasks.
 
@@ -837,10 +919,14 @@ it("re-renders a cached card when only its reactions changed", () => {
   // reused verbatim and the counts freeze.
   const comment = commentWith({ reactions: { "👍": ["ana"] } });
   const view = openInboxWith([comment]);
-  const before = view.el.querySelector(`.${CLASSES.REACTION_PILL_COUNT}`).textContent;
+  const before = view.el.querySelector(
+    `.${CLASSES.REACTION_PILL_COUNT}`
+  ).textContent;
   comment.reactions["👍"].push("bo");
   view.refresh();
-  const after = view.el.querySelector(`.${CLASSES.REACTION_PILL_COUNT}`).textContent;
+  const after = view.el.querySelector(
+    `.${CLASSES.REACTION_PILL_COUNT}`
+  ).textContent;
   expect([before, after]).toEqual(["1", "2"]);
 });
 ```
@@ -865,19 +951,19 @@ flag means "this is a list card that navigates on click", which is the
 **read-only** case for reactions:
 
 ```js
-    const reactionBar = createReactionBar({
-      target: comment,
-      actorKey: this.callbacks.actorKey(),
-      strings: this.strings,
-      // A list card navigates on click and already carries four controls; the
-      // signal belongs there, the affordance does not.
-      interactive: !interactive,
-      onToggle: (emoji) => {
-        this.callbacks.onToggleCommentReaction(comment.id, emoji);
-        this.refresh();
-      },
-    });
-    if (reactionBar) card.appendChild(reactionBar);
+const reactionBar = createReactionBar({
+  target: comment,
+  actorKey: this.callbacks.actorKey(),
+  strings: this.strings,
+  // A list card navigates on click and already carries four controls; the
+  // signal belongs there, the affordance does not.
+  interactive: !interactive,
+  onToggle: (emoji) => {
+    this.callbacks.onToggleCommentReaction(comment.id, emoji);
+    this.refresh();
+  },
+});
+if (reactionBar) card.appendChild(reactionBar);
 ```
 
 In `_renderDetail`, pass a `reactions` handler into each `createReplyElement`
@@ -909,6 +995,7 @@ git commit -m ":sparkles: feat(reactions): Show reactions in the inbox cards and
 ### Task 6: Docs, gates and browser verification
 
 **Files:**
+
 - Modify: `README.md` (`user` option row, the two methods, the callbacks table)
 - Modify: `DECISIONS.md` (new entries; the old "out of scope" entry stays — it is a living log)
 - Create: `.changeset/<name>.md` (minor)
