@@ -631,6 +631,16 @@ ${webkitScrollbar(
         width: 100%;
         gap: 8px;
     }
+    /* The detail header borrows the same strip for its prev/next/close trio.
+       There is no left-hand group there, so \`space-between\` scattered the
+       three across the row — one against \`Back\`, one adrift in the middle.
+       They are one cluster opposite \`Back\`, so the row lines up at its end;
+       the 100% width stays, which is what keeps \`Back\` pinned left. */
+    .${CLASSES.INBOX_DETAIL_HEADER} .${CLASSES.INBOX_CARD_ACTIONS} {
+        justify-content: flex-end;
+        gap: 2px;
+    }
+
     .${CLASSES.ACTIONS_GROUP} {
         display: flex;
         align-items: center;

@@ -1988,3 +1988,26 @@ documented decision rather than only changing presentation — `style` in this
 repo means presentation only. `CLAUDE.md` now carries the table itself, with a
 note that gitmoji's general convention disagrees with it, because that file is
 the one an agent reads at the start of every session.
+
+## The detail header's nav trio keeps the shared strip's full width
+
+The inbox detail header reuses `.inbox-card-actions` — the card's action strip
+— as the container for `prev` / `next` / `close`. That strip is `width: 100%`
+with `justify-content: space-between`, which is what makes a card's two groups
+(classification left, tools right) split cleanly. In the header there is only
+one group, so `space-between` distributed the three buttons across the whole
+row: the up arrow sat against `Back`, the down arrow floated in the middle,
+and only `close` landed where it belonged.
+
+Two fixes were defensible. Dropping `width: 100%` in the header would let the
+strip shrink to its contents and the header's own `space-between` would push it
+right — but the 100% width is a deliberate property of that strip, asked for
+explicitly, and a scoped exception is exactly how it gets quietly lost. So the
+width stays and only the alignment is overridden:
+`.inbox-detail-header .inbox-card-actions { justify-content: flex-end }`. The
+strip still spans the row, which is what holds `Back` at the left edge, and the
+trio reads as one cluster opposite it.
+
+The gap tightens to 2px there, matching `.actions-group--end` — the same
+treatment icon-only buttons already get in the card, where 8px between bare
+glyphs reads as three unrelated controls rather than one group.
