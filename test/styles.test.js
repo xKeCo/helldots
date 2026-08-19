@@ -34,6 +34,9 @@ describe("styles", () => {
       CLASSES.REACTION_PILL,
       CLASSES.REACTION_ADD,
       CLASSES.REACTION_PALETTE_ITEM,
+      // Same lesson again, one feature later: the audit trail adds exactly
+      // one button, and this list is where it stops being covered silently.
+      CLASSES.AUDIT_TOGGLE,
     ].forEach((className) => {
       expect(css.includes(`.${className}`)).toBe(true);
     });

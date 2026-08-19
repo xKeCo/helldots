@@ -1644,6 +1644,105 @@ ${webkitScrollbar(
         opacity: 1;
     }
 
+    .${CLASSES.AUDIT_BLOCK} {
+        margin-top: 10px;
+        border-top: 1px solid rgba(255,255,255,0.08);
+        padding-top: 8px;
+    }
+
+    .${CLASSES.AUDIT_TOGGLE} {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        padding: 4px 0;
+        border: 0;
+        background: none;
+        color: rgba(255,255,255,0.55);
+        font-family: inherit;
+        font-size: 12px;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .${CLASSES.AUDIT_TOGGLE}:hover {
+        color: rgba(255,255,255,0.85);
+    }
+
+    /* A caret rather than a glyph: the disclosure state has to read without
+       colour (WCAG 1.4.1), and rotating a border triangle costs no font. */
+    .${CLASSES.AUDIT_TOGGLE}::before {
+        content: "";
+        width: 0;
+        height: 0;
+        border-left: 4px solid currentColor;
+        border-top: 4px solid transparent;
+        border-bottom: 4px solid transparent;
+        transition: transform 0.15s ease;
+    }
+
+    .${CLASSES.AUDIT_TOGGLE}[aria-expanded="true"]::before {
+        transform: rotate(90deg);
+    }
+
+    .${CLASSES.AUDIT_BODY} {
+        padding: 4px 0 2px;
+    }
+
+    .${CLASSES.AUDIT_LIST} {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+    }
+
+    /* Action and timestamp share the first row; the actor drops underneath
+       the action, so a long transition label never squeezes the date out. */
+    .${CLASSES.AUDIT_ROW} {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: baseline;
+        column-gap: 8px;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+
+    .${CLASSES.AUDIT_ACTION} {
+        grid-column: 1;
+        color: rgba(255,255,255,0.78);
+    }
+
+    .${CLASSES.AUDIT_ACTOR} {
+        grid-column: 1;
+        color: rgba(255,255,255,0.48);
+        font-size: 11px;
+    }
+
+    .${CLASSES.AUDIT_TIME} {
+        grid-row: 1;
+        grid-column: 2;
+        color: rgba(255,255,255,0.42);
+        font-size: 11px;
+        white-space: nowrap;
+    }
+
+    .${CLASSES.AUDIT_HEADING} {
+        margin: 0 0 6px;
+        color: rgba(255,255,255,0.5);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .${CLASSES.AUDIT_RESOLUTIONS} {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+    }
+
     .${CLASSES.INBOX_NOTICE} {
         margin: 0 0 10px;
         padding: 9px 11px;

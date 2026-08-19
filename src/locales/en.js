@@ -1,4 +1,12 @@
 export default {
+  auditToggleTemplate: "History ({n})",
+  auditTrailLabel: "Activity history",
+  auditCreated: "Created the comment",
+  auditEdited: "Edited the text",
+  auditTagsChanged: "Updated the tags",
+  auditPreviousResolutions: "Previous resolutions",
+  auditResolvedInTemplate: "Resolved in {n}",
+
   commentAriaLabelPrefix: "Comment: ",
   anonymous: "Anonymous",
   justNow: "Just now",

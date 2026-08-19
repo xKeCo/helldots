@@ -1,4 +1,12 @@
 export default {
+  auditToggleTemplate: "Historial ({n})",
+  auditTrailLabel: "Historial de actividad",
+  auditCreated: "Creó el comentario",
+  auditEdited: "Editó el texto",
+  auditTagsChanged: "Actualizó las etiquetas",
+  auditPreviousResolutions: "Resoluciones anteriores",
+  auditResolvedInTemplate: "Resuelto en {n}",
+
   commentAriaLabelPrefix: "Comentario: ",
   anonymous: "Anónimo",
   justNow: "Justo ahora",

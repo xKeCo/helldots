@@ -32,6 +32,44 @@ export type CommentType = "bug" | "suggestion" | "question" | "improvement";
 /** RF4 — comment priority. `null` means deliberately unprioritised. */
 export type CommentPriority = "high" | "medium" | "low";
 
+/** Who performed an audited action, as the host declared them at the time. */
+export interface AuditActor {
+  /** From `user.id`, when the host supplies one. Never rendered. */
+  id?: string;
+  /** The display name at the time of the action. */
+  name: string;
+}
+
+/**
+ * The four actions worth auditing. Replies carry their own author and
+ * timestamp already, and reactions are high-frequency signal with no audit
+ * value — neither produces an entry.
+ */
+export type AuditEventType = "created" | "edited" | "status" | "classified";
+
+/** One entry of a comment's append-only audit trail. */
+export interface AuditEvent {
+  type: AuditEventType;
+  /**
+   * ISO timestamp, from the acting client's clock. Merge corpora written on
+   * machines whose clocks disagree and an entry can predate the comment it
+   * belongs to; durations derived from these are clamped at zero rather than
+   * rendered negative.
+   */
+  at: string;
+  actor: AuditActor;
+  /** "classified" only: which field moved. */
+  field?: "type" | "priority" | "tags";
+  /**
+   * Both ends of the transition, for "status" and for "classified" on type or
+   * priority. `null` is a value, not an absence — it is how type and priority
+   * read when deliberately unset. Absent for "created", "edited", and for a
+   * tag change, which is a list with no two-value transition.
+   */
+  from?: string | null;
+  to?: string | null;
+}
+
 /** RF2 — environment snapshot taken when the comment was created. */
 export interface CommentContext {
   version: 1;
@@ -72,6 +110,16 @@ export interface SerializedComment {
   anchor: CommentAnchor | null;
   /** location.pathname where the comment was created. */
   page: string;
+  /**
+   * Append-only audit trail: who created, edited, moved or reclassified this
+   * comment, and when. Optional and absent by default — records written
+   * before it existed simply have none, so no migration is involved, and
+   * `null` rather than `[]` keeps an untouched corpus free of extra bytes.
+   *
+   * Every resolution the comment has had is derivable from the `status`
+   * entries, which is why no separate resolution history is stored.
+   */
+  history?: AuditEvent[] | null;
   replies: CommentReply[];
   author: string;
   /**
@@ -292,6 +340,16 @@ export interface Comment {
   target?: HTMLElement | null;
   /** location.pathname where the comment was created. */
   page: string;
+  /**
+   * Append-only audit trail: who created, edited, moved or reclassified this
+   * comment, and when. Optional and absent by default — records written
+   * before it existed simply have none, so no migration is involved, and
+   * `null` rather than `[]` keeps an untouched corpus free of extra bytes.
+   *
+   * Every resolution the comment has had is derivable from the `status`
+   * entries, which is why no separate resolution history is stored.
+   */
+  history?: AuditEvent[] | null;
   replies: CommentReply[];
   author: string;
   /**

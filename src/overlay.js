@@ -54,6 +54,12 @@ import {
 } from "./popover-controller.js";
 import { MarkerEngine } from "./marker-engine.js";
 import { InboxView } from "./inbox.js";
+import {
+  actorOf,
+  recordEvent,
+  normalizeHistory,
+  serializeHistory,
+} from "./audit.js";
 import { closeOpenMenus } from "./menus.js";
 import { closeOpenConfirmDialogs } from "./confirm-dialog.js";
 
@@ -736,6 +742,8 @@ class CommentOverlay {
       contextScreenshot,
     };
 
+    recordEvent(comment, "created", this._actor());
+
     this.comments.push(comment);
     this._syncStorage();
     const created = this._serializeComment(comment);
@@ -1148,6 +1156,10 @@ class CommentOverlay {
 
     comment.text = next;
     comment.editedAt = new Date().toISOString();
+    // The text itself is deliberately not recorded: the log says who changed
+    // what and when, and keeping every superseded revision would turn it into
+    // a second copy of the corpus.
+    recordEvent(comment, "edited", this._actor());
     // The marker's accessible name is the comment text — a screen-reader
     // user tabbing to it must hear the current sentence, not the old one.
     this._circles
@@ -1235,6 +1247,10 @@ class CommentOverlay {
       // Identity, not copy: the display name is what any renderer shows, and
       // this is what a host correlates against its own user table.
       authorId: comment.authorId || null,
+      // Copied out for the same reason as tags and reactions, and null rather
+      // than [] when nothing was recorded, so an untouched corpus costs no
+      // extra bytes.
+      history: serializeHistory(comment.history),
       createdAt: comment.createdAt,
       screenshots: comment.screenshots || [],
       status: comment.status || "open",
@@ -1267,11 +1283,18 @@ class CommentOverlay {
     // resolvedAt (that would reset RF5's elapsed time to "<1m") or trigger a
     // storage write / inbox refresh / callback for nothing having changed.
     if (comment.status === status) return true;
+    const previous = comment.status;
     comment.status = status;
     // RF5 — the timestamp always describes the CURRENT resolution: a
     // reopened comment loses it, and resolving again re-stamps it.
     comment.resolvedAt =
       status === "resolved" ? new Date().toISOString() : null;
+    // After the no-op guard above, never before it: an entry recorded there
+    // would log a change that did not happen.
+    recordEvent(comment, "status", this._actor(), {
+      from: previous,
+      to: status,
+    });
     // Resolving removes the on-page marker; reopening restores it. The
     // lookup goes through the comment's own id, not the caller's spelling.
     const circle = this._circles.get(String(comment.id));
@@ -1284,6 +1307,16 @@ class CommentOverlay {
     const changed = this._serializeComment(comment);
     this._emit("comment:status-changed", [changed], { comment: changed });
     return true;
+  }
+
+  /**
+   * The current actor as the audit log records them: id when the host
+   * supplies one, plus the display name. Sibling of _actorKey — one produces
+   * a de-duplication key, the other a record meant to be read back.
+   * @returns {{ id?: string, name: string }}
+   */
+  _actor() {
+    return actorOf(this.options.user, this.strings);
   }
 
   /**
@@ -1371,7 +1404,15 @@ class CommentOverlay {
     if (type !== null && !COMMENT_TYPES.includes(type)) return false;
     const comment = this._findComment(id);
     if (!comment) return false;
+    const previousType = comment.type ?? null;
     comment.type = type;
+    if (previousType !== type) {
+      recordEvent(comment, "classified", this._actor(), {
+        field: "type",
+        from: previousType,
+        to: type,
+      });
+    }
     return this._commitUpdate(comment);
   }
 
@@ -1385,7 +1426,15 @@ class CommentOverlay {
     if (priority !== null && !PRIORITIES.includes(priority)) return false;
     const comment = this._findComment(id);
     if (!comment) return false;
+    const previousPriority = comment.priority ?? null;
     comment.priority = priority;
+    if (previousPriority !== priority) {
+      recordEvent(comment, "classified", this._actor(), {
+        field: "priority",
+        from: previousPriority,
+        to: priority,
+      });
+    }
     return this._commitUpdate(comment);
   }
 
@@ -1400,7 +1449,14 @@ class CommentOverlay {
     if (!Array.isArray(tags)) return false;
     const comment = this._findComment(id);
     if (!comment) return false;
+    // Joined on a character no tag can contain, rather than compared with
+    // JSON: the list is already normalised on both sides, so this is the
+    // whole of "did anything actually change".
+    const previousTags = (comment.tags || []).join("\u0000");
     comment.tags = normalizeTags(tags);
+    if (comment.tags.join("\u0000") !== previousTags) {
+      recordEvent(comment, "classified", this._actor(), { field: "tags" });
+    }
     return this._commitUpdate(comment);
   }
 
@@ -1523,6 +1579,10 @@ class CommentOverlay {
         // reaches a host that may look it up, so a non-string must not
         // survive a round trip through localStorage or a backend.
         authorId: typeof item.authorId === "string" ? item.authorId : null,
+        // Scrubbed on the way in like the reaction map: an unknown event type
+        // has no label, and an unparseable timestamp poisons every duration
+        // derived from it.
+        history: normalizeHistory(item.history),
         createdAt: item.createdAt || new Date().toISOString(),
         // Screenshots land in <img src> as-is — a non-string entry renders
         // a silently broken thumbnail.

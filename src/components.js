@@ -9,6 +9,7 @@ import {
   MAX_SCREENSHOTS,
 } from "./constants.js";
 import { formatDuration, formatTemplate } from "./i18n.js";
+import { currentResolutionMs } from "./audit.js";
 import defaultStrings from "./locales/en.js";
 import {
   createPicker,
@@ -331,15 +332,14 @@ export const createBadgeRow = (
   }
 
   if (comment.status === "resolved") {
-    // Comments resolved before RF5 shipped have no timestamp — show a
-    // dash rather than a duration computed from data we don't have.
-    const elapsed = comment.resolvedAt
-      ? formatDuration(
-          new Date(comment.resolvedAt).getTime() -
-            new Date(comment.createdAt).getTime(),
-          strings
-        )
-      : "";
+    // Derived from the audit log rather than read off a stored figure, so a
+    // reopened-and-resolved-again comment cannot show the duration of a
+    // resolution that no longer applies. Comments predating the log fall back
+    // to their stamp inside currentResolutionMs, and one with neither shows a
+    // dash rather than a duration computed from data we do not have.
+    const elapsedMs = currentResolutionMs(comment);
+    const elapsed =
+      elapsedMs === null ? "" : formatDuration(elapsedMs, strings);
     addBadge(
       formatTemplate(strings.resolvedInTemplate, elapsed || "—"),
       CLASSES.BADGE_DURATION,

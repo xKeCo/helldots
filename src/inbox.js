@@ -7,6 +7,7 @@ import { CLASSES, COMMENT_TYPES, PRIORITIES, STATUSES } from "./constants.js";
 import { buildAgentContext } from "./agent-context.js";
 import { attachMenuToggle } from "./menus.js";
 import { createContextBlock } from "./context-block.js";
+import { createAuditTrail } from "./audit-timeline.js";
 import {
   createCommentActions,
   copyToClipboard,
@@ -78,6 +79,13 @@ export class InboxView {
      * prev/next.
      */
     this.contextExpanded = true;
+    /**
+     * Whether the detail view's audit trail is open. Closed on arrival,
+     * unlike the context block: the trail answers a question you go looking
+     * for, while the context is what you came to read. State for the same
+     * reason as its sibling — the detail is rebuilt on every refresh.
+     */
+    this.auditExpanded = false;
     /**
      * The one open editor, as state rather than DOM.
      *
@@ -466,6 +474,11 @@ export class InboxView {
       comment.priority ?? null,
       comment.tags ?? [],
       comment.resolvedAt ?? null,
+      // The resolution badge is derived from the log, so a card whose log
+      // grew has to repaint. Length plus the last stamp rather than the whole
+      // array: appending is the only thing that happens to it.
+      comment.history?.length ?? 0,
+      comment.history?.at(-1)?.at ?? null,
       comment.anchorState,
       comment.hidden === true,
       comment.page,
@@ -1010,6 +1023,19 @@ export class InboxView {
       },
     });
     if (context) detail.appendChild(context);
+
+    // Beside the context block rather than below the thread: both are folded
+    // metadata about the comment, and keeping them together leaves the
+    // conversation as one uninterrupted block underneath.
+    const audit = createAuditTrail(comment, {
+      strings: this.strings,
+      locale: this.locale,
+      open: this.auditExpanded,
+      onToggle: (expanded) => {
+        this.auditExpanded = expanded;
+      },
+    });
+    if (audit) detail.appendChild(audit);
 
     const replies = document.createElement("div");
     replies.className = CLASSES.INBOX_REPLIES;
