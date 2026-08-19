@@ -14,6 +14,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import CommentOverlay from "../src/overlay.js";
 import { IDS } from "../src/constants.js";
 import { TAG_NAME } from "../src/root-element.js";
+import { mountStyles } from "../src/style-mount.js";
 
 vi.mock("../src/capture.js", () => ({
   renderPage: vi.fn().mockResolvedValue({ width: 0, height: 0 }),
@@ -166,5 +167,53 @@ describe("stylesheet mounting", () => {
 
       expect(document.getElementById(IDS.GLOBAL_STYLES)).toBeNull();
     });
+  });
+});
+
+describe("mountStyles across realms", () => {
+  let frame;
+
+  beforeEach(() => {
+    frame = document.createElement("iframe");
+    document.body.appendChild(frame);
+  });
+
+  afterEach(() => {
+    frame.remove();
+  });
+
+  it("constructs the sheet in the target's own realm, not the caller's", () => {
+    // A CSSStyleSheet built in one document and adopted into another throws
+    // in every browser that implements constructed sheets. The print report
+    // mounts into an iframe, so the constructor has to come from there.
+    const doc = frame.contentDocument;
+    const seen = [];
+    const view = frame.contentWindow;
+    // Give the frame's realm the capability the parent has, and record which
+    // constructor gets used.
+    Object.defineProperty(doc, "adoptedStyleSheets", {
+      configurable: true,
+      writable: true,
+      value: [],
+    });
+    view.CSSStyleSheet = class {
+      constructor() {
+        seen.push("frame");
+      }
+      replaceSync() {}
+    };
+
+    mountStyles(doc, ".a { color: red; }", "probe");
+
+    expect(seen).toEqual(["frame"]);
+  });
+
+  it("falls back to a style element inside the target document", () => {
+    const doc = frame.contentDocument;
+
+    mountStyles(doc, ".a { color: red; }", "report-styles");
+
+    expect(doc.head.querySelector("#report-styles")).not.toBeNull();
+    expect(document.head.querySelector("#report-styles")).toBeNull();
   });
 });

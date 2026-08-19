@@ -55,10 +55,19 @@ export function mountStyles(target, css, fallbackId) {
  * would silently style nothing.
  */
 function constructSheet(css, target) {
-  if (typeof CSSStyleSheet !== "function") return null;
+  // The constructor has to come from the TARGET's realm, not this module's: a
+  // sheet built in one document and adopted into another throws. That only
+  // started mattering once the metrics report began mounting into an iframe,
+  // which is a different realm from the page that builds it.
+  const view =
+    /** @type {any} */ (target).defaultView ??
+    target.ownerDocument?.defaultView ??
+    globalThis;
+  const Sheet = view.CSSStyleSheet;
+  if (typeof Sheet !== "function") return null;
   if (!("adoptedStyleSheets" in target)) return null;
   try {
-    const sheet = new CSSStyleSheet();
+    const sheet = new Sheet();
     sheet.replaceSync(css);
     return sheet;
   } catch {
