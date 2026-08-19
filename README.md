@@ -164,9 +164,31 @@ overlay.serializeComments()[0];
 ```
 
 Both fields ride along in `serializeComments()` output, on comments and on
-replies alike, so your backend can correlate them against its own user table.
-`authorId` is `null` when you pass no `id`, and on records written before it
-existed — the field is additive, so no stored corpus needs migrating.
+replies alike. **The display name travels with the record**, so a store that
+holds nothing but comments — a database of its own, with no users table —
+renders every author and every audit entry without a single lookup back into
+your app. The id is opaque to HellDots: point it at your user table, at a
+comments-only store, or at nothing. `authorId` is `null` when you pass no
+`id`, and on records written before it existed — the field is additive, so no
+stored corpus needs migrating.
+
+What the denormalised name costs: a rename does not travel backwards. Old
+comments keep the name that was current when they were written, which is what
+an audit trail should do, and the id is what lets you reconcile if you want
+the current one.
+
+With no `id` at all, two people sharing a display name are one author. If your
+app has no accounts, mint the id yourself — you control the key, the lifetime
+and the consent story, which HellDots cannot:
+
+```js
+const KEY = "my-app-anon-id";
+let id = localStorage.getItem(KEY);
+if (!id) localStorage.setItem(KEY, (id = crypto.randomUUID()));
+createCommentOverlay({ user: { name: typedName, id } });
+```
+
+Bear in mind what that identifies: a browser profile, not a person.
 
 Whatever you declare here is taken at face value and stored as-is. The record
 says what your application asserted about who acted; verifying that claim is
@@ -279,7 +301,8 @@ and its comments render no disclosure — additive, so nothing needs migrating.
 The inbox header carries a **Metrics** button. It swaps the list for a
 dashboard: totals, how many were resolved and how many came back, average and
 median resolution time, bars per status, type and priority, and a daily
-distribution.
+distribution. Each bar carries the colour its own picker uses, so a chip and
+its bar read as the same thing.
 
 The dashboard measures **what the panel is currently filtered to** — the
 filter summary sits right above the figures, so they answer "what am I looking

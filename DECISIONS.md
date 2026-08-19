@@ -2285,3 +2285,72 @@ count changes with the corpus — one row per active day — and a wide shape
 would change its column count between exports and stop being joinable against
 the previous one. The keys are the internal names for the same reason a
 locale-dependent column cannot be joined against anything.
+
+## The metric bars borrow the pickers' palette (amends the entry above)
+
+The bars shipped in one flat grey. Reusing `STATUS_COLORS`, `TYPE_COLORS` and
+`PRIORITY_COLORS` — the same maps the status, type and priority pickers read —
+means a chip and its bar are recognisably the same thing, and nothing new had
+to be chosen or documented: `in_review` is `#2E90FA` in both places because it
+is one constant.
+
+This does not weaken the accessibility rule the entry above records. Colour
+here is reinforcement, not the signal: the row already states its label on one
+side of the bar and its count on the other, so a reader who cannot separate the
+hues loses nothing (WCAG 1.4.1). The flat grey satisfied the rule too — it was
+simply saying less than it could.
+
+The `unset` bucket needed a decision of its own. The pickers paint an unset dot
+`transparent`, which is right for a dot standing in for "no value chosen"; a
+bar is not, because it still has a count to draw and a transparent one would
+read as zero. It takes the neutral the bars used before they were coloured at
+all, which also keeps it visibly outside the palette.
+
+## One identity, one spelling (amends the two entries above)
+
+`authorId` landed in four places — on a comment, on a reply, in every audit
+entry's `actor.id`, and as the key a reaction is stored under — and each of
+them normalised it its own way. The comment and the reply kept it verbatim,
+the audit log trimmed it and cut it at 64 characters, and the reaction key
+took it raw. One padded id therefore arrived in three different spellings
+inside a single payload, and an id longer than 64 characters arrived in two.
+
+That is only invisible while nobody reconciles. A host joining its own records
+against any two of those fields gets orphans, and a composite tenant key or a
+JWT `sub` runs past 64 characters without trying.
+
+All four now go through `normalizeActorId` in `id.js`, beside `sameId` for the
+same reason: identity questions get answered in one place or they get answered
+differently. It **trims but never truncates**, and the 64-character cap stays
+on the display name alone. The asymmetry is the point — a clipped name is
+ugly, a clipped id is wrong in silence, because two ids sharing a prefix
+collapse into one person, and the id is the only field anything can be
+reconciled on. What it means and how long it is belongs to the host.
+
+**The docs said something narrower than the design.** They described the id as
+what a host "correlates against its own user table", which reads as though an
+application user table were where it belongs. It is not: the id is opaque, and
+the display name is denormalised into every comment and every audit entry on
+purpose — so a database holding nothing but comments renders the whole trail
+with no lookup back into the host at all. That case is first class, not a
+workaround. What the denormalisation costs is that a rename does not travel
+backwards; for an audit trail that is correct, and the id is the hinge for
+reconciling when you want the current name.
+
+**A HellDots-minted anonymous id was considered and deferred.** With no `id`
+from the host, two people sharing a display name collapse into one author —
+a real gap, and nanoid is already bundled, so it would cost no bytes. It is
+deferred on what it would be rather than what it would cost. To be stable
+across page loads it has to be persisted, which makes it a browser-profile
+identifier wearing the name of a user id: one person on two machines becomes
+two, a shared machine becomes one, and "activity by actor" quietly starts
+counting browsers. It would also be a persistent tracking identifier minted
+without the integrator asking, and it would force a `localStorage` write in
+`persistence: "none"` — the mode whose whole promise is that HellDots writes
+nothing locally. Minting one per comment instead is worse than `null`: it
+looks like an identity, is not one, and would count a single person's two
+reactions as two people.
+
+If it is ever built it should be opt-in, so the integrator accepts what it
+identifies. Until then the host mints its own in three lines and keeps control
+of the key, the lifetime and the consent story — documented in the README.

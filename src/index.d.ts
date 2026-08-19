@@ -156,8 +156,11 @@ export interface SerializedComment {
    * existed simply have none, so no migration is involved.
    *
    * Never rendered — `author` is the display name and stays what any UI
-   * shows. This is what a host correlates against its own user table, and
-   * what tells two teammates sharing a display name apart.
+   * shows — it travels with the record, so a store that holds nothing but
+   * comments renders every author without a lookup. The id is opaque to
+   * HellDots: whether it points into the host's user table, into a
+   * comments-only database, or nowhere at all is the host's business. What it
+   * buys is telling two teammates who share a display name apart.
    */
   authorId?: string | null;
   createdAt: string;
@@ -336,8 +339,11 @@ export interface CommentReply {
    * existed simply have none, so no migration is involved.
    *
    * Never rendered — `author` is the display name and stays what any UI
-   * shows. This is what a host correlates against its own user table, and
-   * what tells two teammates sharing a display name apart.
+   * shows — it travels with the record, so a store that holds nothing but
+   * comments renders every author without a lookup. The id is opaque to
+   * HellDots: whether it points into the host's user table, into a
+   * comments-only database, or nowhere at all is the host's business. What it
+   * buys is telling two teammates who share a display name apart.
    */
   authorId?: string | null;
   timestamp: string;
@@ -386,8 +392,11 @@ export interface Comment {
    * existed simply have none, so no migration is involved.
    *
    * Never rendered — `author` is the display name and stays what any UI
-   * shows. This is what a host correlates against its own user table, and
-   * what tells two teammates sharing a display name apart.
+   * shows — it travels with the record, so a store that holds nothing but
+   * comments renders every author without a lookup. The id is opaque to
+   * HellDots: whether it points into the host's user table, into a
+   * comments-only database, or nowhere at all is the host's business. What it
+   * buys is telling two teammates who share a display name apart.
    */
   authorId?: string | null;
   createdAt: string;
