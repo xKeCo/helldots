@@ -2199,3 +2199,89 @@ Tags are the exception: a list has no two-value transition, so the change gets
 its own sentence (`auditTagsChanged`) rather than a malformed arrow. Seven new
 i18n keys instead of the nine an earlier draft needed, because the field names
 and every value already existed in both locales.
+
+## The metrics dashboard and its exports carry no libraries
+
+Three candidate dependencies were bundled against the real entry point with
+the real build options before any of this was written, the way the reactions
+entry established:
+
+| Candidate                                       | gzip        | Against ~13 KB of headroom |
+| ----------------------------------------------- | ----------- | -------------------------- |
+| `jspdf` + `jspdf-autotable`                     | 253.99 KB   | 19×                        |
+| `pdf-lib`                                       | 202.12 KB   | 15×                        |
+| `jspdf`, optional deps external                 | 133.01 KB   | 10×                        |
+| `chart.js/auto`                                 | 68.86 KB    | 5×                         |
+| `chart.js`, tree-shaken to bar + doughnut       | 55.14 KB    | 4×                         |
+| `uplot` (the smallest serious charting library) | 22.66 KB    | 1.7×                       |
+| `papaparse`                                     | 7.03 KB     | half of it                 |
+| **hand-written CSV serializer**                 | **0.29 KB** | —                          |
+| **hand-drawn SVG bars**                         | **0.30 KB** | —                          |
+
+Not one of them fits, including the smallest. The whole feature — aggregation,
+dashboard, both CSV exports, the printable report, twenty i18n keys in two
+locales and the CSS — came to **+4.28 KB gzip**, landing the bundle at 41.48 KB
+of 50.
+
+**The PDF is the browser's.** The report is built in its own document and that
+document is asked to print; "Save as PDF" in the dialog produces a real one,
+laid out by the engine that already knows how. What this accepts: the user
+passes through the print dialog rather than receiving a file programmatically,
+and a headless context has no dialog to pass through. Against ten times the
+remaining budget for the alternative, that is the cheaper limitation.
+
+**A print report needs its own realm, and that broke a hidden assumption.**
+`mountStyles` constructed its `CSSStyleSheet` from whatever realm the module
+happened to be evaluated in. That was invisible while every target lived in
+the main document, but a sheet built in one document and adopted into another
+throws — so the report's frame would have taken the `<style>` fallback, and an
+inline sheet is exactly what a strict `style-src` drops, since an iframe
+inherits the embedder's CSP. `constructSheet` now resolves the constructor
+from the target's own `defaultView`. The report is the first caller that
+needed it; the widget's own mount is unchanged.
+
+**Charts state their numbers.** No figure communicates through length or
+colour alone (WCAG 1.4.1, and the Lighthouse gate at 0.9): every bar row
+carries its count as text beside it, and the daily chart is an
+`<svg role="img">` whose `aria-label` reads the whole series with a `<title>`
+per column. That requirement alone rules out a `<canvas>` renderer, which is
+what most charting libraries are — so the size measurement and the
+accessibility gate happened to agree.
+
+**Bars scale against the busiest bucket, not against the total.** A corpus
+spread evenly across four statuses would otherwise draw four slivers at 25%,
+and the shape of the distribution — which is the only thing a bar chart is
+for — would be invisible.
+
+**Mean and median, not just the mean.** The requirement asks for an average.
+One comment left open for a month drags a mean somewhere no real comment
+lives, and a reader with no second figure has no way to tell that happened.
+The median costs six lines.
+
+**`overTime` lists only the days that saw activity.** Filling the gaps between
+the first and last comment is the textbook answer and it is wrong here: two
+comments a year apart would produce 365 buckets and a chart of 363 empty bars.
+The axis labels name the endpoints, so the sparseness is visible rather than
+implied.
+
+**The dashboard is filtered, `getMetrics()` is not.** The panel's filter
+summary sits directly above the figures, so measuring anything other than what
+the panel is showing would contradict the label right next to it. A host
+calling `getMetrics()` has no notion of those filters and gets the whole
+corpus. The exports follow whichever one invoked them.
+
+**CSV is written by hand, and defused.** The whole of RFC 4180 that matters is
+"quote a field containing a delimiter, a quote or a newline, and double the
+quotes inside" — thirty lines against `papaparse`'s 7.03 KB, half the
+headroom. Three details are not obvious and each is a real failure otherwise:
+a UTF-8 BOM, without which Excel reads the bytes as its local codepage and
+every accented name comes back as mojibake; a leading apostrophe on any value
+starting `=`, `+`, `-` or `@`, which Excel would otherwise evaluate as a
+formula on open; and `\r\n` between records, which is what the RFC specifies.
+
+**The aggregate export is long format with untranslated keys.** One row per
+bucket (`section, key, value`) rather than one wide row, because the bucket
+count changes with the corpus — one row per active day — and a wide shape
+would change its column count between exports and stop being joinable against
+the previous one. The keys are the internal names for the same reason a
+locale-dependent column cannot be joined against anything.

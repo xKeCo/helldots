@@ -274,6 +274,56 @@ Two things worth knowing before you rely on it:
 A corpus written before the log existed loads unchanged with `history: null`,
 and its comments render no disclosure — additive, so nothing needs migrating.
 
+## Metrics and reports
+
+The inbox header carries a **Metrics** button. It swaps the list for a
+dashboard: totals, how many were resolved and how many came back, average and
+median resolution time, bars per status, type and priority, and a daily
+distribution.
+
+The dashboard measures **what the panel is currently filtered to** — the
+filter summary sits right above the figures, so they answer "what am I looking
+at". For the unfiltered aggregate, ask the overlay:
+
+```js
+overlay.getMetrics();
+// {
+//   total: 42,
+//   byStatus:   { open: 12, in_progress: 4, in_review: 2, resolved: 24 },
+//   byType:     { bug: 18, suggestion: 9, question: 3, improvement: 4, unset: 8 },
+//   byPriority: { high: 7, medium: 15, low: 6, unset: 14 },
+//   overTime:   [{ date: "2026-08-18", count: 5 }, …],
+//   resolution: { resolvedCount: 24, reopenedCount: 3,
+//                 averageMs: 9000000, medianMs: 5400000 },
+// }
+```
+
+Every bucket is present even when empty, so you can index it without guarding.
+`overTime` lists only the days that saw activity — filling the gaps would put
+a year of empty buckets between two comments twelve months apart.
+
+### Exporting
+
+Three buttons at the foot of the dashboard, and the same three as methods:
+
+```js
+overlay.exportCommentsCsv(); // helldots-comments.csv — one row per comment
+overlay.exportMetricsCsv(); // helldots-metrics.csv  — section, key, value
+overlay.printMetricsReport(); // the browser's print dialog → Save as PDF
+```
+
+The CSVs are RFC 4180 with a UTF-8 BOM, so Excel opens them without turning
+every accent into mojibake, and a value that would otherwise be evaluated as a
+formula is neutralised on the way out. Headers are the internal field names
+rather than translated labels: the file is an interchange format, and a column
+whose spelling follows the widget's locale cannot be joined against anything.
+Screenshots stay out — a 33 KB base64 string in a spreadsheet cell is not data.
+
+The PDF is the browser's. HellDots builds the report in its own document and
+asks that document to print, so "Save as PDF" in the dialog gives you a real
+one at no cost in bundle size — the lightest PDF library measured 133 KB gzip
+against a 50 KB budget. What prints is the report, not the page behind it.
+
 ## Handing a comment to a coding agent
 
 Every comment has a **copy** button that puts a plain-text context block on the
