@@ -8,6 +8,8 @@ import { buildAgentContext } from "./agent-context.js";
 import { attachMenuToggle } from "./menus.js";
 import { createContextBlock } from "./context-block.js";
 import { createAuditTrail } from "./audit-timeline.js";
+import { createMetricsView } from "./metrics-view.js";
+import { computeMetrics } from "./metrics.js";
 import {
   createCommentActions,
   copyToClipboard,
@@ -46,7 +48,7 @@ export class InboxView {
    * @param {string} deps.currentPage
    * @param {() => Array<Object>} deps.getComments
    * @param {{ shortcutKey?: string, shortcutModifier?: string, linkParam?: string }} [deps.options]
-   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onDeleteReply: Function, onEditComment: Function, onEditReply: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function, actorKey: () => string, onToggleCommentReaction: Function, onToggleReplyReaction: Function }} deps.callbacks
+   * @param {{ onOpenDetailScroll: Function, onReply: Function, onDelete: Function, onDeleteReply: Function, onEditComment: Function, onEditReply: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function, actorKey: () => string, onToggleCommentReaction: Function, onToggleReplyReaction: Function, onExportComments: Function, onExportMetrics: Function, onPrintReport: Function }} deps.callbacks
    */
   constructor({
     shadowRoot,
@@ -86,6 +88,12 @@ export class InboxView {
      * reason as its sibling — the detail is rebuilt on every refresh.
      */
     this.auditExpanded = false;
+    /**
+     * Whether the panel is showing the metrics dashboard instead of the list.
+     * A mode rather than a second panel: the sidebar is already where every
+     * comment is looked at, and the figures are about those comments.
+     */
+    this.showMetrics = false;
     /**
      * The one open editor, as state rather than DOM.
      *
@@ -352,6 +360,12 @@ export class InboxView {
     // Set before rendering so a detail reached by any route — a card click,
     // the prev/next nav, the cross-page handoff — marks its marker.
     this._setActiveMarker(detail);
+    if (this.showMetrics) {
+      this._cardBindings.clear();
+      this.el.innerHTML = "";
+      this._renderMetrics(comments);
+      return;
+    }
     if (detail) {
       // The detail shows one comment: a full rebuild is cheap and keeps the
       // editing and reply wiring simple. Leaving the list view drops its
@@ -400,6 +414,59 @@ export class InboxView {
     return btn;
   }
 
+  _metricsButton() {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = CLASSES.INBOX_METRICS_BTN;
+    btn.textContent = this.strings.metricsOpen;
+    btn.setAttribute("aria-label", this.strings.metricsTitle);
+    btn.addEventListener("click", async () => {
+      if (this.editing && !(await this.releaseEditor())) return;
+      this.showMetrics = true;
+      this.detailId = null;
+      this.render();
+    });
+    return btn;
+  }
+
+  /**
+   * The dashboard measures the comments the panel is currently showing, not
+   * the whole corpus: the filter summary sits right above it, so the figures
+   * answer "what am I looking at". A host wanting the unfiltered aggregate
+   * calls `overlay.getMetrics()`.
+   */
+  _renderMetrics(comments) {
+    const header = document.createElement("div");
+    header.className = CLASSES.INBOX_DETAIL_HEADER;
+
+    const backBtn = document.createElement("button");
+    backBtn.type = "button";
+    backBtn.className = CLASSES.INBOX_BACK;
+    backBtn.innerHTML = `${CHEVRON_LEFT_SVG}<span>${this.strings.back}</span>`;
+    backBtn.addEventListener("click", () => {
+      this.showMetrics = false;
+      this.render();
+    });
+    header.appendChild(backBtn);
+
+    const nav = document.createElement("div");
+    nav.className = CLASSES.INBOX_CARD_ACTIONS;
+    nav.appendChild(this._closeButton());
+    header.appendChild(nav);
+    this.el.appendChild(header);
+
+    const scope = this._filterSummaryLabel();
+    this.el.appendChild(
+      createMetricsView(computeMetrics(comments), {
+        strings: this.strings,
+        locale: this.locale,
+        onExportComments: () => this.callbacks.onExportComments(comments),
+        onExportMetrics: () => this.callbacks.onExportMetrics(comments),
+        onPrint: () => this.callbacks.onPrintReport(comments, scope),
+      })
+    );
+  }
+
   _renderList(comments) {
     // Persistent skeleton: the header and the scrolling list are built once
     // and survive every refresh. Replacing the list wholesale (the old
@@ -424,7 +491,14 @@ export class InboxView {
     const header = [...this.el.children].find((el) =>
       el.classList.contains(CLASSES.INBOX_HEADER)
     );
-    header.replaceChildren(this._buildFilter(), this._closeButton());
+    // One cluster, not three loose children: under the header's
+    // `space-between`, a third child lands adrift in the middle instead of
+    // beside the control it belongs with — the same scattering the detail
+    // header already had to group its way out of.
+    const actions = document.createElement("div");
+    actions.className = CLASSES.INBOX_HEADER_ACTIONS;
+    actions.append(this._metricsButton(), this._closeButton());
+    header.replaceChildren(this._buildFilter(), actions);
 
     this._reconcileCards(list, comments);
   }

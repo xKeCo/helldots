@@ -32,6 +32,34 @@ export type CommentType = "bug" | "suggestion" | "question" | "improvement";
 /** RF4 — comment priority. `null` means deliberately unprioritised. */
 export type CommentPriority = "high" | "medium" | "low";
 
+/**
+ * Aggregate figures over a corpus of comments. Every bucket is present even
+ * when empty, so a consumer can index it without guarding — an absent key and
+ * a zero would otherwise be indistinguishable.
+ */
+export interface CommentMetrics {
+  total: number;
+  byStatus: Record<CommentStatus, number>;
+  /** `unset` holds the comments left deliberately unclassified. */
+  byType: Record<CommentType | "unset", number>;
+  /** `unset` holds the comments left deliberately unprioritised. */
+  byPriority: Record<CommentPriority | "unset", number>;
+  /**
+   * Comments created per day, oldest first, in `YYYY-MM-DD`. Only days that
+   * saw activity get an entry: filling the gaps would put a year of empty
+   * buckets between two comments twelve months apart.
+   */
+  overTime: Array<{ date: string; count: number }>;
+  resolution: {
+    resolvedCount: number;
+    /** Comments that were resolved, reopened and resolved again. */
+    reopenedCount: number;
+    /** Mean and median of the resolution currently in force, or null when nothing is resolved. */
+    averageMs: number | null;
+    medianMs: number | null;
+  };
+}
+
 /** Who performed an audited action, as the host declared them at the time. */
 export interface AuditActor {
   /** From `user.id`, when the host supplies one. Never rendered. */
@@ -437,6 +465,28 @@ export declare class CommentOverlay {
    * backend before loadComments — fires no per-comment callbacks.
    */
   clearComments(): void;
+  /**
+   * Aggregate figures over every comment the widget holds. Unfiltered: the
+   * dashboard inside the inbox measures whatever that panel is showing, but a
+   * host has no notion of those filters.
+   */
+  getMetrics(): CommentMetrics;
+  /**
+   * Downloads the corpus as CSV, one row per comment. Screenshots and the
+   * automatic context capture stay out. Defaults to every comment.
+   */
+  exportCommentsCsv(comments?: SerializedComment[]): void;
+  /**
+   * Downloads the aggregate figures as CSV in long format — `section, key,
+   * value` — so the column count does not change with the corpus.
+   */
+  exportMetricsCsv(comments?: SerializedComment[]): void;
+  /**
+   * Opens the browser's print dialog on a report of the figures, which is
+   * where "save as PDF" lives. The report is built in its own document, so
+   * what prints is the report rather than the host page.
+   */
+  printMetricsReport(comments?: SerializedComment[], scope?: string): void;
   setCommentStatus(id: CommentId, status: CommentStatus): boolean;
   setCommentType(id: CommentId, type: CommentType | null): boolean;
   setCommentPriority(id: CommentId, priority: CommentPriority | null): boolean;

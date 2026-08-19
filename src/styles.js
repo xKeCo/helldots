@@ -1743,6 +1743,179 @@ ${webkitScrollbar(
         border-top: 1px solid rgba(255,255,255,0.06);
     }
 
+    /* Metrics and close read as one cluster at the end of the row. The gap
+       is wider than the header's own 8px because the two are different kinds
+       of control — one opens a view, one dismisses the panel — and a tight
+       pair invites the wrong click. */
+    .${CLASSES.INBOX_HEADER_ACTIONS} {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .${CLASSES.INBOX_METRICS_BTN} {
+        padding: 5px 10px;
+        border-radius: 7px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.06);
+        color: rgba(255,255,255,0.75);
+        font-family: inherit;
+        font-size: 12px;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+
+    .${CLASSES.INBOX_METRICS_BTN}:hover {
+        background: rgba(255,255,255,0.11);
+        color: #fff;
+    }
+
+    .${CLASSES.METRICS_VIEW} {
+        flex: 1;
+        overflow-y: auto;
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.22) transparent;
+    }
+
+    .${CLASSES.METRICS_VIEW}::-webkit-scrollbar { width: 8px; }
+    .${CLASSES.METRICS_VIEW}::-webkit-scrollbar-track { background: transparent; }
+    .${CLASSES.METRICS_VIEW}::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.22);
+        border-radius: 4px;
+    }
+
+    .${CLASSES.METRICS_TILES} {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+        gap: 8px;
+    }
+
+    .${CLASSES.METRICS_TILE} {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 10px;
+        border-radius: 9px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .${CLASSES.METRICS_TILE_VALUE} {
+        color: #fff;
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.1;
+    }
+
+    .${CLASSES.METRICS_TILE_LABEL} {
+        color: rgba(255,255,255,0.5);
+        font-size: 11px;
+        line-height: 1.3;
+    }
+
+    .${CLASSES.METRICS_GROUP} {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+    }
+
+    .${CLASSES.METRICS_HEADING} {
+        margin: 0;
+        color: rgba(255,255,255,0.5);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    /* Label, track and count on one line: the count is text beside the bar,
+       never a value the reader has to infer from its length (WCAG 1.4.1). */
+    .${CLASSES.METRICS_ROW} {
+        display: grid;
+        grid-template-columns: 76px 1fr 26px;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+    }
+
+    .${CLASSES.METRICS_ROW_LABEL} {
+        color: rgba(255,255,255,0.72);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .${CLASSES.METRICS_TRACK} {
+        height: 8px;
+        border-radius: 4px;
+        background: rgba(255,255,255,0.07);
+        overflow: hidden;
+    }
+
+    .${CLASSES.METRICS_BAR} {
+        height: 100%;
+        border-radius: 4px;
+        background: rgba(255,255,255,0.42);
+        min-width: 2px;
+    }
+
+    .${CLASSES.METRICS_ROW_COUNT} {
+        color: rgba(255,255,255,0.85);
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+    }
+
+    .${CLASSES.METRICS_CHART} {
+        width: 100%;
+        height: 96px;
+        display: block;
+        fill: rgba(255,255,255,0.42);
+    }
+
+    .${CLASSES.METRICS_AXIS} {
+        display: flex;
+        justify-content: space-between;
+        color: rgba(255,255,255,0.42);
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .${CLASSES.METRICS_EXPORTS} {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding-top: 4px;
+        border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .${CLASSES.METRICS_EXPORT_BTN} {
+        padding: 6px 10px;
+        border-radius: 7px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.06);
+        color: rgba(255,255,255,0.78);
+        font-family: inherit;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+    .${CLASSES.METRICS_EXPORT_BTN}:hover {
+        background: rgba(255,255,255,0.12);
+        color: #fff;
+    }
+
+    .${CLASSES.METRICS_EMPTY} {
+        margin: 0;
+        padding: 24px 0;
+        color: rgba(255,255,255,0.5);
+        font-size: 13px;
+        text-align: center;
+    }
+
     .${CLASSES.INBOX_NOTICE} {
         margin: 0 0 10px;
         padding: 9px 11px;
@@ -1768,4 +1941,72 @@ export const getGlobalStyles = () => `
         cursor: url('${CURSOR_SVG}') ${CURSOR_HOTSPOT}, auto !important;
     }
 
+`;
+
+/**
+ * Styles for the printable metrics report. A separate sheet from getStyles()
+ * because it dresses a different document — the report's own frame — and
+ * because paper is white: printing the widget's dark surface would put a
+ * black slab through the printer and render the text unreadable in
+ * greyscale. Delivered through mountStyles like everything else, so a strict
+ * `style-src` cannot blank it.
+ */
+export const getReportStyles = () => `
+    .report {
+        margin: 0;
+        padding: 24px;
+        background: #fff;
+        color: #111;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 12px;
+        line-height: 1.45;
+    }
+
+    .report-title {
+        margin: 0 0 4px;
+        font-size: 20px;
+    }
+
+    .report-meta {
+        margin: 0 0 2px;
+        color: #555;
+        font-size: 11px;
+    }
+
+    .report-table {
+        width: 100%;
+        margin-top: 18px;
+        border-collapse: collapse;
+        /* Keeps a dimension's table from being split across two sheets. */
+        break-inside: avoid;
+    }
+
+    .report-table caption {
+        margin-bottom: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: left;
+    }
+
+    .report-table th,
+    .report-table td {
+        padding: 5px 8px;
+        border: 1px solid #d5d5d5;
+        text-align: left;
+        font-weight: 400;
+    }
+
+    .report-table thead th {
+        background: #f2f2f2;
+        font-weight: 600;
+    }
+
+    .report-table td {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    @page {
+        margin: 14mm;
+    }
 `;

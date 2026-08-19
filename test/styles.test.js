@@ -37,6 +37,8 @@ describe("styles", () => {
       // Same lesson again, one feature later: the audit trail adds exactly
       // one button, and this list is where it stops being covered silently.
       CLASSES.AUDIT_TOGGLE,
+      CLASSES.INBOX_METRICS_BTN,
+      CLASSES.METRICS_EXPORT_BTN,
     ].forEach((className) => {
       expect(css.includes(`.${className}`)).toBe(true);
     });

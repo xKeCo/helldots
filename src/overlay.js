@@ -60,6 +60,18 @@ import {
   normalizeHistory,
   serializeHistory,
 } from "./audit.js";
+import { computeMetrics } from "./metrics.js";
+import {
+  toCsv,
+  columnsOf,
+  commentRows,
+  metricRows,
+  downloadCsv,
+  COMMENT_COLUMNS,
+  METRIC_COLUMNS,
+} from "./csv.js";
+import { printMetricsReport } from "./metrics-report.js";
+import { getReportStyles } from "./styles.js";
 import { closeOpenMenus } from "./menus.js";
 import { closeOpenConfirmDialogs } from "./confirm-dialog.js";
 
@@ -878,6 +890,10 @@ class CommentOverlay {
             this.toggleCommentReaction(id, emoji),
           onToggleReplyReaction: (commentId, replyId, emoji) =>
             this.toggleReplyReaction(commentId, replyId, emoji),
+          onExportComments: (comments) => this.exportCommentsCsv(comments),
+          onExportMetrics: (comments) => this.exportMetricsCsv(comments),
+          onPrintReport: (comments, scope) =>
+            this.printMetricsReport(comments, scope),
           onSetStatus: (id, status) => this.setCommentStatus(id, status),
           onSetType: (id, type) => this.setCommentType(id, type),
           onSetPriority: (id, priority) =>
@@ -1458,6 +1474,63 @@ class CommentOverlay {
       recordEvent(comment, "classified", this._actor(), { field: "tags" });
     }
     return this._commitUpdate(comment);
+  }
+
+  /**
+   * Aggregate figures over every comment the widget holds — counts by
+   * status, type and priority, the daily distribution, and the resolution
+   * times derived from the audit log.
+   *
+   * Unfiltered on purpose: a host has no notion of the panel's filters. The
+   * dashboard inside the inbox measures whatever that panel is showing.
+   * @returns {import('./index.d.ts').CommentMetrics}
+   */
+  getMetrics() {
+    return computeMetrics(this.serializeComments());
+  }
+
+  /**
+   * Downloads the corpus as CSV, one row per comment. Screenshots stay out:
+   * a 33 KB base64 string in a spreadsheet cell is not data.
+   * @param {import('./index.d.ts').SerializedComment[]} [comments] defaults to all
+   */
+  exportCommentsCsv(comments) {
+    const rows = commentRows(comments || this.serializeComments());
+    downloadCsv(
+      "helldots-comments.csv",
+      toCsv(rows, columnsOf(COMMENT_COLUMNS))
+    );
+  }
+
+  /**
+   * Downloads the aggregate figures as CSV in long format — one row per
+   * bucket, so the shape stays the same however many days the corpus spans.
+   * @param {import('./index.d.ts').SerializedComment[]} [comments] defaults to all
+   */
+  exportMetricsCsv(comments) {
+    const metrics = computeMetrics(comments || this.serializeComments());
+    downloadCsv(
+      "helldots-metrics.csv",
+      toCsv(metricRows(metrics), columnsOf(METRIC_COLUMNS))
+    );
+  }
+
+  /**
+   * Opens the browser's print dialog on a report of the figures — which is
+   * where "save as PDF" lives, at no cost in bundle size. The report is
+   * built in its own document, so what prints is the report and not the
+   * host page.
+   * @param {import('./index.d.ts').SerializedComment[]} [comments] defaults to all
+   * @param {string} [scope] a label describing what was measured
+   */
+  printMetricsReport(comments, scope) {
+    const metrics = computeMetrics(comments || this.serializeComments());
+    printMetricsReport(metrics, {
+      strings: this.strings,
+      locale: this.locale,
+      css: getReportStyles(),
+      scope,
+    });
   }
 
   /**
