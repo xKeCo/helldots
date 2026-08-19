@@ -60,6 +60,7 @@ import {
   normalizeHistory,
   serializeHistory,
 } from "./audit.js";
+import { normalizeActorId } from "./id.js";
 import { computeMetrics } from "./metrics.js";
 import {
   toCsv,
@@ -738,7 +739,7 @@ class CommentOverlay {
       id: createId(),
       replies: [],
       author: this.options.user?.name || this.strings.anonymous,
-      authorId: this.options.user?.id || null,
+      authorId: normalizeActorId(this.options.user?.id) || null,
       createdAt: new Date().toISOString(),
       screenshots: this._pendingScreenshots
         ? [...this._pendingScreenshots]
@@ -1111,7 +1112,7 @@ class CommentOverlay {
       editedAt: null,
       text,
       author: this.options.user?.name || this.strings.anonymous,
-      authorId: this.options.user?.id || null,
+      authorId: normalizeActorId(this.options.user?.id) || null,
       timestamp: new Date().toISOString(),
       screenshots,
     };
@@ -1639,8 +1640,7 @@ class CommentOverlay {
               )
               .map((reply) => ({
                 ...reply,
-                authorId:
-                  typeof reply.authorId === "string" ? reply.authorId : null,
+                authorId: normalizeActorId(reply.authorId) || null,
                 ...(Array.isArray(reply.screenshots)
                   ? { screenshots: onlyStrings(reply.screenshots) }
                   : {}),
@@ -1651,7 +1651,7 @@ class CommentOverlay {
         // Scrubbed like every other field crossing this boundary: the id
         // reaches a host that may look it up, so a non-string must not
         // survive a round trip through localStorage or a backend.
-        authorId: typeof item.authorId === "string" ? item.authorId : null,
+        authorId: normalizeActorId(item.authorId) || null,
         // Scrubbed on the way in like the reaction map: an unknown event type
         // has no label, and an unparseable timestamp poisons every duration
         // derived from it.

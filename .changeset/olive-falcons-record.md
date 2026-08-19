@@ -14,5 +14,11 @@ The field is additive and optional: records written before this change load
 unchanged with `authorId: null`, and no migration is involved. A non-string id
 arriving through `loadComments` is dropped rather than trusted.
 
+One identifier now has exactly one spelling. The id is trimmed — and never
+truncated — in every place it lands: `authorId` on comments and replies, the
+`actor.id` of each audit entry, and the key a reaction is stored under. They
+each normalised it differently before, so a padded or long id could arrive in
+three different forms inside one payload.
+
 HellDots still authenticates nobody. Whatever the host declares in `user` is
 recorded as-is.

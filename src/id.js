@@ -26,6 +26,27 @@ import { nanoid } from "nanoid";
 export const createId = () => nanoid();
 
 /**
+ * The one way to read an author's identifier off whatever the host declared.
+ *
+ * It lands in four places — `comment.authorId`, `reply.authorId`, every audit
+ * entry's `actor.id`, and the key a reaction is stored under — and a host
+ * joining its own records against any two of them has to get the same string
+ * back. Each of those sites used to normalise it its own way, so one padded
+ * or over-long id arrived in three different spellings inside one payload.
+ *
+ * Trimmed but never truncated. A clipped display name is ugly; a clipped id
+ * is wrong in silence, because two ids sharing a prefix collapse into one
+ * person — and this is the only field anything can be reconciled on. What the
+ * id means, how long it is and whether it is safe to store is the host's
+ * call: HellDots treats it as opaque.
+ *
+ * @param {unknown} value
+ * @returns {string} the trimmed id, or "" when there is not one
+ */
+export const normalizeActorId = (value) =>
+  typeof value === "string" ? value.trim() : "";
+
+/**
  * The one way to compare ids. New ids are strings, but Date.now()-era
  * records still hold numbers, and either spelling may have crossed a JSON
  * or URL boundary since — so equality is defined on the string form, as

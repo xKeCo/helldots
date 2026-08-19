@@ -13,14 +13,18 @@
 // derived from the log on read rather than kept beside it, so they cannot
 // go stale when a comment is reopened.
 
+import { normalizeActorId } from "./id.js";
+
 /** The four auditable actions. */
 export const AUDIT_EVENTS = ["created", "edited", "status", "classified"];
 
 /** The classification fields a "classified" event can name. */
 export const AUDIT_FIELDS = ["type", "priority", "tags"];
 
-// Names and ids come from the host and land in localStorage; cap them so one
-// pathological value cannot inflate every entry of the log.
+// A display name comes from the host and is repeated on every entry, so a
+// pathological one is capped. The actor's id is deliberately NOT capped —
+// see normalizeActorId: it is the only thing a host can reconcile on, and a
+// truncated key joins wrongly instead of failing loudly.
 const FIELD_MAX = 64;
 
 const clean = (value) =>
@@ -49,7 +53,7 @@ const transition = (value) => {
  */
 export function actorOf(user, strings) {
   const name = clean(user?.name) || strings.anonymous;
-  const id = clean(user?.id);
+  const id = normalizeActorId(user?.id);
   return id ? { id, name } : { name };
 }
 
@@ -106,7 +110,7 @@ export function normalizeHistory(raw) {
     if (!Number.isFinite(Date.parse(at))) continue;
 
     const name = clean(item.actor?.name);
-    const id = clean(item.actor?.id);
+    const id = normalizeActorId(item.actor?.id);
     const entry = { type: item.type, at, actor: id ? { id, name } : { name } };
 
     if (AUDIT_FIELDS.includes(item.field)) entry.field = item.field;

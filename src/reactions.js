@@ -5,6 +5,7 @@
 
 import { CLASSES, REACTION_EMOJIS } from "./constants.js";
 import { attachMenuToggle } from "./menus.js";
+import { normalizeActorId } from "./id.js";
 
 /**
  * The key a reaction is stored under.
@@ -21,7 +22,7 @@ import { attachMenuToggle } from "./menus.js";
  * @returns {string}
  */
 export const actorKeyOf = (user, strings) =>
-  user?.id || user?.name || strings.anonymous;
+  normalizeActorId(user?.id) || user?.name || strings.anonymous;
 
 /**
  * Reads a reaction map into a stable, ordered list, dropping emoji nobody

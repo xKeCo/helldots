@@ -183,3 +183,72 @@ describe("host-supplied identity", () => {
     expect(rendered).not.toContain("u_secret_42");
   });
 });
+
+describe("one identity, one spelling", () => {
+  let overlay;
+
+  beforeEach(() => {
+    document.elementFromPoint = () => null;
+    document.body.innerHTML = `<section id="target">Compare our plans</section>`;
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  // Every place the actor's id lands. A host joining its own table against
+  // any two of these has to get the same key back.
+  const spellings = (overlay) => {
+    const [serialized] = overlay.serializeComments();
+    return {
+      comment: serialized.authorId,
+      reply: serialized.replies[0].authorId,
+      audit: serialized.history.at(-1).actor.id,
+      reaction: Object.values(serialized.reactions)[0][0],
+    };
+  };
+
+  const drive = async (id) => {
+    overlay = makeOverlay({ user: { name: "Ana Pérez", id } });
+    const comment = await createComment(overlay);
+    overlay.addReply(comment, "Confirmed");
+    overlay.toggleCommentReaction(comment.id, "👍");
+    overlay.setCommentStatus(comment.id, "resolved");
+    return spellings(overlay);
+  };
+
+  it("agrees across the comment, the reply, the log and the reaction", async () => {
+    const seen = await drive("u_42");
+    expect(seen).toEqual({
+      comment: "u_42",
+      reply: "u_42",
+      audit: "u_42",
+      reaction: "u_42",
+    });
+  });
+
+  it("agrees when the host's id arrives padded", async () => {
+    const seen = await drive("  u_42  ");
+    expect(new Set(Object.values(seen))).toEqual(new Set(["u_42"]));
+  });
+
+  it("agrees when the id is longer than a display name would ever be", async () => {
+    // A JWT `sub` or a composite tenant key runs well past any sane cap, and
+    // truncating one of the four would break the join silently.
+    const long = "tenant_acme|" + "a".repeat(120);
+    const seen = await drive(long);
+    expect(new Set(Object.values(seen))).toEqual(new Set([long]));
+  });
+
+  it("still caps a pathological display name, which is not a join key", async () => {
+    overlay = makeOverlay({ user: { name: "x".repeat(500), id: "u_42" } });
+    const comment = await createComment(overlay);
+    overlay.setCommentStatus(comment.id, "resolved");
+
+    const entry = overlay.serializeComments()[0].history.at(-1);
+    expect(entry.actor.name).toHaveLength(64);
+  });
+});
