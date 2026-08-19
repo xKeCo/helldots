@@ -233,6 +233,47 @@ Reactions ride along in `serializeComments()` output as `reactions`, an
 show counts, never who reacted: the stored keys are your ids, and they stay
 out of the UI.
 
+### Audit trail
+
+Every comment carries an append-only log of what happened to it — who created
+it, edited its text, moved its status or changed its classification, and when.
+It shows up as a folded `History (n)` disclosure in the inbox detail, next to
+the context block.
+
+```js
+overlay.serializeComments()[0].history;
+// [
+//   { type: "created",  at: "…", actor: { id: "u_42", name: "Ana Pérez" } },
+//   { type: "status",   at: "…", actor: {…}, from: "open", to: "resolved" },
+//   { type: "classified", at: "…", actor: {…}, field: "type", from: null, to: "bug" },
+// ]
+```
+
+Replies and reactions are deliberately **not** in it. A reply already carries
+its own author and timestamp and is visible in the thread; reactions are
+high-frequency signal with no audit value. That bound is what keeps the log at
+three to five entries per comment — a hundred comments’ worth of history costs
+about what two automatic screenshots cost.
+
+Resolution time is derived from this log rather than stored beside it, so a
+comment that was resolved, reopened and resolved again reports the duration of
+the resolution currently in force, and the superseded ones are listed under
+**Previous resolutions** in the same disclosure.
+
+Two things worth knowing before you rely on it:
+
+- **It is attributive, not evidential.** HellDots authenticates nobody. The log
+  records the `user` your app declared at the moment of the action, so it says
+  what your application asserted about who acted — not a verified fact. Verify
+  on your own backend if you need the stronger claim; `onChange` carries every
+  mutation to it.
+- **Timestamps come from the acting client’s clock.** Merge corpora written on
+  machines whose clocks disagree and an entry can predate the comment it
+  belongs to. Durations are clamped at zero rather than rendered negative.
+
+A corpus written before the log existed loads unchanged with `history: null`,
+and its comments render no disclosure — additive, so nothing needs migrating.
+
 ## Handing a comment to a coding agent
 
 Every comment has a **copy** button that puts a plain-text context block on the

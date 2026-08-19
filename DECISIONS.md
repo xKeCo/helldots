@@ -2125,3 +2125,77 @@ something already stored once per comment, whereas here the identifier is what
 the requirement asks for. An `id` that is itself sensitive is the host's to
 choose; HellDots stores the opaque string it is given and invents none of its
 own.
+
+## The audit trail records four actions, and nothing it cannot label
+
+The entry above ("A single `resolvedAt` instead of a status history") declined
+a status history on the grounds that it "offered more analytical value than
+the requirement asked for, at the cost of more payload per comment". The
+requirement now asks for it — who created, changed or resolved a comment, and
+when — so this amends that call rather than replacing it.
+
+**Four event types, chosen by what the requirement names.** `created`,
+`edited`, `status`, `classified`. Two things stay out on purpose:
+
+- **Reactions.** A single triage session can toggle a dozen; folding them in
+  would quadruple the log to record that somebody clicked 👀.
+- **Replies.** A reply already carries its own `author`, `timestamp` and
+  `editedAt`, and it is visible in the thread. Copying that into the parent's
+  log would be the second place one fact lives.
+
+That bound is load-bearing rather than cosmetic. It puts a typical comment at
+three to five entries — roughly 450–750 bytes — so a hundred comments' worth
+of history costs about what two automatic `contextScreenshot`s cost. Against a
+~5 MB quota that needs no cap and no retention policy, and the shedding path
+in `writeStoredComments` stays exactly as it was: screenshots remain the only
+thing sacrificed, because they are the only thing a user can regenerate by
+taking another one. A log cannot; it _is_ the record.
+
+**Resolution time is derived, never stored.** `resolutionsOf` walks the
+`status` entries and `currentResolutionMs` returns the one in force; neither
+is serialized. Storing the figure would put the same fact in two places and
+let it go stale the moment a comment is reopened — the failure "Card density,
+round two: one fact, one place" already named. `resolvedAt` stays as it is,
+both for hosts already reading it and as the fallback inside
+`currentResolutionMs` for comments resolved before the log existed. Each
+duration is measured from creation rather than from the reopen: restarting the
+clock would make a comment that bounced twice look faster than one fixed on
+the first attempt.
+
+**No new change event.** Reactions got a dedicated `reaction:toggled` because
+a reaction could change without any other event firing. An audit entry cannot:
+it is appended _by_ the mutation that already emits `comment:created`,
+`comment:edited`, `comment:status-changed` or `comment:updated`, and the
+serialized comment those carry now includes the log. A host subscribing today
+receives the history with no new wiring.
+
+**Recording happens after each no-op guard, never before.** `setCommentStatus`
+returns early when the status is unchanged, and the three classification
+setters compare against the previous value first — tags on their joined form,
+since `normalizeTags` already lowercases and de-duplicates both sides. An
+entry appended above those checks would log a change that did not happen, and
+`_cardFingerprint` would then repaint a card for nothing.
+
+**The trail is attributive, not evidential.** HellDots authenticates nobody,
+and the requirement is explicit that it should not. Whatever the host declares
+in `user` is recorded as-is; a host that lies produces a corpus that lies.
+What is recorded is what the application asserted about who acted. Saying that
+out loud matters more than it looks: an audit trail whose limits are
+undocumented reads as a guarantee it cannot make.
+
+**Timestamps are client clocks, so durations clamp at zero.** Every `at` is
+`new Date().toISOString()` on the acting machine. A host syncing two devices
+with skewed clocks will eventually merge a resolution that predates its own
+creation. Clamping keeps the figure meaningless-but-harmless instead of
+negative, and `normalizeHistory` drops an entry whose timestamp does not parse
+at all — one unparseable date would otherwise poison every average built on
+the log.
+
+**The timeline reuses the pickers' dictionaries.** A move reads
+`Status: Open → Resolved`, composed from `statusLabel` plus `statusLabelOf` —
+the same words the picker shows. A second dictionary would let a state be
+called one thing where you change it and another where you read what changed.
+Tags are the exception: a list has no two-value transition, so the change gets
+its own sentence (`auditTagsChanged`) rather than a malformed arrow. Seven new
+i18n keys instead of the nine an earlier draft needed, because the field names
+and every value already existed in both locales.
