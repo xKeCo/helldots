@@ -144,6 +144,52 @@ describe("the resolved dim and open dropdowns", () => {
   });
 });
 
+// Behavioural for the same reason as the block above: what broke was the
+// zero-height flex item still collecting the column's 12px gap on both sides,
+// and only the cascade can say whether the element is out of the layout.
+describe("the replies container with nothing in it", () => {
+  /** @type {HTMLStyleElement} */
+  let styleEl;
+
+  beforeEach(() => {
+    styleEl = document.createElement("style");
+    styleEl.textContent = getStyles();
+    document.head.appendChild(styleEl);
+  });
+
+  afterEach(() => {
+    styleEl.remove();
+    document.body.innerHTML = "";
+  });
+
+  const mountReplies = () => {
+    const replies = document.createElement("div");
+    replies.className = CLASSES.INBOX_REPLIES;
+    document.body.appendChild(replies);
+    return replies;
+  };
+
+  it("is out of the layout, so it cannot open a hole under the context block", () => {
+    expect(getComputedStyle(mountReplies()).display).toBe("none");
+  });
+
+  it("lays out again as soon as it holds a reply", () => {
+    const replies = mountReplies();
+    replies.appendChild(document.createElement("div"));
+    expect(getComputedStyle(replies).display).toBe("flex");
+  });
+
+  // Deleting the last reply drops its row in place rather than re-rendering
+  // the detail view (that would discard a half-typed reply), so the collapse
+  // has to happen without the builder running again.
+  it("collapses again when the last reply is removed in place", () => {
+    const replies = mountReplies();
+    replies.appendChild(document.createElement("div"));
+    replies.firstElementChild.remove();
+    expect(getComputedStyle(replies).display).toBe("none");
+  });
+});
+
 describe("getGlobalStyles", () => {
   it("styles the comment-cursor class meant for document.body", () => {
     const css = getGlobalStyles();

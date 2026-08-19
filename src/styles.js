@@ -1032,6 +1032,17 @@ ${webkitScrollbar(
         padding: 0 4px;
     }
 
+    /* A comment with no replies still gets this container, and as a zero-height
+       flex item it collected a 12px gap on each side — a 24px hole between the
+       context block and the reply box that read as broken with the context
+       collapsed. Collapsing it in CSS rather than skipping the element in
+       \`_renderDetail\` is deliberate: deleting the last reply drops its row in
+       place (a full re-render would discard a half-typed reply), so the
+       container empties out without the builder running again. */
+    .${CLASSES.INBOX_REPLIES}:empty {
+        display: none;
+    }
+
     /* Sits under the body as a quiet aside: the preview shows the root
        comment only, so this says "there is more" without competing with it. */
     .${CLASSES.TOOLTIP_REPLY_COUNT} {

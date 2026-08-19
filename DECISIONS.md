@@ -2011,3 +2011,28 @@ trio reads as one cluster opposite it.
 The gap tightens to 2px there, matching `.actions-group--end` — the same
 treatment icon-only buttons already get in the card, where 8px between bare
 glyphs reads as three unrelated controls rather than one group.
+
+## An empty replies container is collapsed in CSS, not skipped at build time
+
+The inbox detail view is a flex column with `gap: 12px`: card, context block,
+replies, reply box. A comment with no replies still got the replies container,
+and a zero-height flex item still collects the gap on both sides — 24px of
+nothing between the context block and the reply box. With the context expanded
+it passed for breathing room; collapsed to its one-line toggle it read as a
+hole, which is how it was reported.
+
+The obvious fix is to not append the element when `comment.replies` is empty.
+That was rejected: deleting the last reply removes its row in place rather than
+re-rendering the detail view — a full render would throw away whatever is
+half-typed in the reply box — so the container empties out without
+`_renderDetail` running again, and a build-time decision would leave the hole
+behind exactly then. `.inbox-replies:empty { display: none }` covers both paths
+with one rule, and the guard for it is behavioural: asserting the rule's text
+is present would pass just as happily while the element still took up space.
+
+What this does not touch: the panel is `top: 16 / bottom: 16`, so a short
+comment still leaves the rest of the panel empty below the reply box. Docking
+the reply box to the bottom edge, or letting the panel take its content's
+height in the detail view, were both considered and declined — the panel's
+geometry stays fixed on purpose, and both of those move the empty space rather
+than removing it.
