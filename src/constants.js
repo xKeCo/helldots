@@ -79,6 +79,9 @@ export const CLASSES = {
   INBOX_MENU: "inbox-menu",
   // Set by menus.js when a dropdown has to open upward to stay unclipped.
   INBOX_MENU_UP: "inbox-menu--up",
+  // The horizontal counterpart: set when a dropdown has to align to its
+  // button's left edge instead of its right one to stay unclipped.
+  INBOX_MENU_START: "inbox-menu--start",
   INBOX_MENU_ITEM: "inbox-menu-item",
   INBOX_DETAIL: "inbox-detail",
   INBOX_DETAIL_HEADER: "inbox-detail-header",

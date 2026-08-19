@@ -770,6 +770,16 @@ ${webkitScrollbar(
         bottom: calc(100% + 4px);
     }
 
+    /* The horizontal counterpart, set by the same measurement in menus.js.
+       Hanging off the button's right edge is what the tools at the end of the
+       strip want, but the status picker leads the row: its menu is wider than
+       the button, so it reached past the panel's left edge and \`overflow:
+       hidden\` took half of it. */
+    .${CLASSES.INBOX_MENU}.${CLASSES.INBOX_MENU_START} {
+        right: auto;
+        left: 0;
+    }
+
     .${CLASSES.INBOX_CARD_TEXT} {
         white-space: pre-wrap;
         word-break: break-word;

@@ -3,6 +3,7 @@ import { attachMenuToggle, closeOpenMenus } from "../src/menus.js";
 import { CLASSES } from "../src/constants.js";
 
 const MENU_UP_CLASS = CLASSES.INBOX_MENU_UP;
+const MENU_START_CLASS = CLASSES.INBOX_MENU_START;
 
 // Builds a wired button + menu with n focusable menuitem buttons, attached
 // to the document so focus() works.
@@ -230,6 +231,104 @@ describe("menu registry", () => {
       toggle.open();
 
       expect(opensUp(menu)).toBe(false);
+    });
+  });
+
+  // The same story on the horizontal axis. The menus hang off their button's
+  // right edge, which the tools at the end of the strip need, but the status
+  // picker leads the row: its menu is wider than its button, so it reached
+  // past the panel's left edge, where `overflow: hidden` cut it in half.
+  //
+  // The geometry is the one measured in Chrome — a 380px panel against the
+  // right edge, its list inset by 1px, a 59px status button 25px in — laid
+  // out in the 1024px viewport jsdom reports, since the viewport is the
+  // outer bound the placement reads.
+  describe("flipping sideways to stay visible", () => {
+    const sideRect = (left, right) => () => ({
+      top: 100,
+      bottom: 120,
+      height: 20,
+      left,
+      right,
+      width: right - left,
+    });
+
+    // `clip` is the clipping ancestor's horizontal span, or null for a menu
+    // bounded only by the viewport. The menu starts out right-aligned with
+    // the button, which is what the CSS does.
+    const buildRow = ({ clip, button: btn, menuWidth }) => {
+      const host = document.createElement("div");
+      if (clip) {
+        host.style.overflowY = "auto";
+        host.getBoundingClientRect = sideRect(clip[0], clip[1]);
+      }
+      const wrapper = document.createElement("div");
+      const button = document.createElement("button");
+      button.getBoundingClientRect = sideRect(btn[0], btn[1]);
+      const menu = document.createElement("div");
+      menu.setAttribute("role", "menu");
+      menu.getBoundingClientRect = sideRect(btn[1] - menuWidth, btn[1]);
+
+      wrapper.append(button, menu);
+      host.appendChild(wrapper);
+      document.body.appendChild(host);
+      return { button, menu, toggle: attachMenuToggle(button, menu) };
+    };
+
+    const opensFromStart = (menu) => menu.classList.contains(MENU_START_CLASS);
+
+    it("aligns to the button's left edge when the menu spills past the clipper", () => {
+      // 130px of menu hanging off a button whose right edge is 84px into the
+      // panel: 46px of it landed outside.
+      const { menu, toggle } = buildRow({
+        clip: [629, 1007],
+        button: [654, 713],
+        menuWidth: 130,
+      });
+
+      toggle.open();
+
+      expect(opensFromStart(menu)).toBe(true);
+    });
+
+    it("stays right-aligned when the menu already fits", () => {
+      // The type picker, one control further along the same strip.
+      const { menu, toggle } = buildRow({
+        clip: [629, 1007],
+        button: [718, 808],
+        menuWidth: 130,
+      });
+
+      toggle.open();
+
+      expect(opensFromStart(menu)).toBe(false);
+    });
+
+    it("stays right-aligned when flipping would only spill out the other side", () => {
+      // Same reasoning as the vertical case: a menu wider than what clips it
+      // trades one cut edge for another, and loses the alignment the user
+      // reaches for.
+      const { menu, toggle } = buildRow({
+        clip: [629, 759],
+        button: [654, 713],
+        menuWidth: 130,
+      });
+
+      toggle.open();
+
+      expect(opensFromStart(menu)).toBe(false);
+    });
+
+    it("respects the viewport when nothing else clips it", () => {
+      const { menu, toggle } = buildRow({
+        clip: null,
+        button: [10, 60],
+        menuWidth: 130,
+      });
+
+      toggle.open();
+
+      expect(opensFromStart(menu)).toBe(true);
     });
   });
 });

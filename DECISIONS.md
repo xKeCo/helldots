@@ -2036,3 +2036,41 @@ the reply box to the bottom edge, or letting the panel take its content's
 height in the detail view, were both considered and declined — the panel's
 geometry stays fixed on purpose, and both of those move the empty space rather
 than removing it.
+
+## Dropdowns flip sideways too, measured in the same place as the vertical flip
+
+`menus.js` already decided one thing about placement: a dropdown that would be
+clipped below its scrolling ancestor opens upward instead, and only when it
+actually fits up there. The horizontal axis had no such rule — every menu is
+`position: absolute; right: 0`, pinned to its button's right edge — and the
+status picker is the first control in the action strip. Its 130px menu on a
+59px button reached 45px past the left edge of the inbox panel, where the
+panel's `overflow: hidden` cut it in half: the labels were unreadable and two
+of the four states unclickable. The same geometry applies in the thread
+popover, which is narrower still.
+
+Right-aligned is the correct default — the `⋯` and the tools sit at the end of
+the strip, and a left-aligned menu there would spill the other way — so the
+side has to be chosen per open, not per component. That put the fix next to
+the vertical one, as `.inbox-menu--start` (`right: auto; left: 0`), for the
+reason the vertical comment already gives: a measurement in the shared registry
+covers every dropdown, including ones added later, while a rule at the call
+site covers one.
+
+Two details worth recording:
+
+- **The overflow test reads the menu's measured `left`, not one derived from
+  the button.** Which edge a menu hangs off is a CSS decision that already
+  differs per surface — the reaction palette opens leftward only inside the
+  tools group — and deriving the position from the anchor would misjudge
+  whichever surface disagreed with the assumption.
+- **It flips only when the menu fits on the other side**, exactly like the
+  vertical case: a menu wider than what clips it would trade one cut edge for
+  the other while also losing the alignment the user reached for.
+
+What this accepts: a menu wider than its container is still clipped, and the
+`--start` class is inert on any menu whose stylesheet does not pair it with a
+rule (today only `.inbox-menu` does). The alternative — nudging the menu by
+the overflowing amount, the way Floating UI's `shift` works — was declined
+because trigger-aligned edges are what the rest of the widget does, and the
+flip keeps them.

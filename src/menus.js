@@ -55,10 +55,24 @@ const clipperRectOf = (menu) => {
 };
 
 /**
- * Opens the menu upward when it would otherwise be clipped below — and only
- * when it actually fits up there. Flipping a menu taller than its container
- * would just clip the other end while also reversing the position the user
- * reaches for, so in that case it stays put.
+ * Keeps the menu inside whatever clips it, on both axes.
+ *
+ * Vertically it opens upward when it would otherwise be clipped below — and
+ * only when it actually fits up there. Flipping a menu taller than its
+ * container would just clip the other end while also reversing the position
+ * the user reaches for, so in that case it stays put.
+ *
+ * Horizontally the same rule, mirrored: the menus hang off their button's
+ * right edge, which is what the tools at the end of the action strip want,
+ * but the status picker is the strip's *first* control, so its 130px menu
+ * reached ~45px past the left edge of the inbox panel — where the panel's
+ * `overflow: hidden` cut it in half. It aligns to the button's left edge
+ * instead, and only when the menu fits that way.
+ *
+ * The overflow test reads the menu's measured position rather than deriving
+ * it from the button: which edge a menu hangs off is a CSS decision that
+ * differs per surface (the reaction palette opens leftward only inside the
+ * tools group), and a rule that assumed one of them would misjudge the other.
  *
  * Measured on every open, never cached: a menu on a row that scrolled since
  * last time has different room than it did.
@@ -68,18 +82,25 @@ const clipperRectOf = (menu) => {
  */
 const placeMenu = (button, menu) => {
   menu.classList.remove(CLASSES.INBOX_MENU_UP);
+  menu.classList.remove(CLASSES.INBOX_MENU_START);
 
   const clipper = clipperRectOf(menu);
   const floor = Math.min(clipper?.bottom ?? Infinity, window.innerHeight);
   const ceiling = Math.max(clipper?.top ?? 0, 0);
+  const leftWall = Math.max(clipper?.left ?? 0, 0);
+  const rightWall = Math.min(clipper?.right ?? Infinity, window.innerWidth);
 
-  const { height } = menu.getBoundingClientRect();
+  const { height, width, left } = menu.getBoundingClientRect();
   const anchor = button.getBoundingClientRect();
   const bottomIfDown = anchor.bottom + MENU_GAP + height;
   const topIfUp = anchor.top - MENU_GAP - height;
 
   if (bottomIfDown > floor && topIfUp >= ceiling) {
     menu.classList.add(CLASSES.INBOX_MENU_UP);
+  }
+
+  if (left < leftWall && anchor.left + width <= rightWall) {
+    menu.classList.add(CLASSES.INBOX_MENU_START);
   }
 };
 
