@@ -720,6 +720,7 @@ class CommentOverlay {
       id: createId(),
       replies: [],
       author: this.options.user?.name || this.strings.anonymous,
+      authorId: this.options.user?.id || null,
       createdAt: new Date().toISOString(),
       screenshots: this._pendingScreenshots
         ? [...this._pendingScreenshots]
@@ -1086,6 +1087,7 @@ class CommentOverlay {
       editedAt: null,
       text,
       author: this.options.user?.name || this.strings.anonymous,
+      authorId: this.options.user?.id || null,
       timestamp: new Date().toISOString(),
       screenshots,
     };
@@ -1190,6 +1192,7 @@ class CommentOverlay {
     id,
     text,
     author,
+    authorId,
     timestamp,
     screenshots,
     editedAt,
@@ -1201,6 +1204,7 @@ class CommentOverlay {
       id,
       text,
       author,
+      authorId: authorId || null,
       timestamp,
       screenshots: screenshots || [],
       editedAt: editedAt || null,
@@ -1228,6 +1232,9 @@ class CommentOverlay {
         this._serializeReply(reply)
       ),
       author: comment.author,
+      // Identity, not copy: the display name is what any renderer shows, and
+      // this is what a host correlates against its own user table.
+      authorId: comment.authorId || null,
       createdAt: comment.createdAt,
       screenshots: comment.screenshots || [],
       status: comment.status || "open",
@@ -1503,6 +1510,8 @@ class CommentOverlay {
               )
               .map((reply) => ({
                 ...reply,
+                authorId:
+                  typeof reply.authorId === "string" ? reply.authorId : null,
                 ...(Array.isArray(reply.screenshots)
                   ? { screenshots: onlyStrings(reply.screenshots) }
                   : {}),
@@ -1510,6 +1519,10 @@ class CommentOverlay {
               }))
           : [],
         author: item.author || this.strings.anonymous,
+        // Scrubbed like every other field crossing this boundary: the id
+        // reaches a host that may look it up, so a non-string must not
+        // survive a round trip through localStorage or a backend.
+        authorId: typeof item.authorId === "string" ? item.authorId : null,
         createdAt: item.createdAt || new Date().toISOString(),
         // Screenshots land in <img src> as-is — a non-string entry renders
         // a silently broken thumbnail.

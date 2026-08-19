@@ -74,6 +74,16 @@ export interface SerializedComment {
   page: string;
   replies: CommentReply[];
   author: string;
+  /**
+   * Stable identifier of the author, from the `user.id` the host supplied at
+   * creation. Optional and absent by default: records written before it
+   * existed simply have none, so no migration is involved.
+   *
+   * Never rendered — `author` is the display name and stays what any UI
+   * shows. This is what a host correlates against its own user table, and
+   * what tells two teammates sharing a display name apart.
+   */
+  authorId?: string | null;
   createdAt: string;
   screenshots: string[];
   status: CommentStatus;
@@ -175,10 +185,14 @@ export interface CommentOverlayOptions {
   /**
    * Identity used as the author of new comments and replies.
    *
-   * `name` is what gets displayed. `id` is optional and never rendered: it is
-   * what a reaction is keyed on, so two teammates who share a display name do
-   * not share one reaction. Without it the name is used, and without any
-   * `user` at all every actor collapses into one.
+   * `name` is what gets displayed. `id` is optional and never rendered: it
+   * is persisted as `authorId` on the comments and replies this user creates,
+   * and it is what a reaction is keyed on — so two teammates who share a
+   * display name are still told apart. Without it the name is used, and
+   * without any `user` at all every actor collapses into one.
+   *
+   * HellDots authenticates nobody: whatever the host declares here is taken
+   * at face value and recorded as-is.
    */
   user?: { name: string; id?: string };
   /**
@@ -240,6 +254,16 @@ export interface CommentReply {
   id: CommentId;
   text: string;
   author: string;
+  /**
+   * Stable identifier of the author, from the `user.id` the host supplied at
+   * creation. Optional and absent by default: records written before it
+   * existed simply have none, so no migration is involved.
+   *
+   * Never rendered — `author` is the display name and stays what any UI
+   * shows. This is what a host correlates against its own user table, and
+   * what tells two teammates sharing a display name apart.
+   */
+  authorId?: string | null;
   timestamp: string;
   screenshots?: string[];
   /** ISO timestamp of the last edit; null when never edited. */
@@ -270,6 +294,16 @@ export interface Comment {
   page: string;
   replies: CommentReply[];
   author: string;
+  /**
+   * Stable identifier of the author, from the `user.id` the host supplied at
+   * creation. Optional and absent by default: records written before it
+   * existed simply have none, so no migration is involved.
+   *
+   * Never rendered — `author` is the display name and stays what any UI
+   * shows. This is what a host correlates against its own user table, and
+   * what tells two teammates sharing a display name apart.
+   */
+  authorId?: string | null;
   createdAt: string;
   screenshots: string[];
   status: CommentStatus;

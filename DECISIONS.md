@@ -2074,3 +2074,54 @@ rule (today only `.inbox-menu` does). The alternative — nudging the menu by
 the overflowing amount, the way Floating UI's `shift` works — was declined
 because trigger-aligned edges are what the rest of the widget does, and the
 flip keeps them.
+
+## The host's user id is persisted, and says nothing about authentication
+
+`user.id` already existed — the reactions entry above introduced it — but it
+only ever lived in memory, as the key `actorKeyOf` produces. What got stored
+on a comment was `author`, a display name. A record that claims to say _who_
+created, changed or resolved something cannot rest on that: two teammates
+called "Ana" are one author in the corpus, and a display name that changes
+rewrites history retroactively for every comment that person ever wrote.
+
+So `authorId` joins `author` on comments and replies, stamped from
+`this.options.user?.id` on both creation paths.
+
+**Optional and absent by default, so `schemaVersion` does not move.** A corpus
+written before this change loads unchanged and reports `authorId: null` — the
+same policy `resolvedAt` and `reactions` already follow, and the reason
+neither needed a migration. Bumping the version to `2` would announce a
+migration path that no stored payload requires. The serializer emits the key
+unconditionally as `null` when there is no id, matching how `resolvedAt`,
+`type`, `priority` and `context` already behave; only `reactions` omits itself
+entirely, and it does so because its absent form is an object rather than a
+scalar.
+
+**The id is scrubbed on the way in, like every other field crossing that
+boundary.** `loadComments` keeps it only when it is a string. An id reaches a
+host that may look it up, so a `{ toString() }` from a hostile backend must
+not survive a round trip — the same reasoning that had `normalizeReactions`
+drop non-string actor keys.
+
+**Never rendered.** `author` stays what every renderer shows; `authorId` is
+correlation data for the host. This is the rule the reaction pills already
+follow ("Pills never show who reacted"), and a test asserts the id does not
+appear anywhere in the rendered shadow root, so a future card or timeline
+cannot quietly start leaking it.
+
+**The record is attributive, not evidential.** HellDots authenticates nobody,
+and the requirement is explicit that it should not. Whatever the host declares
+in `user` is taken at face value and stored as-is; a host that lies produces a
+corpus that lies. What is being recorded is what the application asserted
+about who acted, and a deployment needing the stronger claim verifies it on
+its own backend, which `onChange` already feeds. Saying that out loud matters
+more than it looks: an audit trail whose limits are undocumented reads as a
+guarantee it cannot make.
+
+What this accepts: a little more personal data in `localStorage`. The
+reactions entry weighed exactly this when it rejected storing `{ id, name }`
+per reaction, and landed the other way — but there the name was a duplicate of
+something already stored once per comment, whereas here the identifier is what
+the requirement asks for. An `id` that is itself sensitive is the host's to
+choose; HellDots stores the opaque string it is given and invents none of its
+own.

@@ -141,6 +141,37 @@ Three ways out, cheapest first:
 - **Leave it.** Captures of such a page stay misaligned where text is
   concerned; everything else about them is correct.
 
+## Identity
+
+HellDots authenticates nobody. It takes whoever your app says is signed in
+and records that:
+
+```js
+createCommentOverlay({
+  user: { name: currentUser.fullName, id: currentUser.id },
+});
+```
+
+`name` is the display name — it is what appears on every comment and reply.
+`id` is optional, never rendered, and persisted as `authorId` on everything
+that user creates. Pass it whenever two people on your team can share a
+display name: without it they are indistinguishable in the record, and they
+share one reaction.
+
+```js
+overlay.serializeComments()[0];
+// { author: "Ana Pérez", authorId: "u_42", ... }
+```
+
+Both fields ride along in `serializeComments()` output, on comments and on
+replies alike, so your backend can correlate them against its own user table.
+`authorId` is `null` when you pass no `id`, and on records written before it
+existed — the field is additive, so no stored corpus needs migrating.
+
+Whatever you declare here is taken at face value and stored as-is. The record
+says what your application asserted about who acted; verifying that claim is
+your backend’s job, and `onChange` carries every mutation to it.
+
 ## Triage
 
 Comments carry an optional type, priority and free-form tags. All three start
@@ -231,7 +262,7 @@ OS: iOS 17.2
 
 | Option                  | Type                             | Default             |                                                                   |
 | ----------------------- | -------------------------------- | ------------------- | ----------------------------------------------------------------- |
-| `user`                  | `{ name: string, id?: string }`  | `"Anonymous"`       | Author of new comments and replies; `id` keys reactions           |
+| `user`                  | `{ name: string, id?: string }`  | `"Anonymous"`       | Author of new comments and replies; `id` persists as `authorId`   |
 | `persistence`           | `"localStorage"` \| `"none"`     | `"none"`            | Auto save/restore, or handle it yourself via callbacks            |
 | `autoScreenshot`        | `boolean`                        | `true`              | Capture a screenshot and environment snapshot per comment         |
 | `embedCrossOriginFonts` | `boolean`                        | `false`             | Fetch unreadable stylesheets so their web fonts reach the capture |
