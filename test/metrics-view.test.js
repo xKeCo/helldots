@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { createMetricsView } from "../src/metrics-view.js";
 import { computeMetrics } from "../src/metrics.js";
+import {
+  STATUS_COLORS,
+  TYPE_COLORS,
+  PRIORITY_COLORS,
+} from "../src/constants.js";
 import en from "../src/locales/en.js";
 import es from "../src/locales/es.js";
 
@@ -73,6 +78,57 @@ describe("createMetricsView", () => {
       (row) => row.querySelector("[data-metrics-bar]").style.width
     );
     expect(widths).toContain("100%");
+  });
+
+  describe("bar colours", () => {
+    // jsdom normalises any colour it is handed into rgb(), so the expectation
+    // is derived from the constant rather than written out — a hex typed by
+    // hand here would pass while disagreeing with the picker.
+    const rgb = (hex) => {
+      const n = parseInt(hex.slice(1), 16);
+      return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+    };
+    const colours = (el, group) =>
+      barRows(el, group).map(
+        (row) => row.querySelector("[data-metrics-bar]").style.backgroundColor
+      );
+
+    it("paints a status bar the colour its own picker uses", () => {
+      expect(colours(build(), "status")).toEqual([
+        rgb(STATUS_COLORS.open),
+        rgb(STATUS_COLORS.in_progress),
+        rgb(STATUS_COLORS.in_review),
+        rgb(STATUS_COLORS.resolved),
+      ]);
+    });
+
+    it("paints a type bar the colour its own picker uses", () => {
+      expect(colours(build(), "type").slice(0, 4)).toEqual([
+        rgb(TYPE_COLORS.bug),
+        rgb(TYPE_COLORS.suggestion),
+        rgb(TYPE_COLORS.question),
+        rgb(TYPE_COLORS.improvement),
+      ]);
+    });
+
+    it("paints a priority bar the colour its own picker uses", () => {
+      expect(colours(build(), "priority").slice(0, 3)).toEqual([
+        rgb(PRIORITY_COLORS.high),
+        rgb(PRIORITY_COLORS.medium),
+        rgb(PRIORITY_COLORS.low),
+      ]);
+    });
+
+    it("leaves the unset bucket visible instead of transparent", () => {
+      // The pickers paint an unset dot `transparent` — there is nothing to
+      // show. A bar is different: it still has a count to draw, so it takes a
+      // neutral rather than vanishing.
+      for (const group of ["type", "priority"]) {
+        const last = colours(build(), group).at(-1);
+        expect(last).not.toBe("transparent");
+        expect(last).not.toBe("");
+      }
+    });
   });
 
   it("gives unclassified comments their own row", () => {

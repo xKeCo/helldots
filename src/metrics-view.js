@@ -7,7 +7,15 @@
 // text, and no figure here is allowed to communicate through length or colour
 // alone (WCAG 1.4.1). Each bar states its count beside it.
 
-import { CLASSES, STATUSES, COMMENT_TYPES, PRIORITIES } from "./constants.js";
+import {
+  CLASSES,
+  STATUSES,
+  COMMENT_TYPES,
+  PRIORITIES,
+  STATUS_COLORS,
+  TYPE_COLORS,
+  PRIORITY_COLORS,
+} from "./constants.js";
 import { formatDuration } from "./i18n.js";
 import {
   statusLabelOf,
@@ -15,6 +23,12 @@ import {
   priorityLabelOf,
 } from "./comment-actions.js";
 import { UNSET } from "./metrics.js";
+
+// The bucket for comments left deliberately unclassified. The pickers paint
+// its dot `transparent` — there is nothing to show — but a bar still has a
+// count to draw, so it takes the neutral the bars used before they were
+// coloured at all rather than vanishing.
+const UNSET_COLOR = "rgba(255,255,255,0.42)";
 
 const CHART_WIDTH = 300;
 const CHART_HEIGHT = 96;
@@ -46,14 +60,22 @@ const tile = (label, value) => {
  * One dimension as labelled horizontal bars. Bars are scaled against the
  * busiest bucket rather than the total: against the total, a corpus spread
  * evenly across four statuses would draw four slivers.
+ *
+ * Each bar takes the colour its own picker already uses for that value, so a
+ * chip and its bar are recognisably the same thing. The colour is
+ * reinforcement, never the signal: the row states its label and its count as
+ * text either side of the bar, so nothing here is lost to a reader who cannot
+ * tell the hues apart (WCAG 1.4.1).
+ *
+ * @param {Array<{ label: string, count: number, color: string }>} entries
  */
 const barGroup = (name, heading, entries) => {
   const group = el("div", CLASSES.METRICS_GROUP);
   group.dataset.metricsGroup = name;
   group.appendChild(el("h4", CLASSES.METRICS_HEADING, heading));
 
-  const max = Math.max(1, ...entries.map(([, count]) => count));
-  for (const [label, count] of entries) {
+  const max = Math.max(1, ...entries.map((entry) => entry.count));
+  for (const { label, count, color } of entries) {
     const row = el("div", CLASSES.METRICS_ROW);
     row.dataset.metricsRow = "";
 
@@ -63,6 +85,7 @@ const barGroup = (name, heading, entries) => {
     const bar = el("div", CLASSES.METRICS_BAR);
     bar.dataset.metricsBar = "";
     bar.style.width = `${Math.round((count / max) * 100)}%`;
+    bar.style.background = color;
     track.appendChild(bar);
     row.appendChild(track);
 
@@ -192,28 +215,39 @@ export function createMetricsView(metrics, deps) {
     barGroup(
       "status",
       strings.metricsByStatus,
-      STATUSES.map((key) => [
-        statusLabelOf(key, strings),
-        metrics.byStatus[key],
-      ])
+      STATUSES.map((key) => ({
+        label: statusLabelOf(key, strings),
+        count: metrics.byStatus[key],
+        color: STATUS_COLORS[key],
+      }))
     )
   );
   view.appendChild(
     barGroup("type", strings.metricsByType, [
-      ...COMMENT_TYPES.map((key) => [
-        typeLabelOf(key, strings),
-        metrics.byType[key],
-      ]),
-      [strings.unset, metrics.byType[UNSET]],
+      ...COMMENT_TYPES.map((key) => ({
+        label: typeLabelOf(key, strings),
+        count: metrics.byType[key],
+        color: TYPE_COLORS[key],
+      })),
+      {
+        label: strings.unset,
+        count: metrics.byType[UNSET],
+        color: UNSET_COLOR,
+      },
     ])
   );
   view.appendChild(
     barGroup("priority", strings.metricsByPriority, [
-      ...PRIORITIES.map((key) => [
-        priorityLabelOf(key, strings),
-        metrics.byPriority[key],
-      ]),
-      [strings.unset, metrics.byPriority[UNSET]],
+      ...PRIORITIES.map((key) => ({
+        label: priorityLabelOf(key, strings),
+        count: metrics.byPriority[key],
+        color: PRIORITY_COLORS[key],
+      })),
+      {
+        label: strings.unset,
+        count: metrics.byPriority[UNSET],
+        color: UNSET_COLOR,
+      },
     ])
   );
 

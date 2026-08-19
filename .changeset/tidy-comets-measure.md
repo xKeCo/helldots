@@ -6,7 +6,8 @@ Add a metrics dashboard and report exports.
 
 The inbox header gains a **Metrics** button that swaps the list for a
 dashboard: totals, resolved and reopened counts, average and median resolution
-time, bars per status, type and priority, and a daily distribution. It measures
+time, bars per status, type and priority, and a daily distribution. Each bar is
+painted in the same colour that value already carries in its picker. It measures
 whatever the panel is filtered to; `overlay.getMetrics()` returns the same
 shape over the whole corpus.
 
