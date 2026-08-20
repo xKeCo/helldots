@@ -1,5 +1,137 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- 599e9f0: Add emoji reactions to comments and replies. One of six fixed reactions
+  (👍 👎 ❤️ 🎉 👀 🚀) is added from the emoji button in the action strip — the
+  same strip the thread popover and every inbox card share — and once something
+  has been reacted to, a row of pills appears under the comment (below its
+  screenshot when there is one) with a trailing button for adding one more.
+  Reacting again with the same emoji removes it, and the row disappears with the
+  last reaction.
+
+  The action strip is now split in two: status, type and priority on the left,
+  and the tools — react, copy context, ⋯ — on the right. Replies carry the same
+  pair of controls on their meta line.
+
+  Two new methods, `toggleCommentReaction(id, emoji)` and
+  `toggleReplyReaction(commentId, replyId, emoji)`, plus a `reaction:toggled`
+  event and its `onReactionToggled(comment, reply)` callback — `reply` is `null`
+  when the reaction is on the root comment.
+
+  `user` gained an optional `id`. It is never displayed: it is what a reaction is
+  keyed on, so two teammates who share a display name do not share a reaction.
+  Without it the name is used, exactly as authorship already does.
+
+  Reactions travel in `serializeComments()` output as an `{ emoji: actorKey[] }`
+  map, `null` when nobody has reacted, and hostile or stale persisted values are
+  scrubbed on load. Costs 2 KB gzip and no new dependency.
+
+- 1d23150: Persist the host-supplied user identity as `authorId` on comments and replies.
+
+  `user.id` already keyed reactions; it is now also stored alongside `author` on
+  everything that user creates, so two teammates who share a display name stay
+  distinguishable in the record. The id is opaque to HellDots — point it at your
+  user table, at a comments-only store, or at nothing. The display name is still
+  the only thing rendered, and it travels with the record, so a store holding
+  nothing but comments renders every author without a lookup.
+
+  The field is additive and optional: records written before this change load
+  unchanged with `authorId: null`, and no migration is involved. A non-string id
+  arriving through `loadComments` is dropped rather than trusted.
+
+  One identifier now has exactly one spelling. The id is trimmed — and never
+  truncated — in every place it lands: `authorId` on comments and replies, the
+  `actor.id` of each audit entry, and the key a reaction is stored under. They
+  each normalised it differently before, so a padded or long id could arrive in
+  three different forms inside one payload.
+
+  HellDots still authenticates nobody. Whatever the host declares in `user` is
+  recorded as-is.
+
+- d353b7b: Add an append-only audit trail to every comment: who created it, edited its
+  text, moved its status or changed its classification, and when. It shows as a
+  folded `History (n)` disclosure in the inbox detail and rides along in
+  `serializeComments()` output as `history`.
+
+  Resolution time is now derived from that log instead of read off a stored
+  figure, so a comment that was resolved, reopened and resolved again reports the
+  duration of the resolution currently in force — and the superseded ones are
+  listed under **Previous resolutions** in the same disclosure.
+
+  Replies and reactions are deliberately not recorded: a reply already carries
+  its own author and timestamp, and reactions are high-frequency signal with no
+  audit value. That keeps a typical comment at three to five entries.
+
+  The field is additive and optional — a corpus written before this change loads
+  unchanged with `history: null`, and no migration is involved. Entries arriving
+  through `loadComments` are scrubbed: an unknown event type or an unparseable
+  timestamp is dropped rather than trusted.
+
+  HellDots still authenticates nobody, so the trail records what the host
+  declared in `user` at the moment of each action. It is attributive, not
+  evidential.
+
+- ba46d13: Add a metrics dashboard and report exports.
+
+  The inbox header gains a **Metrics** button that swaps the list for a
+  dashboard: totals, resolved and reopened counts, average and median resolution
+  time, bars per status, type and priority, and a daily distribution. Each bar is
+  painted in the same colour that value already carries in its picker. It measures
+  whatever the panel is filtered to; `overlay.getMetrics()` returns the same
+  shape over the whole corpus.
+
+  Three exports, from the dashboard or directly:
+
+  - `overlay.exportCommentsCsv()` — one row per comment
+  - `overlay.exportMetricsCsv()` — the aggregate figures in `section, key, value`
+  - `overlay.printMetricsReport()` — the browser's print dialog, where "Save as
+    PDF" produces a real PDF
+
+  The CSVs are RFC 4180 with a UTF-8 BOM so Excel reads accents correctly, and
+  values that a spreadsheet would evaluate as formulas are neutralised. No new
+  dependency: the charts are hand-drawn SVG and the PDF is the browser's own, so
+  the whole feature costs 4.28 KB gzip.
+
+  Also fixes `mountStyles` constructing its stylesheet in the calling realm
+  rather than the target's, which prevented styles from being adopted into a
+  document other than the caller's.
+
+- 6405f7c: Add an **In review** state to the comment lifecycle, between _In progress_ and
+  _Resolved_. It is available in the status picker, in the inbox status filter
+  and through `setCommentStatus(id, "in_review")`, and it carries the blue that
+  `open` used to have.
+
+  `open` moves to an unsaturated off-white grey, so the states somebody actively
+  moved a comment into are the ones that stand out. `CommentStatus` gains
+  `"in_review"`; stored comments need no migration.
+
+### Patch Changes
+
+- 448c0d9: Close the gap under the context block in the inbox detail view. A comment
+  with no replies still rendered its replies container, and as a zero-height
+  flex item it collected 24px of the column gap — most visible with the
+  context block collapsed.
+- ae9049d: Fix dropdowns rendering see-through on resolved comments. A resolved card is
+  dimmed with `opacity`, which composites it and everything inside it as a single
+  translucent layer — so the status, type, priority and `...` menus opened from
+  one were painted above the context block and still showed it through
+  themselves. The dim is now lifted while a dropdown inside the card is open.
+
+  Most visible in the inbox detail view, where the context screenshot sits
+  directly behind the menu.
+
+- d186cbb: Fix the inbox detail header: its prev/next/close buttons reuse the card
+  action strip, whose `space-between` scattered them across the row instead
+  of grouping them opposite `Back`. They now align to the end of the strip,
+  which keeps its full width.
+- 494ecbf: Keep dropdowns inside the surface that clips them on the horizontal axis
+  too. The status picker leads the action strip, so its menu hung 45px past
+  the left edge of the inbox panel and was cut in half; it now aligns to the
+  button's left edge when — and only when — it fits that way.
+
 ## 0.5.0
 
 ### Minor Changes
