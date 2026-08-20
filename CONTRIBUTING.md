@@ -135,9 +135,16 @@ Workflow:
    This consumes every pending changeset, updates `version` in `package.json`
    and appends the matching entry to `CHANGELOG.md`.
 
-4. Commit the version bump, tag it (`git tag vX.Y.Z`) and push the tag —
-   `.github/workflows/release.yml` triggers on `v*` tags (see `DECISIONS.md`
-   for the state of that workflow).
+4. Promote the release commit along the branch flow — `dev` → `staging` →
+   `main`, each one a fast-forward. Every release tag so far sits on a commit
+   that reached `main`.
+
+5. Tag it on `main` (`git tag -a vX.Y.Z -m "vX.Y.Z"`) and push the tag.
+   `.github/workflows/release.yml` triggers on `v*`, re-runs every gate, and
+   then publishes to npm **and** opens the GitHub release from the
+   `CHANGELOG.md` section for that version. Nothing there is done by hand —
+   pushing the tag is the whole release (see `DECISIONS.md` for the state of
+   that workflow).
 
 ## Before opening a PR
 

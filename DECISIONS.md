@@ -2354,3 +2354,33 @@ reactions as two people.
 If it is ever built it should be opt-in, so the integrator accepts what it
 identifies. Until then the host mints its own in three lines and keeps control
 of the key, the lifetime and the consent story — documented in the README.
+
+## The GitHub release is opened by the workflow, from the changelog
+
+Pushing a `v*` tag already published to npm; the release page was then created
+by hand, which is how `v0.4.0` and `v0.5.0` got theirs. One step now does it,
+and three things about it were choices.
+
+**The notes come from `CHANGELOG.md`, not from `--generate-notes`.** GitHub can
+synthesise notes from the commits in the range, which here would be 27 commit
+subjects — the internal shape of the work, not what changed for someone
+installing the package. The changelog section is the text the changesets were
+written to produce, and it is already the text on npm; using anything else
+would mean the two pages describing one release disagree.
+
+**The section is found by prefix, and ends at the next heading.** changesets
+writes `## 0.6.0`; entries cut by hand before it carry a date
+(`## 0.4.0 — 2026-08-12`). Matching the prefix covers both, and stopping at the
+next `## ` avoids having to name the successor version — which the release
+being cut cannot know. An empty result fails the step rather than opening a
+release with blank notes.
+
+**It runs after `npm publish`, not before.** The publish is the irreversible
+half: a version number can never be reused. Failing after it leaves a
+published package with no release page, which is visible and fixable in a
+minute. Failing before it would leave a release page announcing something that
+never shipped.
+
+What this costs: the job's `contents` permission goes from `read` to `write`.
+That is the minimum for opening a release, and the token is the ephemeral
+`GITHUB_TOKEN` rather than a stored credential.
