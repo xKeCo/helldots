@@ -585,7 +585,9 @@ describe("persistence", () => {
         overlay.shadowRoot.querySelector(`[data-comment-id="${comment.id}"]`)
       ).toBeNull();
       expect(JSON.parse(localStorage.getItem("helldots-comments"))).toEqual([]);
-      expect(onCommentDeleted).toHaveBeenCalledWith(comment.id);
+      expect(onCommentDeleted).toHaveBeenCalledWith(comment.id, {
+        origin: "host",
+      });
     });
 
     it("deleteComment returns false for unknown ids", () => {

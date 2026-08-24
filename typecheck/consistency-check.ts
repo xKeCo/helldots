@@ -10,11 +10,17 @@
 // `index.d.ts`. Importing both sides here and asserting assignability
 // forces a real comparison: if either side drifts, this file fails to
 // compile.
-import { createCommentOverlay as createCommentOverlayImpl } from "../src/index.js";
+import {
+  createCommentOverlay as createCommentOverlayImpl,
+  DEFAULT_LINK_PARAM as defaultLinkParamImpl,
+  readCommentLinkParam as readCommentLinkParamImpl,
+} from "../src/index.js";
 import CommentOverlayImpl from "../src/overlay.js";
 import type {
   createCommentOverlay as createCommentOverlayDeclared,
   CommentOverlay as CommentOverlayDeclared,
+  DEFAULT_LINK_PARAM as defaultLinkParamDeclared,
+  readCommentLinkParam as readCommentLinkParamDeclared,
 } from "../src/index.d.ts";
 
 const _createCommentOverlayMatchesDeclaration: typeof createCommentOverlayDeclared =
@@ -23,5 +29,15 @@ const _createCommentOverlayMatchesDeclaration: typeof createCommentOverlayDeclar
 const _commentOverlayInstanceMatchesDeclaration: CommentOverlayDeclared =
   new CommentOverlayImpl();
 
+// The deep-link helpers are public API too: a host reading the id out of the
+// URL itself imports these, so they get the same drift check as the class.
+const _defaultLinkParamMatchesDeclaration: typeof defaultLinkParamDeclared =
+  defaultLinkParamImpl;
+
+const _readCommentLinkParamMatchesDeclaration: typeof readCommentLinkParamDeclared =
+  readCommentLinkParamImpl;
+
 void _createCommentOverlayMatchesDeclaration;
 void _commentOverlayInstanceMatchesDeclaration;
+void _defaultLinkParamMatchesDeclaration;
+void _readCommentLinkParamMatchesDeclaration;

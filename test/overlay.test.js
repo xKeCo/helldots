@@ -907,7 +907,8 @@ describe("CommentOverlay", () => {
       expect(overlay.comments).toContain(comment);
       expect(onReplyDeleted).toHaveBeenCalledWith(
         expect.objectContaining({ id: comment.id }),
-        expect.objectContaining({ id: reply.id, text: "bye" })
+        expect.objectContaining({ id: reply.id, text: "bye" }),
+        { origin: "host" }
       );
     });
 
@@ -3093,7 +3094,8 @@ describe("emoji reactions", () => {
     expect(overlay.comments[0].reactions).toEqual({ "👍": ["Ana"] });
     expect(onReactionToggled).toHaveBeenCalledWith(
       expect.objectContaining({ id: 30, reactions: { "👍": ["Ana"] } }),
-      null
+      null,
+      { origin: "host" }
     );
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ type: "reaction:toggled" })
@@ -3134,7 +3136,8 @@ describe("emoji reactions", () => {
     });
     expect(onReactionToggled).toHaveBeenCalledWith(
       expect.objectContaining({ id: 30 }),
-      expect.objectContaining({ id: "r1", reactions: { "🎉": ["Ana"] } })
+      expect.objectContaining({ id: "r1", reactions: { "🎉": ["Ana"] } }),
+      { origin: "host" }
     );
   });
 

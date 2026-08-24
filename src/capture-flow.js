@@ -19,7 +19,11 @@ export class CaptureFlow {
    *   embedCrossOriginFonts?: boolean,
    *   onRegionCaptured: (dataUrl: string) => void,
    *   onPlace: (x: number, y: number) => Promise<void>,
-   * }} deps `host` is where the selection rectangle mounts.
+   *   onError?: (error: unknown) => void,
+   * }} deps `host` is where the selection rectangle mounts. `onError` is
+   *   how a failed render reaches the host: a capture that silently comes
+   *   back null leaves a feedback tool without the thing it exists to
+   *   collect, and the console is the only place that says so today.
    */
   constructor({
     host,
@@ -27,12 +31,14 @@ export class CaptureFlow {
     embedCrossOriginFonts = false,
     onRegionCaptured,
     onPlace,
+    onError,
   }) {
     this.host = host;
     this.autoScreenshot = autoScreenshot;
     this.embedCrossOriginFonts = embedCrossOriginFonts;
     this.onRegionCaptured = onRegionCaptured;
     this.onPlace = onPlace;
+    this.onError = onError;
 
     /**
      * The in-flight automatic capture, resolving to a JPEG data-URL or
@@ -117,6 +123,7 @@ export class CaptureFlow {
           }
         } catch (err) {
           console.warn("HellDots: screenshot capture failed:", err);
+          this.onError?.(err);
         }
       }
 
@@ -146,6 +153,7 @@ export class CaptureFlow {
       .then((full) => cropViewport(full, { sourceScale: AUTO_SCALE }))
       .catch((err) => {
         console.warn("HellDots: automatic screenshot failed", err);
+        this.onError?.(err);
         return null;
       });
   }

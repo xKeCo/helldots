@@ -2384,3 +2384,150 @@ never shipped.
 What this costs: the job's `contents` permission goes from `read` to `write`.
 That is the minimum for opening a release, and the token is the ephemeral
 `GITHUB_TOKEN` rather than a stored credential.
+
+## Every change says who caused it, and what moved
+
+Ten callbacks and the `onChange` stream reported _that_ something happened.
+Building a realistic integration against them — a multi-user app with a
+backend, SPA routing and shared links — surfaced three things they could not
+say, and all three were load-bearing.
+
+### Provenance: `origin`, not a flag every host reinvents
+
+The inbox and the thread popover drive the very same public methods a host
+does (`this.setCommentStatus(...)` behind an adapter object). So a host
+applying a change that arrived over a socket calls the method, the method
+emits, and the host sends its own write straight back to the server. Every
+multi-user integration had to wrap its writes in an `applying` flag and
+early-return on it — boilerplate the library was in a far better position to
+provide.
+
+`ChangeMeta.origin` is that flag: `"user"` for the widget's own UI, `"host"`
+for anything else. **Additive on purpose.** It arrives as one trailing
+argument on the specific callbacks and flattened onto the `onChange` event, so
+an existing handler that ignores it is unaffected — which is the same promise
+"the nine callbacks are kept, not deprecated" made.
+
+Considered and rejected: a `{ silent: true }` option on each setter. It
+multiplies every signature, and it makes `onChange` lie by omission — the
+event simply never happens, so a host that wanted to log it locally cannot.
+
+**How the two are told apart is structural, not a guess.** `_asUser` flips a
+field for the duration of a synchronous call, and `_userActions` wraps a whole
+adapter object at once, so the inbox and the popover are stamped at their one
+construction site rather than at each of their ~20 actions. A new action added
+to either panel inherits the stamp without anyone remembering to add it. The
+helper restores the _previous_ value rather than resetting to `"host"`,
+because these adapters reach public methods that reach others.
+
+The limitation it accepts: `_asUser` is a synchronous scope. An adapter action
+that grew an `await` before the mutation would leak its origin to whatever ran
+in between. None do today, and the comment box — the one user-originated path
+that is async — stamps its own emit directly instead of going through the
+helper.
+
+This also generalises `clearComments()`, which has always been silent on the
+grounds that "the host initiated it and would only hear its own action echoed
+back". That was the right instinct applied to one method; `origin` is it
+applied to all of them.
+
+### What moved: the transition was already computed and thrown away
+
+`setCommentStatus` computes `previous` and records it in the audit trail, then
+emits the serialized comment and nothing else. `setCommentType` and its two
+siblings do the same with `{field, from, to}`. A host wanting to notify
+"reopened" rather than "resolved", or "priority raised to high", had to diff
+against its own previous copy of a record the widget had just diffed itself.
+
+So `comment:status-changed` now carries `from`/`to`, and `comment:updated`
+carries `field` as well — discriminated, so TypeScript narrows `from` and `to`
+with it. Tags have no two-value transition in the _audit trail_ (a list has no
+two ends worth logging), but the callback carries both arrays anyway: a host
+asking "which label was added" is a different question from "what does the
+timeline render".
+
+Deliberately **not** split into `onTypeChanged` / `onPriorityChanged` /
+`onTagsChanged`. That is the problem `onChange` was introduced to solve,
+approached from the other end.
+
+### The three setters get the no-op guard `setCommentStatus` always had
+
+`setCommentType(id, sameType)` wrote to storage, refreshed the inbox and
+emitted `comment:updated` for a change that did not happen — while
+`setCommentStatus` had guarded against exactly that since RF5, to avoid
+re-stamping `resolvedAt`. Two siblings, two behaviours, and the divergent one
+was the one that mattered most under `origin`: applying a remote value that
+already matches local state is the single most common thing a socket handler
+does.
+
+## A link can now ask for the comment it points at
+
+`_openPendingDetail` already did the hard half: it keeps the pending id and
+retries after every load, so a link works even when the host's fetch lands
+800 ms after startup. What it could not do was tell the host _which_ id it was
+waiting for.
+
+That made "load only the comment in the link" — the reason to send someone a
+link into a corpus too large to ship per page — the one flow that could not be
+written. The host's only route was re-parsing the query string with its own
+copy of `linkParam`: a second spelling of one setting, free to drift from the
+one the widget honours.
+
+`onCommentRequested(id)` closes it, and `DEFAULT_LINK_PARAM` /
+`readCommentLinkParam` are exported for the case that happens _before_ an
+overlay exists (fetch the one comment, then construct). Both are covered by
+`typecheck/consistency-check.ts` now — they are public API and get the same
+drift gate as the class.
+
+Two calls worth naming:
+
+- **Asked once per id, not once per attempt.** `_openPendingDetail` runs after
+  every load and every navigation. An id the host cannot produce would
+  otherwise be a request loop.
+- **A returned promise is awaited and the link retried, on rejection too.**
+  The comment may have arrived by another route while the fetch was failing,
+  and the already-asked guard makes the retry cheap.
+
+## Loading before the widget mounted held instead of throwing
+
+`loadComments()` called while `document.readyState === "loading"` threw
+`TypeError: Cannot read properties of null (reading 'remove')` out of a marker
+engine that `initOverlay` had not built yet. Reachable from the plain
+`<script>` path the README advertises, whenever a cached fetch resolves before
+`DOMContentLoaded`.
+
+The obvious fix — null-guard the marker calls and let the load proceed — is
+wrong. Anchors would resolve against a half-parsed DOM, so comments whose
+elements simply had not been reached yet would be filed as orphans and fire
+`onAnchorLost` for each. A false orphan is worse than a crash: it is silent.
+
+So the data is held and replayed by `initOverlay`, after the localStorage
+restore, so explicit data still wins by id over anything cached.
+
+**What this costs, stated in the type:** the counts come back as
+`{0, 0, 0}` because nothing has been resolved yet. `onReady` exists partly for
+this — load from there and the numbers mean something. It hands over the
+instance because with the document already parsed the mount happens _inside_
+the constructor, before `createCommentOverlay()` has returned anything to
+assign.
+
+`notifyNavigation()` early-returns before mount for the same reason, and the
+two paths that could still be reached with no marker engine (`_removeComment`,
+`clearComments`) took an optional call rather than a guard clause.
+
+## `onError` reports what the console already knew
+
+Four failures were survivable, warned about, and invisible to the host: a
+screenshot that did not render, a localStorage write that could not be made, a
+malformed record skipped on load, and now a rejected `onCommentRequested`.
+
+For a feedback widget the first is the worst of them — the screenshot is a
+large part of what the tool is for, and CSP or a tainted canvas breaks it
+silently, per-user, in production. The fourth is where the host's own fetch
+failed and only the widget knows.
+
+The console warnings **stay**. A host without a handler must not lose the
+diagnostic, and a host with one is nearly always logging rather than
+replacing. `onError` is isolated in try/catch like every other subscriber, for
+the same reason: a bad handler must not take down the operation that reported
+to it.

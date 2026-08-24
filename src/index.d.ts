@@ -192,41 +192,101 @@ export interface SerializedComment {
 }
 
 /**
+ * Who caused a change.
+ *
+ * `"user"` is somebody acting inside the widget — a marker, the thread
+ * popover, the inbox. `"host"` is the app's own code calling a method.
+ *
+ * The distinction exists for multi-user apps. Applying a change that arrived
+ * over a socket means calling the same method the UI calls, so without this
+ * every host has to wrap its own writes in a flag to avoid echoing them
+ * straight back to the server. `if (meta.origin === "host") return;` is that
+ * flag, and it is now the library's job to provide it.
+ */
+export type ChangeOrigin = "user" | "host";
+
+/** Which part of the widget a reported failure came from. */
+export type ErrorContext =
+  /** A screenshot render failed; the comment saves without one. */
+  | "capture"
+  /** localStorage could not be written; this browser's copy now diverges. */
+  | "storage"
+  /** A record handed to loadComments was malformed and was skipped. */
+  | "load"
+  /** An `onCommentRequested` handler threw or rejected. */
+  | "link";
+
+/**
+ * What every change carries, whatever its type. Delivered as one trailing
+ * argument to the specific callbacks, and flattened onto the `onChange`
+ * event next to `comment`/`reply`/`id`.
+ */
+export interface ChangeMeta {
+  origin: ChangeOrigin;
+}
+
+/** `comment:status-changed` — both ends of the move along the lifecycle. */
+export interface StatusChangeMeta extends ChangeMeta {
+  from: CommentStatus;
+  to: CommentStatus;
+}
+
+/**
+ * `comment:updated` — which of the three fields moved, and both ends of the
+ * move. Discriminated on `field`, so narrowing gives you correctly typed
+ * `from`/`to` for each.
+ */
+export type UpdateMeta = ChangeMeta &
+  (
+    | { field: "type"; from: CommentType | null; to: CommentType | null }
+    | {
+        field: "priority";
+        from: CommentPriority | null;
+        to: CommentPriority | null;
+      }
+    | { field: "tags"; from: string[]; to: string[] }
+  );
+
+/**
  * Everything that can change, as one discriminated union. Switch on `type`
  * and TypeScript narrows the rest of the fields for you.
  *
  * The ten specific callbacks below carry exactly the same events at
- * exactly the same moments; subscribe either way, or both.
+ * exactly the same moments, with the same metadata; subscribe either way,
+ * or both.
  */
 export type ChangeEvent =
-  | { type: "comment:created"; comment: SerializedComment }
-  | { type: "comment:edited"; comment: SerializedComment }
-  | { type: "comment:deleted"; id: CommentId }
-  | { type: "comment:status-changed"; comment: SerializedComment }
-  /** Type, priority or tags changed. */
-  | { type: "comment:updated"; comment: SerializedComment }
-  | { type: "comment:anchor-lost"; comment: SerializedComment }
-  | {
+  | ({ type: "comment:created"; comment: SerializedComment } & ChangeMeta)
+  | ({ type: "comment:edited"; comment: SerializedComment } & ChangeMeta)
+  | ({ type: "comment:deleted"; id: CommentId } & ChangeMeta)
+  | ({
+      type: "comment:status-changed";
+      comment: SerializedComment;
+    } & StatusChangeMeta)
+  /** Type, priority or tags changed; `field` says which. */
+  | ({ type: "comment:updated"; comment: SerializedComment } & UpdateMeta)
+  | ({ type: "comment:anchor-lost"; comment: SerializedComment } & ChangeMeta)
+  | ({
       type: "reply:added";
       comment: SerializedComment;
       reply: CommentReply;
-    }
-  | {
+    } & ChangeMeta)
+  | ({
       type: "reply:deleted";
       comment: SerializedComment;
       reply: CommentReply;
-    }
-  | {
+    } & ChangeMeta)
+  | ({
       type: "reply:edited";
       comment: SerializedComment;
       reply: CommentReply;
-    }
+    } & ChangeMeta)
   /** `reply` is null when the reaction is on the root comment. */
-  | {
+  | ({
       type: "reaction:toggled";
       comment: SerializedComment;
       reply: CommentReply | null;
-    };
+    } & ChangeMeta);
 
 export interface CommentOverlayOptions {
   shortcutKey?: string;
@@ -294,38 +354,97 @@ export interface CommentOverlayOptions {
    */
   autoDetectNavigation?: boolean;
   /**
+   * Called once the widget has mounted and every method on it is safe to
+   * drive. Receives the instance, because when the document is already
+   * parsed the mount happens inside the constructor — before
+   * `createCommentOverlay()` has returned anything to assign.
+   *
+   * This is the right place to `loadComments()`: a call made earlier is held
+   * and replayed here, but it can only return zeroes until then.
+   */
+  onReady?: (overlay: CommentOverlay) => void;
+  /**
+   * Called when something the widget survived nonetheless went wrong: a
+   * screenshot that failed to render, a localStorage write that could not be
+   * made, a malformed record skipped on load, a rejected
+   * `onCommentRequested`. Each of these already warns on the console and the
+   * widget carries on regardless — this is how they reach the host's own
+   * logging instead of only a devtools panel nobody has open.
+   */
+  onError?: (error: unknown, context: ErrorContext) => void;
+  /**
+   * Called when a "Copy link" URL points at a comment the widget does not
+   * hold — once per id, not once per attempt.
+   *
+   * This is what makes lazy loading work: fetch that one comment and hand it
+   * to `loadComments()`, and the inbox opens on it. Return a promise and the
+   * link is retried once it settles. Without a handler the inbox still opens
+   * and says the comment was not found.
+   */
+  onCommentRequested?: (id: CommentId) => void | Promise<unknown>;
+  /**
    * Single subscription point: fires for every change, alongside whichever
    * specific callback below carries the same event. Handy when a host syncs
    * everything to one endpoint instead of wiring nine functions. A handler
    * that throws is caught and warned about — it never rolls back the
    * mutation that emitted it.
+   *
+   * The event carries `origin` (and, where there is one, the transition that
+   * caused it) flattened onto it — see `ChangeMeta`.
    */
   onChange?: (event: ChangeEvent) => void;
   /** Fired after a new comment is saved. */
-  onCommentCreated?: (comment: SerializedComment) => void;
+  onCommentCreated?: (comment: SerializedComment, meta: ChangeMeta) => void;
   /** Fired after a reply is added to any comment. */
-  onReplyAdded?: (comment: SerializedComment, reply: CommentReply) => void;
+  onReplyAdded?: (
+    comment: SerializedComment,
+    reply: CommentReply,
+    meta: ChangeMeta
+  ) => void;
   /** Fired after deleteReply removes a reply. */
-  onReplyDeleted?: (comment: SerializedComment, reply: CommentReply) => void;
+  onReplyDeleted?: (
+    comment: SerializedComment,
+    reply: CommentReply,
+    meta: ChangeMeta
+  ) => void;
   /** Fired after editComment rewrites a comment's text. */
-  onCommentEdited?: (comment: SerializedComment) => void;
+  onCommentEdited?: (comment: SerializedComment, meta: ChangeMeta) => void;
   /** Fired after editReply rewrites a reply's text. */
-  onReplyEdited?: (comment: SerializedComment, reply: CommentReply) => void;
-  /** Fired for each comment that could not be re-anchored by loadComments. */
-  onAnchorLost?: (comment: SerializedComment) => void;
+  onReplyEdited?: (
+    comment: SerializedComment,
+    reply: CommentReply,
+    meta: ChangeMeta
+  ) => void;
+  /**
+   * Fired for each comment that could not be re-anchored — by loadComments,
+   * and again by every notifyNavigation that lands somewhere its element
+   * does not exist. Those repeats always carry `origin: "host"`.
+   */
+  onAnchorLost?: (comment: SerializedComment, meta: ChangeMeta) => void;
   /** Fired after deleteComment removes a comment. */
-  onCommentDeleted?: (id: CommentId) => void;
-  /** Fired after setCommentStatus changes a comment's lifecycle state. */
-  onCommentStatusChanged?: (comment: SerializedComment) => void;
-  /** Fired after type, priority or tags change on any comment. */
-  onCommentUpdated?: (comment: SerializedComment) => void;
+  onCommentDeleted?: (id: CommentId, meta: ChangeMeta) => void;
+  /**
+   * Fired after setCommentStatus changes a comment's lifecycle state.
+   * `meta.from`/`meta.to` are both ends of the move, so "reopened" and
+   * "resolved" are told apart without diffing against a previous copy.
+   */
+  onCommentStatusChanged?: (
+    comment: SerializedComment,
+    meta: StatusChangeMeta
+  ) => void;
+  /**
+   * Fired after type, priority or tags change on any comment. `meta.field`
+   * says which one moved, and narrows `meta.from`/`meta.to` with it.
+   */
+  onCommentUpdated?: (comment: SerializedComment, meta: UpdateMeta) => void;
   /**
    * Fired after a reaction is added to or removed from a comment or a reply.
    * `reply` is null when the reaction is on the root comment.
    */
   onReactionToggled?: (
     comment: SerializedComment,
-    reply: CommentReply | null
+    reply: CommentReply | null,
+    meta: ChangeMeta
   ) => void;
 }
 
@@ -451,6 +570,12 @@ export declare class CommentOverlay {
   /** The shareable URL for a comment, or null when the id is unknown. */
   commentLink(id: CommentId): string | null;
   serializeComments(): SerializedComment[];
+  /**
+   * Called before the widget has mounted — possible when a fetch resolves
+   * while the document is still parsing — the data is held and applied at
+   * mount, and the counts come back as zeroes because nothing has been
+   * resolved yet. Load from `onReady` when the counts matter.
+   */
   loadComments(data: SerializedComment[]): {
     anchored: number;
     orphaned: number;
@@ -529,5 +654,23 @@ export declare function createCommentOverlay(
 export declare function createCommentOverlay(
   options: CommentOverlayOptions & { autoInit: false }
 ): () => CommentOverlay;
+
+/**
+ * Default name of the query parameter carrying a comment id in "Copy link"
+ * URLs. Exported so a host reading the id itself — before the widget is up,
+ * to fetch just that comment — does not have to hardcode a second copy of
+ * it. Override it per instance with the `linkParam` option.
+ */
+export declare const DEFAULT_LINK_PARAM: string;
+
+/**
+ * The comment id the given URL asks for, or null. Pass the same `param` the
+ * widget was configured with; both default to `DEFAULT_LINK_PARAM`. A
+ * malformed URL yields null rather than throwing.
+ */
+export declare function readCommentLinkParam(
+  param?: string,
+  href?: string
+): string | null;
 
 export default createCommentOverlay;

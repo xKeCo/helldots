@@ -34,5 +34,13 @@ export function createCommentOverlay(options = {}) {
 // Export the class for advanced usage
 export { CommentOverlay };
 
+// Deep-link helpers. A host that loads comments lazily has to read the id
+// out of the URL *before* it can fetch anything — which means before the
+// widget can tell it. Exporting these is what keeps that read from becoming
+// a second, hand-written copy of the `linkParam` setting, free to drift from
+// the one the widget honours. See also the `onCommentRequested` option,
+// which covers the case where the widget is already up.
+export { DEFAULT_LINK_PARAM, readCommentLinkParam } from "./link.js";
+
 // Export a default instance creator for simple usage
 export default createCommentOverlay;

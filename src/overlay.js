@@ -162,6 +162,29 @@ class CommentOverlay {
      */
     this._pendingDetailId = null;
 
+    /**
+     * The pending id the host was already asked to fetch. A link pointing at
+     * a comment that never arrives must ask once, not once per load.
+     * @type {string | null}
+     */
+    this._requestedDetailId = null;
+
+    /**
+     * Where the mutation being applied right now came from. "host" is the
+     * default because a public method reached directly IS the host calling
+     * it; the widget's own UI goes through `_asUser`, which flips this for
+     * the duration of the call.
+     * @type {import('./index.d.ts').ChangeOrigin}
+     */
+    this._origin = "host";
+
+    /**
+     * Comments handed to loadComments() before the widget mounted, replayed
+     * by initOverlay() once the marker engine exists.
+     * @type {import('./index.d.ts').SerializedComment[] | null}
+     */
+    this._deferredLoad = null;
+
     if (document.readyState === "loading") {
       // Kept on the instance so cleanup() can cancel it — an instance
       // destroyed while the document is still loading must not mount a
@@ -221,6 +244,7 @@ class CommentOverlay {
         }
       },
       onPlace: (x, y) => this._placeCommentAtPoint(x, y),
+      onError: (err) => this._reportError(err, "capture"),
     });
 
     this._popover = new PopoverController({
@@ -236,7 +260,9 @@ class CommentOverlay {
         if (this.inboxView?.isOpen()) this.inboxView.refresh();
       },
       actorKey: () => this._actorKey(),
-      actions: {
+      // Every action below is a person clicking inside the widget, so the
+      // events they emit carry origin "user" (see _asUser).
+      actions: this._userActions({
         addReply: (comment, text, screenshots) =>
           this.addReply(comment, text, screenshots),
         deleteReply: (commentId, replyId) =>
@@ -252,7 +278,7 @@ class CommentOverlay {
           this.toggleCommentReaction(id, emoji),
         toggleReplyReaction: (commentId, replyId, emoji) =>
           this.toggleReplyReaction(commentId, replyId, emoji),
-      },
+      }),
     });
 
     this.markers = new MarkerEngine({
@@ -288,6 +314,17 @@ class CommentOverlay {
       };
       window.addEventListener("storage", this._storageHandler);
     }
+
+    // A host whose fetch resolved while the document was still parsing
+    // called loadComments() before any of this existed. Applied here, after
+    // the localStorage restore, so explicit data still wins by id over
+    // whatever was cached.
+    if (this._deferredLoad) {
+      const deferred = this._deferredLoad;
+      this._deferredLoad = null;
+      this.loadComments(deferred);
+    }
+
     // Also outside localStorage mode: a host that persists comments itself
     // still deserves to have the link honoured, and until its loadComments()
     // arrives the inbox is what tells the user the link was understood.
@@ -300,6 +337,8 @@ class CommentOverlay {
       this._popstateHandler = () => this.notifyNavigation();
       window.addEventListener("popstate", this._popstateHandler);
     }
+
+    this._notifyReady();
   }
 
   _navigateTo(url) {
@@ -356,13 +395,148 @@ class CommentOverlay {
       // nothing at all happen is indistinguishable from a broken widget.
       this.showInbox();
       this.inboxView?.showNotice(this.strings.commentNotFound);
+      this._requestPendingDetail(id);
       return;
     }
 
     this._pendingDetailId = null;
+    this._requestedDetailId = null;
     this.showInbox();
     this.inboxView.clearNotice();
     this.inboxView.openDetail(comment.id);
+  }
+
+  /**
+   * Asks the host for a comment a link points at that the widget does not
+   * hold.
+   *
+   * This is what makes "load only the comment in the link" implementable. A
+   * host that fetches per page otherwise has no way to learn which id the
+   * URL asked for except re-parsing the query string with its own copy of
+   * `linkParam` — a second spelling of the same setting, free to drift from
+   * the one the widget actually uses.
+   *
+   * Asked once per id rather than once per attempt: `_openPendingDetail`
+   * runs again after every load and after every navigation, and an id the
+   * host cannot produce must not become a request loop.
+   *
+   * A handler returning a promise is awaited and the link retried once it
+   * settles — on rejection too, since the comment may have arrived by
+   * another route while the fetch was failing.
+   *
+   * @param {string} id the pending id, as the URL or the handoff spelled it
+   */
+  _requestPendingDetail(id) {
+    const handler = this.options.onCommentRequested;
+    if (typeof handler !== "function") return;
+    if (this._requestedDetailId !== null && sameId(this._requestedDetailId, id))
+      return;
+    this._requestedDetailId = id;
+
+    let result;
+    try {
+      result = handler(id);
+    } catch (err) {
+      this._reportError(err, "link");
+      return;
+    }
+    if (!result || typeof (/** @type {any} */ (result).then) !== "function") {
+      return;
+    }
+    /** @type {Promise<unknown>} */ (result).then(
+      () => this._openPendingDetail(),
+      (err) => {
+        this._reportError(err, "link");
+        this._openPendingDetail();
+      }
+    );
+  }
+
+  /**
+   * Announces that the widget is mounted and every method on it is safe to
+   * call. Fires once, at the end of initOverlay — synchronously inside the
+   * constructor when the document was already parsed, on DOMContentLoaded
+   * when it was not. The instance is handed over because in the synchronous
+   * case the host does not have the return value of createCommentOverlay()
+   * yet.
+   */
+  _notifyReady() {
+    const handler = this.options.onReady;
+    if (typeof handler !== "function") return;
+    try {
+      handler(this);
+    } catch (err) {
+      console.warn("HellDots: onReady handler threw", err);
+    }
+  }
+
+  /**
+   * Runs a mutation performed by the widget's own UI, so everything emitted
+   * inside it is stamped `origin: "user"`. A call arriving from the host's
+   * code never passes through here and stays `"host"` — which is the whole
+   * of how the two are told apart, since the inbox and the thread popover
+   * drive the very same public methods a host does.
+   *
+   * Restores the previous value rather than resetting to "host": the inbox
+   * calls a public method that itself reaches another one, and the inner
+   * call must not downgrade the outer one's origin.
+   *
+   * @template T
+   * @param {() => T} fn
+   * @returns {T}
+   */
+  _asUser(fn) {
+    const previous = this._origin;
+    this._origin = "user";
+    try {
+      return fn();
+    } finally {
+      this._origin = previous;
+    }
+  }
+
+  /**
+   * Wraps every function of an adapter object so the UI that calls it is
+   * recorded as the origin. One call site per adapter instead of one per
+   * action: a new action added to the inbox or the popover is stamped
+   * without anyone having to remember to stamp it.
+   *
+   * @template {Record<string, any>} T
+   * @param {T} actions
+   * @returns {T}
+   */
+  _userActions(actions) {
+    /** @type {Record<string, any>} */
+    const wrapped = {};
+    for (const [key, value] of Object.entries(actions)) {
+      wrapped[key] =
+        typeof value === "function"
+          ? (/** @type {any[]} */ ...args) => this._asUser(() => value(...args))
+          : value;
+    }
+    return /** @type {T} */ (wrapped);
+  }
+
+  /**
+   * Tells the host about a failure it would otherwise only find in the
+   * console. Every one of these is already survivable — the widget carries
+   * on regardless — but "the screenshot pipeline is broken" is not something
+   * a feedback tool should keep to itself.
+   *
+   * The console warning stays: a host without an `onError` must not lose the
+   * diagnostic, and one with it is usually logging rather than replacing.
+   *
+   * @param {unknown} error
+   * @param {import('./index.d.ts').ErrorContext} context
+   */
+  _reportError(error, context) {
+    const handler = this.options.onError;
+    if (typeof handler !== "function") return;
+    try {
+      handler(error, context);
+    } catch (err) {
+      console.warn("HellDots: onError handler threw", err);
+    }
   }
 
   /**
@@ -370,6 +544,11 @@ class CommentOverlay {
    * that has always carried this event and then the onChange stream, so a
    * host can subscribe either way — or both — and never sees the two
    * disagree about what happened or when.
+   *
+   * Both shapes also receive the same `meta`: the specific callback takes it
+   * as one extra trailing argument (existing handlers ignore it — that is
+   * what makes this additive), and `onChange` gets its fields flattened onto
+   * the event, alongside `comment`/`reply`/`id`.
    *
    * Host handlers are isolated: a subscriber that throws must not roll back
    * a mutation that already happened, and must not stop its sibling from
@@ -379,20 +558,23 @@ class CommentOverlay {
    * @param {any[]} callbackArgs arguments for the specific callback, in the
    *   order it has always taken them
    * @param {Object} payload the event's own fields, minus `type`
+   * @param {Object} [detail] event-specific metadata (`field`, `from`, `to`)
+   *   to travel next to `origin`
    */
-  _emit(type, callbackArgs, payload) {
+  _emit(type, callbackArgs, payload, detail) {
+    const meta = { origin: this._origin, ...detail };
     const name = CHANGE_CALLBACKS[type];
     const callback = this.options[name];
     if (typeof callback === "function") {
       try {
-        callback(...callbackArgs);
+        callback(...callbackArgs, meta);
       } catch (err) {
         console.warn(`HellDots: ${name} handler threw`, err);
       }
     }
     if (typeof this.options.onChange === "function") {
       try {
-        this.options.onChange({ type, ...payload });
+        this.options.onChange({ type, ...payload, ...meta });
       } catch (err) {
         console.warn("HellDots: onChange handler threw", err);
       }
@@ -418,7 +600,15 @@ class CommentOverlay {
       this.serializeComments(),
       location.pathname
     );
-    writeStoredComments(merged);
+    if (!writeStoredComments(merged)) {
+      // Already warned about in detail by the writer, which shed what it
+      // could before giving up. Worth surfacing anyway: from here on this
+      // browser's copy silently diverges from what the user can see.
+      this._reportError(
+        new Error("HellDots: comments could not be persisted to localStorage"),
+        "storage"
+      );
+    }
     // The merge IS the new stored state (quota shedding only nulls
     // contextScreenshot in the written copy, which the next merge would
     // reattempt from memory anyway — same as before the cache existed).
@@ -760,7 +950,11 @@ class CommentOverlay {
     this.comments.push(comment);
     this._syncStorage();
     const created = this._serializeComment(comment);
-    this._emit("comment:created", [created], { comment: created });
+    // The comment box is widget UI like any other, but it reaches _emit
+    // directly instead of through an adapter, so it stamps its own origin.
+    this._asUser(() =>
+      this._emit("comment:created", [created], { comment: created })
+    );
     this.renderCommentCircle(comment);
     this.hideCommentBox();
     this.toggleCommentMode();
@@ -863,7 +1057,8 @@ class CommentOverlay {
         currentPage: location.pathname,
         getComments: () => this.comments,
         options: this.options,
-        callbacks: {
+        // Same as the popover's: everything here is user-driven.
+        callbacks: this._userActions({
           onActivateCommentMode: () => {
             this.closeInbox();
             // Never a toggle: the button reads "turn on comment mode", so
@@ -907,7 +1102,7 @@ class CommentOverlay {
           },
           onShowLightbox: (src) => this.showLightbox(src),
           onClose: () => this.closeInbox(),
-        },
+        }),
       });
     }
     this.inboxView.open();
@@ -1322,7 +1517,18 @@ class CommentOverlay {
     // change came from — card, detail or thread popover.
     if (this.inboxView?.isOpen()) this.inboxView.refresh();
     const changed = this._serializeComment(comment);
-    this._emit("comment:status-changed", [changed], { comment: changed });
+    // Both ends of the move, the same pair the audit entry just recorded: a
+    // host routing "reopened" or "resolved" differently should not have to
+    // diff against its own previous copy to find out which one happened.
+    this._emit(
+      "comment:status-changed",
+      [changed],
+      { comment: changed },
+      {
+        from: previous,
+        to: status,
+      }
+    );
     return true;
   }
 
@@ -1403,11 +1609,18 @@ class CommentOverlay {
    * @param {any} comment
    * @returns {true}
    */
-  _commitUpdate(comment) {
+  /**
+   * @param {any} comment
+   * @param {{ field: "type" | "priority" | "tags", from?: any, to?: any }} detail
+   *   which field moved, and both ends of the move where there are two. The
+   *   setters already compute this for the audit trail; passing it on costs
+   *   nothing and saves every host the same diff.
+   */
+  _commitUpdate(comment, detail) {
     this._syncStorage();
     if (this.inboxView?.isOpen()) this.inboxView.refresh();
     const updated = this._serializeComment(comment);
-    this._emit("comment:updated", [updated], { comment: updated });
+    this._emit("comment:updated", [updated], { comment: updated }, detail);
     return true;
   }
 
@@ -1422,15 +1635,22 @@ class CommentOverlay {
     const comment = this._findComment(id);
     if (!comment) return false;
     const previousType = comment.type ?? null;
+    // The same no-op guard setCommentStatus has always had. Without it,
+    // re-applying the value a comment already holds wrote to storage,
+    // refreshed the inbox and emitted comment:updated for nothing — which a
+    // host mirroring a remote change hears as its own echo.
+    if (previousType === type) return true;
     comment.type = type;
-    if (previousType !== type) {
-      recordEvent(comment, "classified", this._actor(), {
-        field: "type",
-        from: previousType,
-        to: type,
-      });
-    }
-    return this._commitUpdate(comment);
+    recordEvent(comment, "classified", this._actor(), {
+      field: "type",
+      from: previousType,
+      to: type,
+    });
+    return this._commitUpdate(comment, {
+      field: "type",
+      from: previousType,
+      to: type,
+    });
   }
 
   /**
@@ -1444,15 +1664,18 @@ class CommentOverlay {
     const comment = this._findComment(id);
     if (!comment) return false;
     const previousPriority = comment.priority ?? null;
+    if (previousPriority === priority) return true;
     comment.priority = priority;
-    if (previousPriority !== priority) {
-      recordEvent(comment, "classified", this._actor(), {
-        field: "priority",
-        from: previousPriority,
-        to: priority,
-      });
-    }
-    return this._commitUpdate(comment);
+    recordEvent(comment, "classified", this._actor(), {
+      field: "priority",
+      from: previousPriority,
+      to: priority,
+    });
+    return this._commitUpdate(comment, {
+      field: "priority",
+      from: previousPriority,
+      to: priority,
+    });
   }
 
   /**
@@ -1469,12 +1692,20 @@ class CommentOverlay {
     // Joined on a character no tag can contain, rather than compared with
     // JSON: the list is already normalised on both sides, so this is the
     // whole of "did anything actually change".
-    const previousTags = (comment.tags || []).join("\u0000");
-    comment.tags = normalizeTags(tags);
-    if (comment.tags.join("\u0000") !== previousTags) {
-      recordEvent(comment, "classified", this._actor(), { field: "tags" });
-    }
-    return this._commitUpdate(comment);
+    const previous = [...(comment.tags || [])];
+    const previousKey = previous.join("\u0000");
+    const next = normalizeTags(tags);
+    if (next.join("\u0000") === previousKey) return true;
+    comment.tags = next;
+    recordEvent(comment, "classified", this._actor(), { field: "tags" });
+    // Tags are a list, so unlike type and priority they have no two-value
+    // transition to record in the audit trail — but a host diffing "which
+    // label was added" still wants both sides, and here they are.
+    return this._commitUpdate(comment, {
+      field: "tags",
+      from: previous,
+      to: [...next],
+    });
   }
 
   /**
@@ -1566,7 +1797,7 @@ class CommentOverlay {
   }
 
   _removeComment(id) {
-    this.markers.remove(id);
+    this.markers?.remove(id);
     this.comments = this.comments.filter((comment) => !sameId(comment.id, id));
   }
 
@@ -1580,7 +1811,7 @@ class CommentOverlay {
   clearComments() {
     this.closeThreadPopover();
     const cleared = this.comments;
-    this.markers.clear();
+    this.markers?.clear();
     this.comments = [];
 
     if (this.options.persistence === "localStorage" && cleared.length > 0) {
@@ -1608,9 +1839,28 @@ class CommentOverlay {
     let inactive = 0;
     if (!Array.isArray(data)) return { anchored, orphaned, inactive };
 
+    // Called before the widget mounted — a host whose fetch resolved while
+    // the document was still parsing. Resolving anchors against a half-built
+    // DOM would report orphans that are not orphans and fire onAnchorLost
+    // for each of them, so the data is held and replayed by initOverlay.
+    // Zeroes are all this can honestly return at that point: nothing has
+    // been resolved yet. A host that needs the counts should load from
+    // onReady, where the widget is up and they mean something.
+    if (!this.markers) {
+      this._deferredLoad = [...(this._deferredLoad || []), ...data];
+      return { anchored, orphaned, inactive };
+    }
+
     for (const item of data) {
       if (!item || item.id == null || typeof item.text !== "string") {
         console.warn("HellDots: skipping malformed serialized comment", item);
+        // A record the widget drops is a record the host still believes it
+        // is showing — which is exactly the kind of divergence that goes
+        // unnoticed until someone asks where their comment went.
+        this._reportError(
+          new Error("HellDots: skipping malformed serialized comment"),
+          "load"
+        );
         continue;
       }
       this._removeComment(item.id);
@@ -1734,6 +1984,11 @@ class CommentOverlay {
     let anchored = 0;
     let orphaned = 0;
     let inactive = 0;
+
+    // Nothing is mounted and nothing is loaded yet (loadComments defers too),
+    // so there is no state to re-sync — and every panel this touches below
+    // is still null.
+    if (!this.markers) return { anchored, orphaned, inactive };
 
     // Panels pinned to the old DOM don't survive a route change; the inbox
     // does — it is cross-page by design and refreshes below.
@@ -1885,6 +2140,9 @@ class CommentOverlay {
       this._popstateHandler = null;
     }
     this._storedCache = null;
+    // An instance torn down before it mounted must not hold on to data it
+    // will never replay.
+    this._deferredLoad = null;
     // Dropping the panels leaves their dropdowns detached-but-open, which
     // would keep the menu registry's document listener alive until the next
     // stray mousedown.
