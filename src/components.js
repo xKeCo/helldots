@@ -515,29 +515,61 @@ export const renderScreenshotsPreview = (
 };
 
 /**
+ * FileReader as a promise, so the attachment path can await a host's
+ * transform after the read without nesting two callbacks. Resolves to null
+ * on a read error rather than rejecting — a file the browser could not read
+ * is not an exception, it is just nothing to attach.
+ * @param {File} file
+ * @returns {Promise<string | null>}
+ */
+const readAsDataUrl = (file) =>
+  new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => resolve(/** @type {string} */ (ev.target.result));
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+
+/**
  * Wires the hidden file input that feeds a pending-screenshots array,
  * enforcing MAX_SCREENSHOTS the same way on every attachment surface.
  * @param {HTMLInputElement} input
  * @param {() => string[]} getScreenshots
  * @param {() => void} rerender
+ * @param {(dataUrl: string) => Promise<string>} [transform] the host's
+ *   screenshot transform, with the comment id already bound by the caller.
+ *   Omitted by the comment box, whose array is transformed at save instead.
  */
-export const wireScreenshotInput = (input, getScreenshots, rerender) => {
-  input.addEventListener("change", (e) => {
+export const wireScreenshotInput = (
+  input,
+  getScreenshots,
+  rerender,
+  transform
+) => {
+  input.addEventListener("change", async (e) => {
     const file = /** @type {HTMLInputElement} */ (e.target).files[0];
     if (!file) return;
     // A non-image read into a data URL renders a broken <img> and bloats
     // the stored payload for nothing.
     if (file.type && !file.type.startsWith("image/")) return;
+    if (getScreenshots().length >= MAX_SCREENSHOTS) return;
+
+    const pending = readAsDataUrl(file);
+    // Cleared while the read is in flight, exactly as before: otherwise
+    // picking the same file twice in a row fires no second change event.
+    input.value = "";
+    const dataUrl = await pending;
+    if (!dataUrl) return;
+
+    const value = transform ? await transform(dataUrl) : dataUrl;
+
+    // Re-checked after the awaits. The read has always sat here, and a
+    // host's upload now sits here too — long enough for two quick picks to
+    // both pass the check above and push past the cap together.
     const screenshots = getScreenshots();
     if (screenshots.length >= MAX_SCREENSHOTS) return;
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      screenshots.push(/** @type {string} */ (ev.target.result));
-      rerender();
-    };
-    reader.readAsDataURL(file);
-    input.value = "";
+    screenshots.push(value);
+    rerender();
   });
 };
 

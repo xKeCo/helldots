@@ -107,6 +107,7 @@ export class PopoverController {
    *   linkParam: () => string,
    *   refreshInbox: () => void,
    *   actorKey: () => string,
+   *   transformScreenshot: Function,
    *   actions: {
    *     addReply: Function, deleteReply: Function,
    *     editComment: Function, editReply: Function,
@@ -478,7 +479,8 @@ export class PopoverController {
     wireScreenshotInput(
       threadFileInput,
       () => pendingReplyScreenshots,
-      updateReplyScreenshotsPreview
+      updateReplyScreenshotsPreview,
+      (dataUrl) => this.deps.transformScreenshot(dataUrl, comment.id)
     );
 
     const submitReply = () => {

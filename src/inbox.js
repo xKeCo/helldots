@@ -48,7 +48,7 @@ export class InboxView {
    * @param {string} deps.currentPage
    * @param {() => Array<Object>} deps.getComments
    * @param {{ shortcutKey?: string, shortcutModifier?: string, linkParam?: string }} [deps.options]
-   * @param {{ onOpenDetailScroll: Function, onOpenDetail?: Function, onReply: Function, onDelete: Function, onDeleteReply: Function, onEditComment: Function, onEditReply: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function, actorKey: () => string, onToggleCommentReaction: Function, onToggleReplyReaction: Function, onExportComments: Function, onExportMetrics: Function, onPrintReport: Function }} deps.callbacks
+   * @param {{ onOpenDetailScroll: Function, onOpenDetail?: Function, onTransformScreenshot?: Function, onReply: Function, onDelete: Function, onDeleteReply: Function, onEditComment: Function, onEditReply: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function, actorKey: () => string, onToggleCommentReaction: Function, onToggleReplyReaction: Function, onExportComments: Function, onExportMetrics: Function, onPrintReport: Function }} deps.callbacks
    */
   constructor({
     shadowRoot,
@@ -1174,7 +1174,12 @@ export class InboxView {
     };
 
     attachBtn.addEventListener("click", () => fileInput.click());
-    wireScreenshotInput(fileInput, () => pendingScreenshots, updatePreview);
+    wireScreenshotInput(
+      fileInput,
+      () => pendingScreenshots,
+      updatePreview,
+      (dataUrl) => this.callbacks.onTransformScreenshot(dataUrl, comment.id)
+    );
 
     const submit = () => {
       const text = inputEl.value.trim();

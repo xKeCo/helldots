@@ -260,6 +260,8 @@ class CommentOverlay {
         if (this.inboxView?.isOpen()) this.inboxView.refresh();
       },
       actorKey: () => this._actorKey(),
+      transformScreenshot: (dataUrl, commentId) =>
+        this._transformScreenshot(dataUrl, "attachment", commentId),
       // Every action below is a person clicking inside the widget, so the
       // events they emit carry origin "user" (see _asUser).
       actions: this._userActions({
@@ -1133,6 +1135,8 @@ class CommentOverlay {
           },
           onOpenDetailScroll: (comment) => this.scrollMarkerIntoView(comment),
           onOpenDetail: (comment) => this._notifyCommentOpened(comment),
+          onTransformScreenshot: (dataUrl, commentId) =>
+            this._transformScreenshot(dataUrl, "attachment", commentId),
           onReply: (comment, text, screenshots) =>
             this.addReply(comment, text, screenshots),
           onDelete: (id) => this.deleteComment(id),

@@ -6,6 +6,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import CommentOverlay from "../src/overlay.js";
 import { TAG_NAME } from "../src/root-element.js";
+import { CLASSES } from "../src/constants.js";
 
 vi.mock("../src/capture.js", () => ({
   renderPage: vi.fn().mockResolvedValue({ width: 0, height: 0 }),
@@ -212,5 +213,113 @@ describe("the submit button during a save", () => {
     await overlay.saveComment();
 
     expect(overlay.submitButton.disabled).toBe(false);
+  });
+});
+
+describe("transformScreenshot on the reply path", () => {
+  let overlay;
+
+  const seeded = () => ({
+    id: "c1",
+    text: "seeded comment",
+    anchor: null,
+    page: location.pathname,
+    replies: [],
+    author: "Ana",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    screenshots: [],
+    status: "open",
+  });
+
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // Polls instead of betting on a fixed number of ticks: jsdom's FileReader
+  // does not resolve on a schedule lined up with a bare setTimeout(0), so a
+  // flat wait here is exactly the intermittent failure test/overlay.test.js's
+  // own `waitFor` was written to avoid. `settled` is the spy — either
+  // `transformScreenshot` or `onError` — that only gets called once the read
+  // and the transform have both gone through.
+  const pickFile = async (input, settled) => {
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["x"], "shot.png", { type: "image/png" })],
+    });
+    input.dispatchEvent(new Event("change"));
+    const start = Date.now();
+    while (settled.mock.calls.length === 0) {
+      if (Date.now() - start > 2000) throw new Error("pickFile: timed out");
+      await wait(5);
+    }
+  };
+
+  beforeEach(() => {
+    document.elementFromPoint = () => null;
+    document.body.innerHTML = `<section id="target">Anchor text</section>`;
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it("transforms an attachment picked in the thread popover", async () => {
+    const transformScreenshot = vi
+      .fn()
+      .mockResolvedValue("https://cdn.test/reply.png");
+    overlay = new CommentOverlay({ transformScreenshot });
+    overlay.loadComments([seeded()]);
+    overlay.showThreadPopover(null, overlay.comments[0]);
+
+    // Scoped to the popover: the always-mounted new-comment composer has
+    // its own hidden file input, and an unscoped query would hit that one
+    // first since it is inserted into the shadow root before the popover.
+    const input = overlay.activeThreadPopover.querySelector(
+      `.${CLASSES.THREAD_INPUT_AREA} input[type="file"]`
+    );
+    await pickFile(input, transformScreenshot);
+
+    expect(transformScreenshot).toHaveBeenCalledWith(
+      expect.stringContaining("data:"),
+      { kind: "attachment", commentId: "c1" }
+    );
+  });
+
+  it("transforms an attachment picked in the inbox detail", async () => {
+    const transformScreenshot = vi
+      .fn()
+      .mockResolvedValue("https://cdn.test/reply.png");
+    overlay = new CommentOverlay({ transformScreenshot });
+    overlay.loadComments([seeded()]);
+    overlay.showInbox();
+    overlay.inboxView.openDetail("c1");
+
+    const input = overlay.inboxView.el.querySelector('input[type="file"]');
+    await pickFile(input, transformScreenshot);
+
+    expect(transformScreenshot).toHaveBeenCalledWith(
+      expect.stringContaining("data:"),
+      { kind: "attachment", commentId: "c1" }
+    );
+  });
+
+  it("keeps the data URL on the reply path too when the host rejects", async () => {
+    const onError = vi.fn();
+    overlay = new CommentOverlay({
+      onError,
+      transformScreenshot: () => Promise.reject(new Error("S3 is down")),
+    });
+    overlay.loadComments([seeded()]);
+    overlay.showThreadPopover(null, overlay.comments[0]);
+
+    // Scoped for the same reason as the test above.
+    const input = overlay.activeThreadPopover.querySelector(
+      `.${CLASSES.THREAD_INPUT_AREA} input[type="file"]`
+    );
+    await pickFile(input, onError);
+
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), "transform");
   });
 });
