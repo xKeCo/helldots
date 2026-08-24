@@ -2611,7 +2611,9 @@ stays `void`: what it produces is a print dialog, not a value.
 its own. The right rule is "transform at the last moment before the image
 becomes part of a record", and for a comment that is `_saveCommentNow` —
 already `async` because it awaits the pending capture, so the hook costs no
-new asynchrony and a comment abandoned with Escape uploads nothing.
+new asynchrony and a comment abandoned before Send uploads nothing. (Once
+Send is pressed the upload has started, and dismissing the box after that
+orphans a blob — see the limitation recorded further down.)
 
 For a reply that would be `addReply()`, which is synchronous and returns
 `CommentReply | null`. Awaiting an upload there changes the return type to a
