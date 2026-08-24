@@ -387,16 +387,24 @@ export interface CommentOverlayOptions {
   /**
    * Called for every image the widget acquires — the automatic viewport
    * capture, a drag-crop region, and anything attached through the file
-   * picker — before it becomes part of a record. Return the string to store
-   * in its place, typically a URL into your own object storage.
+   * picker. Return the string to store in its place, typically a URL into
+   * your own object storage.
    *
    * Without it, a ~33KB base64 data URL travels inside every comment: into
    * localStorage, where it is the first thing shed under quota pressure, and
    * into whatever your backend persists.
    *
+   * Everything on a comment is transformed as the comment is saved; an
+   * attachment on a *reply* is transformed when the file is picked, because
+   * `addReply()` is synchronous. Either way the record may never arrive —
+   * an abandoned reply draft, or a comment box dismissed while its upload is
+   * in flight — so treat a URL you hand back as an upload, not as a record,
+   * and sweep for unreferenced blobs.
+   *
    * `kind` separates the automatic capture ("context" — disposable and
    * regenerable) from something a person chose to include ("attachment"), so
-   * the two can go to different buckets with different retention.
+   * the two can go to different buckets with different retention. It does
+   * not distinguish the two moments above: both arrive as "attachment".
    * `commentId` is the comment the image will belong to — for an attachment
    * on a reply, the parent comment.
    *

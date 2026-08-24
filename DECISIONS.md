@@ -2625,9 +2625,22 @@ through the hook.** An `addReply()` the host calls with its own array does
 not — and does not need to, because the host is already holding those
 strings and can upload them before calling.
 
-**What this costs:** an attachment on a reply draft the user abandons leaves
-an orphan blob in the host's storage. Collectable by sweeping unreferenced
-blobs, and impossible for comments, which transform at save.
+**What this costs:** orphan blobs in the host's storage, on both paths.
+Obviously for a reply — an attachment picked into a draft the user then
+abandons was uploaded when it was picked. But comments orphan too, just
+through a narrower window: `_saveCommentNow` uploads and _then_ checks
+whether the box survived, so an Escape during the upload leaves the blobs
+behind with no record pointing at them. Both are collectable by sweeping
+unreferenced blobs, which is the host's job because only the host knows what
+its own keys mean.
+
+The privacy half of that is worth stating rather than discovering: a user who
+hits Send, thinks better of it and presses Escape has already had a
+screenshot of their page shipped to the host's storage. Defensible — they did
+press Send, and the alternative is holding every upload until after the
+record is written, which reintroduces the latency the disabled button exists
+to cover — but it is not nothing, and a host with a retention policy has to
+sweep for it rather than assume an abandoned comment left no trace.
 
 **Fail-open, not fail-closed.** A rejected transform keeps the data URL and
 reports `onError(error, "transform")` — a new context rather than a reuse of

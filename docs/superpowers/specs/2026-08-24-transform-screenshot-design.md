@@ -157,10 +157,15 @@ stylesheet already covers.
 
 ## Accepted limitations
 
-- **A reply attachment in an abandoned draft leaves an orphan blob.** The user
-  attaches an image, then closes the popover without submitting. Collectable
-  from the host's side by sweeping unreferenced blobs. It cannot happen for
-  comments, which transform at save.
+- **An abandoned draft leaves an orphan blob, on either path.** For a reply
+  the window is wide: the user attaches an image, then closes the popover
+  without submitting, and the upload happened when the file was picked. For a
+  comment it is narrower but real — the save uploads and only then checks
+  whether the box survived, so an Escape during the upload orphans the blobs
+  too. Collectable from the host's side by sweeping unreferenced blobs.
+  Note what that means for privacy: a user who hits Send and then changes
+  their mind has already had a screenshot of their page shipped to the host's
+  storage.
 - **No timeout.** The host owns the promise and can impose its own with
   `AbortSignal.timeout()`. A deadline imposed by the widget would discard an
   upload that was about to succeed, and the widget has no basis for choosing

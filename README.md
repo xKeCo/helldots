@@ -211,6 +211,15 @@ file picker on a comment or a reply (`kind: "attachment"`). The two kinds
 exist so the disposable one and the deliberate one can go to different
 buckets.
 
+**It runs at two different moments, and `kind` does not tell them apart.**
+Everything on a comment transforms when the comment is saved; an attachment
+on a _reply_ transforms when the file is picked, because `addReply()` is
+synchronous and cannot wait on your upload. So a reply attachment can be
+uploaded and then never referenced — the user closes the popover without
+sending — and a comment can do the same in a narrower window, by being
+dismissed while its upload is still in flight. Sweep for unreferenced blobs;
+a URL you were handed is not a promise that a record will point at it.
+
 It is **fail-open**. If your upload rejects — or resolves to anything that is
 not a non-empty string — the original data URL is kept and you get
 `onError(error, "transform")`. You receive a large record rather than losing
@@ -470,7 +479,7 @@ OS: iOS 17.2
 | `linkParam`             | `string`                             | `"helldotsComment"` | Query param used by "Copy link" URLs                              |
 | `navigate`              | `(page: string) => void`             | full page load      | SPA router hook for the widget's cross-page jumps                 |
 | `onReady`               | `(overlay) => void`                  | —                   | Widget mounted; the safe place to `loadComments()`                |
-| `onError`               | `(error, context) => void`           | —                   | A survivable failure — capture, storage, load or link             |
+| `onError`               | `(error, context) => void`           | —                   | A survivable failure — capture, storage, load, link or transform  |
 | `onCommentRequested`    | `(id) => void \| Promise`            | —                   | A link points at a comment the widget does not hold               |
 | `transformScreenshot`   | `(dataUrl, info) => Promise<string>` | —                   | Swap every image the widget acquires for a string of your own     |
 | `onCommentModeChanged`  | `(active: boolean) => void`          | —                   | Comment mode turned on or off, however it was flipped             |
@@ -601,8 +610,9 @@ Failures the widget survives but you would otherwise only find in the
 console: `"capture"` (a screenshot did not render — the comment saves without
 one), `"storage"` (localStorage could not be written, so this browser's copy
 now diverges), `"load"` (a malformed record was skipped), `"link"` (an
-`onCommentRequested` handler threw or rejected). The console warning stays
-either way.
+`onCommentRequested` handler threw or rejected), `"transform"` (a
+`transformScreenshot` handler failed, so the data URL was kept). The console
+warning stays either way.
 
 ## API
 
