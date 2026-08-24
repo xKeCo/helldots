@@ -22,15 +22,15 @@
 
 ## File Structure
 
-| File | Responsibility | Change |
-| --- | --- | --- |
-| `src/overlay.js` | Owns `_transformScreenshot` (the entire contract), calls it from the save path, hands bound wrappers to the two reply surfaces | Modify |
-| `src/components.js` | `wireScreenshotInput` gains an optional transform and awaits it | Modify |
-| `src/popover-controller.js` | Passes the transform for the thread reply composer | Modify |
-| `src/inbox.js` | Passes the transform for the inbox-detail reply composer | Modify |
-| `src/index.d.ts` | Declares the `transformScreenshot` option and the `"transform"` error context | Modify |
-| `test/transform-screenshot.test.js` | Every behaviour in the spec's testing section | Create |
-| `README.md`, `DECISIONS.md`, `.changeset/*.md` | Documentation | Modify / create |
+| File                                           | Responsibility                                                                                                                 | Change          |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------- |
+| `src/overlay.js`                               | Owns `_transformScreenshot` (the entire contract), calls it from the save path, hands bound wrappers to the two reply surfaces | Modify          |
+| `src/components.js`                            | `wireScreenshotInput` gains an optional transform and awaits it                                                                | Modify          |
+| `src/popover-controller.js`                    | Passes the transform for the thread reply composer                                                                             | Modify          |
+| `src/inbox.js`                                 | Passes the transform for the inbox-detail reply composer                                                                       | Modify          |
+| `src/index.d.ts`                               | Declares the `transformScreenshot` option and the `"transform"` error context                                                  | Modify          |
+| `test/transform-screenshot.test.js`            | Every behaviour in the spec's testing section                                                                                  | Create          |
+| `README.md`, `DECISIONS.md`, `.changeset/*.md` | Documentation                                                                                                                  | Modify / create |
 
 ---
 
@@ -39,17 +39,19 @@
 Covers three of the five image paths — the automatic capture, the drag-crop region, and the comment box's file picker — because all three converge on `_pendingScreenshots` and `contextScreenshot` by the time `_saveCommentNow` runs.
 
 It also disables the submit button while a save is in flight. That is folded
-in here rather than standing alone: the button only becomes slow *because*
+in here rather than standing alone: the button only becomes slow _because_
 this task makes the save wait on the host's network, so the two are one
 change. (It is `feat`, not `style` — `disabled` blocks the click, which
 `CONTRIBUTING.md` does not count as presentation-only.)
 
 **Files:**
+
 - Modify: `src/overlay.js` (`_saveCommentNow`, `saveComment`, new `_transformScreenshot`)
 - Modify: `src/index.d.ts` (`CommentOverlayOptions`, `ErrorContext`)
 - Test: `test/transform-screenshot.test.js`
 
 **Interfaces:**
+
 - Consumes: `this._reportError(error, context)` — already exists on `CommentOverlay`.
 - Produces: `_transformScreenshot(dataUrl: string | null, kind: "context" | "attachment", commentId: CommentId): Promise<string | null>` — **never rejects**. Tasks 2 wraps this; do not duplicate its fail-open logic there.
 
@@ -460,6 +462,7 @@ git commit -m ":sparkles: feat(screenshots): Let the host swap an image before i
 `addReply()` is synchronous and returns `CommentReply | null`. Making it await an upload would change that to a promise and break every existing consumer, so reply attachments transform at the moment they are picked instead. See the spec's "Why the timing is not uniform".
 
 **Files:**
+
 - Modify: `src/components.js` (`wireScreenshotInput`)
 - Modify: `src/popover-controller.js:~478`
 - Modify: `src/inbox.js:~1177`
@@ -467,6 +470,7 @@ git commit -m ":sparkles: feat(screenshots): Let the host swap an image before i
 - Test: `test/transform-screenshot.test.js`
 
 **Interfaces:**
+
 - Consumes: `_transformScreenshot(dataUrl, kind, commentId)` from Task 1.
 - Produces: `wireScreenshotInput(input, getScreenshots, rerender, transform?)` where `transform` is `(dataUrl: string) => Promise<string>` with the `commentId` already bound by the caller.
 
@@ -651,12 +655,12 @@ In `src/overlay.js`, add a dependency to the `new PopoverController({ ... })` li
 In `src/popover-controller.js`, replace the `wireScreenshotInput(threadFileInput, ...)` call with:
 
 ```js
-    wireScreenshotInput(
-      threadFileInput,
-      () => pendingReplyScreenshots,
-      updateReplyScreenshotsPreview,
-      (dataUrl) => this.deps.transformScreenshot(dataUrl, comment.id)
-    );
+wireScreenshotInput(
+  threadFileInput,
+  () => pendingReplyScreenshots,
+  updateReplyScreenshotsPreview,
+  (dataUrl) => this.deps.transformScreenshot(dataUrl, comment.id)
+);
 ```
 
 Add `transformScreenshot: Function,` to the `deps` JSDoc block at the top of the class.
@@ -673,12 +677,12 @@ In `src/overlay.js`, add to the inbox `callbacks` literal, directly after `onOpe
 In `src/inbox.js`, inside `_buildReplyInput(comment)`, replace the `wireScreenshotInput` call with:
 
 ```js
-    wireScreenshotInput(
-      fileInput,
-      () => pendingScreenshots,
-      updatePreview,
-      (dataUrl) => this.callbacks.onTransformScreenshot(dataUrl, comment.id)
-    );
+wireScreenshotInput(
+  fileInput,
+  () => pendingScreenshots,
+  updatePreview,
+  (dataUrl) => this.callbacks.onTransformScreenshot(dataUrl, comment.id)
+);
 ```
 
 Add `onTransformScreenshot?: Function,` to the `deps.callbacks` JSDoc block.
@@ -705,11 +709,13 @@ git commit -m ":sparkles: feat(screenshots): Transform a reply's attachment as i
 ### Task 3: Documentation, decision log and changeset
 
 **Files:**
+
 - Modify: `README.md`
 - Modify: `DECISIONS.md`
 - Create: `.changeset/<generated-name>.md`
 
 **Interfaces:**
+
 - Consumes: the final API from Tasks 1–2. Nothing produces.
 
 - [ ] **Step 1: Document the option in the README**
@@ -717,7 +723,7 @@ git commit -m ":sparkles: feat(screenshots): Transform a reply's attachment as i
 Add a row to the Options table, after `onCommentRequested`:
 
 ```markdown
-| `transformScreenshot`   | `(dataUrl, info) => Promise<string>` | —          | Swap every image the widget acquires for a string of your own       |
+| `transformScreenshot` | `(dataUrl, info) => Promise<string>` | — | Swap every image the widget acquires for a string of your own |
 ```
 
 Add a subsection under "What gets captured", after "Web fonts in screenshots":

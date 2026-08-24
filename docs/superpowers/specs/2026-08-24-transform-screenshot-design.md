@@ -71,7 +71,7 @@ would have to guess from the MIME prefix.
 `commentId` is the comment the image will belong to — for a reply attachment,
 the parent comment. It is always present, which requires one change to the
 save path: `_saveCommentNow` currently generates the id while building the
-comment object, *after* awaiting the capture. The id generation moves ahead of
+comment object, _after_ awaiting the capture. The id generation moves ahead of
 the transform so the host can name the blob after the comment it belongs to.
 
 Only two kinds, deliberately. A third for reply attachments was considered and
@@ -83,13 +83,13 @@ that applies to one applies to the other.
 Five paths put an image into the model. Mapping them showed that three
 converge on `_pendingScreenshots`, so they are covered by one call:
 
-| Path                                  | Transforms | Call site              |
-| ------------------------------------- | ---------- | ---------------------- |
-| Automatic viewport capture            | on save    | `_saveCommentNow`      |
-| Drag-crop region                      | on save    | `_saveCommentNow`      |
-| File picker, comment box              | on save    | `_saveCommentNow`      |
-| File picker, reply in thread popover  | on attach  | `wireScreenshotInput`  |
-| File picker, reply in inbox detail    | on attach  | `wireScreenshotInput`  |
+| Path                                 | Transforms | Call site             |
+| ------------------------------------ | ---------- | --------------------- |
+| Automatic viewport capture           | on save    | `_saveCommentNow`     |
+| Drag-crop region                     | on save    | `_saveCommentNow`     |
+| File picker, comment box             | on save    | `_saveCommentNow`     |
+| File picker, reply in thread popover | on attach  | `wireScreenshotInput` |
+| File picker, reply in inbox detail   | on attach  | `wireScreenshotInput` |
 
 Three call sites. `wireScreenshotInput` gains an optional fourth parameter
 used by exactly the two reply surfaces; the comment box omits it, because its
