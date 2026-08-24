@@ -540,6 +540,42 @@ class CommentOverlay {
   }
 
   /**
+   * Hands one image to the host's `transformScreenshot`, so what ends up
+   * stored can be a URL into its own storage instead of ~33KB of base64 in
+   * every record.
+   *
+   * Never rejects, and never returns something a renderer cannot use: a
+   * bucket that is down must not cost the user their comment, so a failed
+   * transform degrades to the data URL the widget already holds and reports
+   * itself through onError instead. The host receives a fat record rather
+   * than none — the better of two bad outcomes.
+   *
+   * @param {string | null} dataUrl null passes straight through: no capture
+   *   was taken, and there is nothing to transform.
+   * @param {"context" | "attachment"} kind
+   * @param {import('./index.d.ts').CommentId} commentId
+   * @returns {Promise<string | null>}
+   */
+  async _transformScreenshot(dataUrl, kind, commentId) {
+    const transform = this.options.transformScreenshot;
+    if (typeof transform !== "function" || !dataUrl) return dataUrl;
+    try {
+      const result = await transform(dataUrl, { kind, commentId });
+      // A handler resolving to nothing usable is a failed handler; storing
+      // it would put a broken <img> where the screenshot was.
+      if (typeof result !== "string" || !result) {
+        throw new Error(
+          "HellDots: transformScreenshot resolved to no usable string"
+        );
+      }
+      return result;
+    } catch (err) {
+      this._reportError(err, "transform");
+      return dataUrl;
+    }
+  }
+
+  /**
    * The one place a change leaves the widget. Fires the specific callback
    * that has always carried this event and then the onChange stream, so a
    * host can subscribe either way — or both — and never sees the two
@@ -906,19 +942,45 @@ class CommentOverlay {
     if (this._saving) return;
     if (!this.commentInput.value.trim() || !this.currentPosition) return;
     this._saving = true;
+    // The guard above already made the second click a no-op; disabling says
+    // so. With a host's upload behind the save this is no longer instant,
+    // and a button that looks live but does nothing reads as broken.
+    if (this.submitButton) this.submitButton.disabled = true;
     try {
       await this._saveCommentNow();
     } finally {
       this._saving = false;
+      if (this.submitButton) this.submitButton.disabled = false;
     }
   }
 
   async _saveCommentNow() {
     // The capture kicked off when the box opened; by save time it has
     // usually resolved and this await costs nothing.
-    const contextScreenshot = await this._captureFlow.consumePending();
+    const captured = await this._captureFlow.consumePending();
     // The box may have been dismissed (Escape) while awaiting — a save that
     // lands after that would contradict what the user sees on screen.
+    if (!this.currentPosition) return;
+
+    // Generated ahead of the transform rather than inside the object below,
+    // so a host can name its blobs after the comment they belong to.
+    const id = createId();
+    const attachments = this._pendingScreenshots
+      ? [...this._pendingScreenshots]
+      : [];
+
+    // In parallel: up to six images, one wait rather than six.
+    const [contextScreenshot, screenshots] = await Promise.all([
+      this._transformScreenshot(captured, "context", id),
+      Promise.all(
+        attachments.map((dataUrl) =>
+          this._transformScreenshot(dataUrl, "attachment", id)
+        )
+      ),
+    ]);
+
+    // Checked again: unlike the capture above, the transform is the host's
+    // network, so the box has had a real chance to be dismissed under it.
     if (!this.currentPosition) return;
 
     const comment = {
@@ -932,14 +994,12 @@ class CommentOverlay {
       hidden: false,
       status: "open",
       page: location.pathname,
-      id: createId(),
+      id,
       replies: [],
       author: this.options.user?.name || this.strings.anonymous,
       authorId: normalizeActorId(this.options.user?.id) || null,
       createdAt: new Date().toISOString(),
-      screenshots: this._pendingScreenshots
-        ? [...this._pendingScreenshots]
-        : [],
+      screenshots,
       type: /** @type {any} */ (this.commentBox).classify?.getType() ?? null,
       priority:
         /** @type {any} */ (this.commentBox).classify?.getPriority() ?? null,

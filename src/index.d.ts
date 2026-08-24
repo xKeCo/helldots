@@ -214,7 +214,9 @@ export type ErrorContext =
   /** A record handed to loadComments was malformed and was skipped. */
   | "load"
   /** An `onCommentRequested` handler threw or rejected. */
-  | "link";
+  | "link"
+  /** A `transformScreenshot` handler failed; the data URL was kept. */
+  | "transform";
 
 /**
  * What every change carries, whatever its type. Delivered as one trailing
@@ -382,6 +384,35 @@ export interface CommentOverlayOptions {
    * and says the comment was not found.
    */
   onCommentRequested?: (id: CommentId) => void | Promise<unknown>;
+  /**
+   * Called for every image the widget acquires — the automatic viewport
+   * capture, a drag-crop region, and anything attached through the file
+   * picker — before it becomes part of a record. Return the string to store
+   * in its place, typically a URL into your own object storage.
+   *
+   * Without it, a ~33KB base64 data URL travels inside every comment: into
+   * localStorage, where it is the first thing shed under quota pressure, and
+   * into whatever your backend persists.
+   *
+   * `kind` separates the automatic capture ("context" — disposable and
+   * regenerable) from something a person chose to include ("attachment"), so
+   * the two can go to different buckets with different retention.
+   * `commentId` is the comment the image will belong to — for an attachment
+   * on a reply, the parent comment.
+   *
+   * Fail-open: a rejection, a throw, or a resolved value that is not a
+   * non-empty string leaves the original data URL in place and reports
+   * `onError(error, "transform")`. Losing the user's comment would be worse
+   * than sending you a large one.
+   *
+   * Not called for records passed to `loadComments()`, nor for screenshots
+   * you hand to `addReply()` yourself — in both cases the strings are
+   * already yours.
+   */
+  transformScreenshot?: (
+    dataUrl: string,
+    info: { kind: "context" | "attachment"; commentId: CommentId }
+  ) => Promise<string>;
   /**
    * Called whenever comment mode turns on or off, however it was flipped —
    * the toolbar button, the keyboard shortcut, the inbox empty state, or the
