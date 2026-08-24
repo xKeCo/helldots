@@ -34,12 +34,18 @@
 
 ---
 
-### Task 1: The transform helper and the comment save path
+### Task 1: The transform helper, the comment save path, and the submit button
 
 Covers three of the five image paths — the automatic capture, the drag-crop region, and the comment box's file picker — because all three converge on `_pendingScreenshots` and `contextScreenshot` by the time `_saveCommentNow` runs.
 
+It also disables the submit button while a save is in flight. That is folded
+in here rather than standing alone: the button only becomes slow *because*
+this task makes the save wait on the host's network, so the two are one
+change. (It is `feat`, not `style` — `disabled` blocks the click, which
+`CONTRIBUTING.md` does not count as presentation-only.)
+
 **Files:**
-- Modify: `src/overlay.js` (`_saveCommentNow`, new `_transformScreenshot`)
+- Modify: `src/overlay.js` (`_saveCommentNow`, `saveComment`, new `_transformScreenshot`)
 - Modify: `src/index.d.ts` (`CommentOverlayOptions`, `ErrorContext`)
 - Test: `test/transform-screenshot.test.js`
 
@@ -219,6 +225,55 @@ describe("transformScreenshot on the comment path", () => {
     expect(peak).toBe(6);
   });
 });
+
+describe("the submit button during a save", () => {
+  let overlay;
+
+  beforeEach(() => {
+    document.elementFromPoint = () => null;
+    document.body.innerHTML = `<section id="target">Anchor text</section>`;
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it("is disabled while the host's upload is in flight, and re-enabled after", async () => {
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    overlay = new CommentOverlay({
+      transformScreenshot: () => held.then(() => "https://cdn.test/x"),
+    });
+    await overlay._placeCommentAtPoint(10, 10);
+    overlay.commentInput.value = "slow upload";
+
+    const saving = overlay.saveComment();
+    expect(overlay.submitButton.disabled).toBe(true);
+
+    release();
+    await saving;
+
+    expect(overlay.submitButton.disabled).toBe(false);
+  });
+
+  it("re-enables the button even when the transform failed", async () => {
+    overlay = new CommentOverlay({
+      transformScreenshot: () => Promise.reject(new Error("S3 is down")),
+    });
+    await overlay._placeCommentAtPoint(10, 10);
+    overlay.commentInput.value = "failed upload";
+
+    await overlay.saveComment();
+
+    expect(overlay.submitButton.disabled).toBe(false);
+  });
+});
 ```
 
 - [ ] **Step 2: Run the tests and confirm they fail**
@@ -351,17 +406,47 @@ Add the option to `CommentOverlayOptions`, immediately after `onCommentRequested
   ) => Promise<string>;
 ```
 
-- [ ] **Step 6: Run the tests and the typecheck**
+- [ ] **Step 6: Disable the submit button while a save is in flight**
+
+Saving now waits on the host's network. The button currently stays enabled
+and `_saving` silently swallows the second click, which with a three-second
+upload behind it is a dead click.
+
+In `src/overlay.js`, replace the body of `saveComment`:
+
+```js
+  async saveComment() {
+    // Two Enters while the capture resolves must not save twice.
+    if (this._saving) return;
+    if (!this.commentInput.value.trim() || !this.currentPosition) return;
+    this._saving = true;
+    // The guard above already made the second click a no-op; disabling says
+    // so. With a host's upload behind the save this is no longer instant,
+    // and a button that looks live but does nothing reads as broken.
+    if (this.submitButton) this.submitButton.disabled = true;
+    try {
+      await this._saveCommentNow();
+    } finally {
+      this._saving = false;
+      if (this.submitButton) this.submitButton.disabled = false;
+    }
+  }
+```
+
+The two tests covering this are already in the file from Step 1, under
+`describe("the submit button during a save")`.
+
+- [ ] **Step 7: Run the tests and the typecheck**
 
 Run: `npx vitest run test/transform-screenshot.test.js && npm run typecheck`
-Expected: 8 passed, and `tsc --noEmit` silent.
+Expected: 10 passed, and `tsc --noEmit` silent.
 
-- [ ] **Step 7: Run the full gate**
+- [ ] **Step 8: Run the full gate**
 
 Run: `npm run verify`
-Expected: every gate green, 868 tests, size under 50 KB.
+Expected: every gate green, size under 50 KB.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src/overlay.js src/index.d.ts test/transform-screenshot.test.js
@@ -617,121 +702,7 @@ git commit -m ":sparkles: feat(screenshots): Transform a reply's attachment as i
 
 ---
 
-### Task 3: Disable the submit button while a save is in flight
-
-Saving now waits on the host's network. The button currently stays enabled and `_saving` silently swallows the second click, which with a three-second upload behind it is a dead click.
-
-**Files:**
-- Modify: `src/overlay.js` (`saveComment`)
-- Test: `test/transform-screenshot.test.js`
-
-**Interfaces:**
-- Consumes: `this.submitButton` — an `HTMLButtonElement` assigned in `initOverlay`.
-- Produces: nothing other tasks depend on.
-
-- [ ] **Step 1: Write the failing test**
-
-Append to `test/transform-screenshot.test.js`:
-
-```js
-describe("the submit button during a save", () => {
-  let overlay;
-
-  beforeEach(() => {
-    document.elementFromPoint = () => null;
-    document.body.innerHTML = `<section id="target">Anchor text</section>`;
-    localStorage.clear();
-  });
-
-  afterEach(() => {
-    overlay?.cleanup?.();
-    cleanupDom();
-    localStorage.clear();
-    vi.restoreAllMocks();
-  });
-
-  it("is disabled while the host's upload is in flight, and re-enabled after", async () => {
-    let release;
-    const held = new Promise((resolve) => {
-      release = resolve;
-    });
-    overlay = new CommentOverlay({
-      transformScreenshot: () => held.then(() => "https://cdn.test/x"),
-    });
-    await overlay._placeCommentAtPoint(10, 10);
-    overlay.commentInput.value = "slow upload";
-
-    const saving = overlay.saveComment();
-    expect(overlay.submitButton.disabled).toBe(true);
-
-    release();
-    await saving;
-
-    expect(overlay.submitButton.disabled).toBe(false);
-  });
-
-  it("re-enables the button even when the transform failed", async () => {
-    overlay = new CommentOverlay({
-      transformScreenshot: () => Promise.reject(new Error("S3 is down")),
-    });
-    await overlay._placeCommentAtPoint(10, 10);
-    overlay.commentInput.value = "failed upload";
-
-    await overlay.saveComment();
-
-    expect(overlay.submitButton.disabled).toBe(false);
-  });
-});
-```
-
-- [ ] **Step 2: Run the tests and confirm the first fails**
-
-Run: `npx vitest run test/transform-screenshot.test.js -t "submit button"`
-Expected: FAIL — `expected false to be true`, because nothing disables the button.
-
-- [ ] **Step 3: Disable and restore around the save**
-
-In `src/overlay.js`, replace the body of `saveComment`:
-
-```js
-  async saveComment() {
-    // Two Enters while the capture resolves must not save twice.
-    if (this._saving) return;
-    if (!this.commentInput.value.trim() || !this.currentPosition) return;
-    this._saving = true;
-    // The guard above already made the second click a no-op; disabling says
-    // so. With a host's upload behind the save this is no longer instant,
-    // and a button that looks live but does nothing reads as broken.
-    if (this.submitButton) this.submitButton.disabled = true;
-    try {
-      await this._saveCommentNow();
-    } finally {
-      this._saving = false;
-      if (this.submitButton) this.submitButton.disabled = false;
-    }
-  }
-```
-
-- [ ] **Step 4: Run the tests**
-
-Run: `npx vitest run test/transform-screenshot.test.js`
-Expected: 13 passed.
-
-- [ ] **Step 5: Run the full gate**
-
-Run: `npm run verify`
-Expected: all green.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/overlay.js test/transform-screenshot.test.js
-git commit -m ":art: style(overlay): Disable submit while the save is in flight"
-```
-
----
-
-### Task 4: Documentation, decision log and changeset
+### Task 3: Documentation, decision log and changeset
 
 **Files:**
 - Modify: `README.md`
@@ -739,7 +710,7 @@ git commit -m ":art: style(overlay): Disable submit while the save is in flight"
 - Create: `.changeset/<generated-name>.md`
 
 **Interfaces:**
-- Consumes: the final API from Tasks 1–3. Nothing produces.
+- Consumes: the final API from Tasks 1–2. Nothing produces.
 
 - [ ] **Step 1: Document the option in the README**
 
@@ -874,7 +845,7 @@ git commit -m ":memo: docs(screenshots): Document the transform seam and its two
 
 ## Self-review
 
-**Spec coverage.** API → Task 1 Step 5. All five paths → Tasks 1 and 2 (three converge at save, two at attach). Failure semantics → Task 1 Steps 1, 3. Data flow (no shape change) → asserted by the "changes nothing when no handler" test. The small addition → Task 3. Accepted limitations → documented in Task 4 Step 2. Every item in the spec's Testing section maps to a named test in Task 1 or 2.
+**Spec coverage.** API → Task 1 Step 5. All five paths → Tasks 1 and 2 (three converge at save, two at attach). Failure semantics → Task 1 Steps 1, 3. Data flow (no shape change) → asserted by the "changes nothing when no handler" test. The submit button → Task 1 Step 6. Accepted limitations → documented in Task 3 Step 2. Every item in the spec's Testing section maps to a named test in Task 1 or 2.
 
 **Placeholders.** None. Every code step carries the code.
 
