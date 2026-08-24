@@ -383,6 +383,26 @@ export interface CommentOverlayOptions {
    */
   onCommentRequested?: (id: CommentId) => void | Promise<unknown>;
   /**
+   * Called whenever comment mode turns on or off, however it was flipped —
+   * the toolbar button, the keyboard shortcut, the inbox empty state, or the
+   * automatic switch-off after a comment is saved.
+   *
+   * The shortcut is the reason this exists: the host never sees that
+   * keystroke, so an app that needs to stand down while the user is picking
+   * an element — pause a carousel, disable its own drag-and-drop, dim a
+   * layer — has no other way to know.
+   */
+  onCommentModeChanged?: (active: boolean) => void;
+  /**
+   * Called when somebody opens a comment's full thread, from its marker or
+   * from the inbox detail — the only two places the replies are readable.
+   *
+   * This is what an unread count is built on. HellDots keeps no read state
+   * of its own: whose "read" it is depends on an identity only the host can
+   * persist.
+   */
+  onCommentOpened?: (comment: SerializedComment) => void;
+  /**
    * Single subscription point: fires for every change, alongside whichever
    * specific callback below carries the same event. Handy when a host syncs
    * everything to one endpoint instead of wiring nine functions. A handler
@@ -606,21 +626,40 @@ export declare class CommentOverlay {
    */
   getMetrics(): CommentMetrics;
   /**
-   * Downloads the corpus as CSV, one row per comment. Screenshots and the
-   * automatic context capture stay out. Defaults to every comment.
+   * Downloads the corpus as CSV, one row per comment, and returns the same
+   * text. Screenshots and the automatic context capture stay out. Defaults
+   * to every comment.
+   *
+   * The return value is for a host that wanted to POST those rows somewhere
+   * or attach them to a message: a browser download is a dead end, and
+   * building the CSV a second time is the only alternative.
    */
-  exportCommentsCsv(comments?: SerializedComment[]): void;
+  exportCommentsCsv(comments?: SerializedComment[]): string;
   /**
    * Downloads the aggregate figures as CSV in long format — `section, key,
-   * value` — so the column count does not change with the corpus.
+   * value` — so the column count does not change with the corpus. Returns
+   * the same text, for the same reason as above.
    */
-  exportMetricsCsv(comments?: SerializedComment[]): void;
+  exportMetricsCsv(comments?: SerializedComment[]): string;
   /**
    * Opens the browser's print dialog on a report of the figures, which is
    * where "save as PDF" lives. The report is built in its own document, so
    * what prints is the report rather than the host page.
    */
   printMetricsReport(comments?: SerializedComment[], scope?: string): void;
+  /**
+   * Replaces the identity new comments, replies and reactions are attributed
+   * to. Everything already recorded keeps the author it was written with.
+   *
+   * For the common case where identity resolves after the widget mounts, or
+   * where the user switches account or workspace — the alternative was
+   * `cleanup()` and a rebuild, which throws away every loaded comment and
+   * whatever panel was open. `null` returns to the anonymous author.
+   *
+   * Returns false, changing nothing, for anything that is neither null nor
+   * an object with a non-blank `name`.
+   */
+  setUser(user: { name: string; id?: string } | null): boolean;
   setCommentStatus(id: CommentId, status: CommentStatus): boolean;
   setCommentType(id: CommentId, type: CommentType | null): boolean;
   setCommentPriority(id: CommentId, priority: CommentPriority | null): boolean;

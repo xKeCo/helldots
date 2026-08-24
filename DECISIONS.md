@@ -2531,3 +2531,76 @@ diagnostic, and a host with one is nearly always logging rather than
 replacing. `onError` is isolated in try/catch like every other subscriber, for
 the same reason: a bad handler must not take down the operation that reported
 to it.
+
+## The state the widget owned and never reported
+
+Three of the four gaps below are the same shape: something the widget knew,
+the host needed, and no method could ask for.
+
+### Comment mode, because the host cannot see the shortcut
+
+An app often has to stand down while somebody is picking an element — pause a
+carousel, disable its own drag-and-drop, stop a poller that re-renders the
+DOM under the marker. `overlay.commentMode` was readable, and
+`toggleCommentMode()` was callable, so the state was _reachable_; what was
+missing was being told when it moved.
+
+Polling a boolean is the workaround, and the reason it is not good enough is
+the keyboard shortcut: `Alt+C` is handled on `document` by the widget and
+never surfaces to the host at all. `onCommentModeChanged(active)` fires from
+`toggleCommentMode()` itself, so every path reports — button, shortcut, the
+inbox empty state, and the automatic switch-off after a save.
+
+No no-op guard, because there is no no-op: the method always flips.
+
+### Thread opens, because unread counts are table stakes
+
+`onCommentOpened(comment)` fires from the two places a thread is actually
+readable — the marker's popover and the inbox detail. Not from `render()` or
+`refresh()`, which read `detailId` rather than going through `_openDetail`, so
+a count built on this does not tick over every time a filter changes.
+
+**The widget stores no read state itself.** It could: a set of ids in
+localStorage would "work". But whose read state it is depends on an identity
+HellDots does not authenticate and does not persist, and a per-browser set
+that silently means "whoever last used this laptop" is worse than no feature.
+The event is the honest half; the host owns the rest.
+
+It fires for a comment the user just created, too. That is a real open — they
+are looking at the thread — and the alternative is a special case that makes
+"opened" mean something subtler than the word does.
+
+### `setUser`, because identity usually arrives after the widget
+
+`user` was read from `this.options` at every save, so the value was already
+late-bound; there was simply no supported way to change it, since `options` is
+not public. The workaround was `cleanup()` and a rebuild, which throws away
+every loaded comment and whatever panel was open — for a session that resolved
+200 ms after mount, which is the ordinary case, not an edge one.
+
+Two calls:
+
+- **Nothing already written is rewritten.** This changes who is acting now.
+  A comment keeps the author it was created with, which is the same promise
+  the audit trail makes.
+- **The open thread popover is closed rather than re-rendered.** Both panels
+  read the actor through a function, so the inbox refreshes in place and picks
+  up which reactions are now "yours". The popover could too, but it may be
+  mid-edit with a draft in it — and a draft written as Ana, silently
+  reattributed to Bruno on submit, is the wrong outcome. Closing is the
+  conservative half of an operation the host initiated deliberately.
+
+`null` returns to the anonymous author, and anything that is not an object
+with a non-blank `name` is refused with `false` — the same contract the other
+setters have.
+
+### The CSV exporters return what they downloaded
+
+`exportCommentsCsv()` triggered a browser download and returned `undefined`. A
+host wanting to POST the same rows to its own endpoint, or attach them to a
+message, had no way to get at them: `csv.js` has pure builders, but they are
+internal, so the only route was reimplementing the row mapping.
+
+Returning the string is additive — the download still happens, and a caller
+ignoring the return value sees no change. `printMetricsReport()` deliberately
+stays `void`: what it produces is a print dialog, not a value.

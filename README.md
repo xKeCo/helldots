@@ -380,6 +380,14 @@ overlay.exportMetricsCsv(); // helldots-metrics.csv  — section, key, value
 overlay.printMetricsReport(); // the browser's print dialog → Save as PDF
 ```
 
+Both CSV methods **return the same text they download**, so a host that wanted
+to send those rows somewhere instead of handing the user a file does not have
+to build them a second time:
+
+```js
+await api.post("/reports/comments", { csv: overlay.exportCommentsCsv() });
+```
+
 The CSVs are RFC 4180 with a UTF-8 BOM, so Excel opens them without turning
 every accent into mojibake, and a value that would otherwise be evaluated as a
 formula is neutralised on the way out. Headers are the internal field names
@@ -431,6 +439,8 @@ OS: iOS 17.2
 | `onReady`               | `(overlay) => void`              | —                   | Widget mounted; the safe place to `loadComments()`                |
 | `onError`               | `(error, context) => void`       | —                   | A survivable failure — capture, storage, load or link             |
 | `onCommentRequested`    | `(id) => void \| Promise`        | —                   | A link points at a comment the widget does not hold               |
+| `onCommentModeChanged`  | `(active: boolean) => void`      | —                   | Comment mode turned on or off, however it was flipped             |
+| `onCommentOpened`       | `(comment) => void`              | —                   | Somebody opened a comment's thread — build unread counts on this  |
 | `autoDetectNavigation`  | `boolean`                        | `false`             | Run `notifyNavigation()` on popstate (back/forward)               |
 | `shortcutKey`           | `string`                         | `"c"`               | Key that toggles comment mode                                     |
 | `shortcutModifier`      | `"alt"` \| `"ctrl"` \| `"shift"` | `"alt"`             | Modifier for that key                                             |
@@ -475,13 +485,15 @@ working unchanged.
 | `onAnchorLost(comment, meta)`             | A comment could not be re-anchored                             |
 | `onReactionToggled(comment, reply, meta)` | A reaction is added or removed (`reply` is `null` at the root) |
 
-Three more do not report a change:
+Five more do not report a change to a comment:
 
-| Callback                  | Fires when                                                      |
-| ------------------------- | --------------------------------------------------------------- |
-| `onReady(overlay)`        | The widget has mounted and every method is safe to call         |
-| `onError(error, context)` | Something survivable went wrong — see below                     |
-| `onCommentRequested(id)`  | A link points at a comment the widget does not hold — see below |
+| Callback                       | Fires when                                                      |
+| ------------------------------ | --------------------------------------------------------------- |
+| `onReady(overlay)`             | The widget has mounted and every method is safe to call         |
+| `onError(error, context)`      | Something survivable went wrong — see below                     |
+| `onCommentRequested(id)`       | A link points at a comment the widget does not hold — see below |
+| `onCommentModeChanged(active)` | Comment mode turned on or off — see below                       |
+| `onCommentOpened(comment)`     | Somebody opened a comment's thread — see below                  |
 
 #### `meta.origin` — who caused the change
 
@@ -527,6 +539,28 @@ onCommentUpdated: (comment, meta) => {
 `field` narrows `from` and `to` for you in TypeScript. Re-applying a value a
 comment already holds is a no-op: no event, no write.
 
+#### `onCommentModeChanged` and `onCommentOpened`
+
+Comment mode is the one the host cannot observe on its own: the keyboard
+shortcut never reaches your code, so an app that has to stand down while
+somebody is picking an element has no other signal.
+
+```js
+onCommentModeChanged: (active) => {
+  carousel.paused = active; // your drag-and-drop would fight the picker
+},
+```
+
+`onCommentOpened` fires when a thread is actually read — from its marker or
+from the inbox detail, the only two places the replies are visible. It does
+not fire when the inbox merely re-renders. HellDots stores no read state of
+its own, because whose "read" it is depends on an identity only you can
+persist:
+
+```js
+onCommentOpened: (comment) => api.post(`/comments/${comment.id}/read`),
+```
+
 #### `onError(error, context)`
 
 Failures the widget survives but you would otherwise only find in the
@@ -560,6 +594,9 @@ overlay.setCommentPriority(id, priority); // → boolean
 overlay.setCommentTags(id, tags); // → boolean
 overlay.toggleCommentReaction(id, emoji); // → boolean
 overlay.toggleReplyReaction(commentId, replyId, emoji); // → boolean
+overlay.setUser(user); // → boolean (null returns to the anonymous author)
+overlay.exportCommentsCsv(comments?); // → string (and downloads it)
+overlay.exportMetricsCsv(comments?); // → string (and downloads it)
 overlay.cleanup(); // remove the widget entirely
 ```
 

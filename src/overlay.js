@@ -893,6 +893,12 @@ class CommentOverlay {
     if (!this.commentMode) {
       this.hideCommentBox();
     }
+
+    // Every path lands here — the toolbar button, the keyboard shortcut, the
+    // inbox empty state, and the automatic switch-off after a save — so the
+    // host hears about the mode however it was flipped, including by the
+    // shortcut it never sees.
+    this._notify("onCommentModeChanged", [this.commentMode]);
   }
 
   async saveComment() {
@@ -1066,6 +1072,7 @@ class CommentOverlay {
             if (!this.commentMode) this.toggleCommentMode();
           },
           onOpenDetailScroll: (comment) => this.scrollMarkerIntoView(comment),
+          onOpenDetail: (comment) => this._notifyCommentOpened(comment),
           onReply: (comment, text, screenshots) =>
             this.addReply(comment, text, screenshots),
           onDelete: (id) => this.deleteComment(id),
@@ -1170,6 +1177,43 @@ class CommentOverlay {
   // the popover is centered in the viewport instead of pinned to a marker.
   showThreadPopover(circle, comment) {
     this._popover.show(circle, comment);
+    this._notifyCommentOpened(comment);
+  }
+
+  /**
+   * Someone is now looking at a comment's full thread — from its marker or
+   * from the inbox detail, which are the only two places the replies are
+   * readable. This is the signal an unread count is built on; the widget
+   * keeps no read state of its own, because whose "read" it is depends on an
+   * identity only the host can persist.
+   *
+   * @param {any} comment the live comment, serialized on the way out like
+   *   every other payload that crosses this boundary
+   */
+  _notifyCommentOpened(comment) {
+    if (!comment) return;
+    this._notify("onCommentOpened", [this._serializeComment(comment)]);
+  }
+
+  /**
+   * Calls one of the options that is not part of the change stream, with the
+   * same isolation `_emit` gives the ones that are: a subscriber that throws
+   * must not take down the operation that was reporting to it.
+   *
+   * @param {"onCommentModeChanged" | "onCommentOpened"} name
+   * @param {any[]} args
+   */
+  _notify(name, args) {
+    // Cast: the two options have different signatures, so the union of them
+    // takes no spread. The call sites below are the only ones, and each
+    // passes what its own option declares.
+    const handler = /** @type {any} */ (this.options[name]);
+    if (typeof handler !== "function") return;
+    try {
+      handler(...args);
+    } catch (err) {
+      console.warn(`HellDots: ${name} handler threw`, err);
+    }
   }
 
   closeThreadPopover() {
@@ -1533,6 +1577,34 @@ class CommentOverlay {
   }
 
   /**
+   * Replaces the identity new comments, replies and reactions are attributed
+   * to. Everything already recorded keeps the author it was written with —
+   * this is a change of who is acting now, not a rewrite of history.
+   *
+   * Exists because identity commonly arrives *after* the widget: the overlay
+   * mounts, the session resolves 200ms later, and the alternative was
+   * `cleanup()` plus a rebuild — which throws away every loaded comment and
+   * whatever panel was open. Passing `null` returns to the anonymous author.
+   *
+   * @param {{ name: string, id?: string } | null} [user]
+   * @returns {boolean} false when the argument is neither null nor an object
+   *   carrying a usable name
+   */
+  setUser(user) {
+    if (user != null) {
+      if (typeof user !== "object") return false;
+      if (typeof user.name !== "string" || !user.name.trim()) return false;
+    }
+    this.options.user = user ?? undefined;
+    // Both panels read the actor through a function rather than a captured
+    // value, so all they need is a re-render: which reactions are shown as
+    // the current user's own changes with the identity.
+    this._popover?.close();
+    if (this.inboxView?.isOpen()) this.inboxView.refresh();
+    return true;
+  }
+
+  /**
    * The current actor as the audit log records them: id when the host
    * supplies one, plus the display name. Sibling of _actorKey — one produces
    * a de-duplication key, the other a record meant to be read back.
@@ -1728,10 +1800,12 @@ class CommentOverlay {
    */
   exportCommentsCsv(comments) {
     const rows = commentRows(comments || this.serializeComments());
-    downloadCsv(
-      "helldots-comments.csv",
-      toCsv(rows, columnsOf(COMMENT_COLUMNS))
-    );
+    const csv = toCsv(rows, columnsOf(COMMENT_COLUMNS));
+    downloadCsv("helldots-comments.csv", csv);
+    // Returned as well as downloaded: a browser download is a dead end for a
+    // host that wanted to POST the same rows to its own endpoint or attach
+    // them to a message, and building the CSV twice is the only alternative.
+    return csv;
   }
 
   /**
@@ -1741,10 +1815,9 @@ class CommentOverlay {
    */
   exportMetricsCsv(comments) {
     const metrics = computeMetrics(comments || this.serializeComments());
-    downloadCsv(
-      "helldots-metrics.csv",
-      toCsv(metricRows(metrics), columnsOf(METRIC_COLUMNS))
-    );
+    const csv = toCsv(metricRows(metrics), columnsOf(METRIC_COLUMNS));
+    downloadCsv("helldots-metrics.csv", csv);
+    return csv;
   }
 
   /**
