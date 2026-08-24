@@ -186,6 +186,39 @@ Three ways out, cheapest first:
 - **Leave it.** Captures of such a page stay misaligned where text is
   concerned; everything else about them is correct.
 
+### Keeping screenshots out of your database
+
+Every image is stored as a base64 data URL inside the record — around 33 KB
+for the automatic capture alone. That is the first thing shed when
+localStorage hits its quota, and in your own backend it means a 33 KB string
+per comment in whatever column holds the JSON.
+
+`transformScreenshot` is where you swap it for a URL:
+
+```js
+createCommentOverlay({
+  transformScreenshot: async (dataUrl, { kind, commentId }) => {
+    const blob = await (await fetch(dataUrl)).blob();
+    const { url } = await api.upload(blob, { kind, commentId });
+    return url; // stored in place of the data URL
+  },
+});
+```
+
+It runs for every image the widget acquires: the automatic capture
+(`kind: "context"`), a drag-crop region, and anything attached through the
+file picker on a comment or a reply (`kind: "attachment"`). The two kinds
+exist so the disposable one and the deliberate one can go to different
+buckets.
+
+It is **fail-open**. If your upload rejects — or resolves to anything that is
+not a non-empty string — the original data URL is kept and you get
+`onError(error, "transform")`. You receive a large record rather than losing
+somebody's comment.
+
+Not called for records you pass to `loadComments()`, nor for screenshots you
+hand to `addReply()` yourself: in both cases the strings are already yours.
+
 ## Identity
 
 HellDots authenticates nobody. It takes whoever your app says is signed in
@@ -427,24 +460,25 @@ OS: iOS 17.2
 
 ## Options
 
-| Option                  | Type                             | Default             |                                                                   |
-| ----------------------- | -------------------------------- | ------------------- | ----------------------------------------------------------------- |
-| `user`                  | `{ name: string, id?: string }`  | `"Anonymous"`       | Author of new comments and replies; `id` persists as `authorId`   |
-| `persistence`           | `"localStorage"` \| `"none"`     | `"none"`            | Auto save/restore, or handle it yourself via callbacks            |
-| `autoScreenshot`        | `boolean`                        | `true`              | Capture a screenshot and environment snapshot per comment         |
-| `embedCrossOriginFonts` | `boolean`                        | `false`             | Fetch unreadable stylesheets so their web fonts reach the capture |
-| `locale`                | `string`                         | browser language    | `"en"` and `"es"` ship; anything else falls back per key          |
-| `linkParam`             | `string`                         | `"helldotsComment"` | Query param used by "Copy link" URLs                              |
-| `navigate`              | `(page: string) => void`         | full page load      | SPA router hook for the widget's cross-page jumps                 |
-| `onReady`               | `(overlay) => void`              | —                   | Widget mounted; the safe place to `loadComments()`                |
-| `onError`               | `(error, context) => void`       | —                   | A survivable failure — capture, storage, load or link             |
-| `onCommentRequested`    | `(id) => void \| Promise`        | —                   | A link points at a comment the widget does not hold               |
-| `onCommentModeChanged`  | `(active: boolean) => void`      | —                   | Comment mode turned on or off, however it was flipped             |
-| `onCommentOpened`       | `(comment) => void`              | —                   | Somebody opened a comment's thread — build unread counts on this  |
-| `autoDetectNavigation`  | `boolean`                        | `false`             | Run `notifyNavigation()` on popstate (back/forward)               |
-| `shortcutKey`           | `string`                         | `"c"`               | Key that toggles comment mode                                     |
-| `shortcutModifier`      | `"alt"` \| `"ctrl"` \| `"shift"` | `"alt"`             | Modifier for that key                                             |
-| `autoInit`              | `boolean`                        | `true`              | When `false`, returns an initializer to call yourself             |
+| Option                  | Type                                 | Default             |                                                                   |
+| ----------------------- | ------------------------------------ | ------------------- | ----------------------------------------------------------------- |
+| `user`                  | `{ name: string, id?: string }`      | `"Anonymous"`       | Author of new comments and replies; `id` persists as `authorId`   |
+| `persistence`           | `"localStorage"` \| `"none"`         | `"none"`            | Auto save/restore, or handle it yourself via callbacks            |
+| `autoScreenshot`        | `boolean`                            | `true`              | Capture a screenshot and environment snapshot per comment         |
+| `embedCrossOriginFonts` | `boolean`                            | `false`             | Fetch unreadable stylesheets so their web fonts reach the capture |
+| `locale`                | `string`                             | browser language    | `"en"` and `"es"` ship; anything else falls back per key          |
+| `linkParam`             | `string`                             | `"helldotsComment"` | Query param used by "Copy link" URLs                              |
+| `navigate`              | `(page: string) => void`             | full page load      | SPA router hook for the widget's cross-page jumps                 |
+| `onReady`               | `(overlay) => void`                  | —                   | Widget mounted; the safe place to `loadComments()`                |
+| `onError`               | `(error, context) => void`           | —                   | A survivable failure — capture, storage, load or link             |
+| `onCommentRequested`    | `(id) => void \| Promise`            | —                   | A link points at a comment the widget does not hold               |
+| `transformScreenshot`   | `(dataUrl, info) => Promise<string>` | —                   | Swap every image the widget acquires for a string of your own     |
+| `onCommentModeChanged`  | `(active: boolean) => void`          | —                   | Comment mode turned on or off, however it was flipped             |
+| `onCommentOpened`       | `(comment) => void`                  | —                   | Somebody opened a comment's thread — build unread counts on this  |
+| `autoDetectNavigation`  | `boolean`                            | `false`             | Run `notifyNavigation()` on popstate (back/forward)               |
+| `shortcutKey`           | `string`                             | `"c"`               | Key that toggles comment mode                                     |
+| `shortcutModifier`      | `"alt"` \| `"ctrl"` \| `"shift"`     | `"alt"`             | Modifier for that key                                             |
+| `autoInit`              | `boolean`                            | `true`              | When `false`, returns an initializer to call yourself             |
 
 ### Callbacks
 

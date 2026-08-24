@@ -2604,3 +2604,42 @@ internal, so the only route was reimplementing the row mapping.
 Returning the string is additive — the download still happens, and a caller
 ignoring the return value sees no change. `printMetricsReport()` deliberately
 stays `void`: what it produces is a print dialog, not a value.
+
+## The screenshot seam sits at two different moments, on purpose
+
+`transformScreenshot` lets a host swap a ~33KB base64 data URL for a URL of
+its own. The right rule is "transform at the last moment before the image
+becomes part of a record", and for a comment that is `_saveCommentNow` —
+already `async` because it awaits the pending capture, so the hook costs no
+new asynchrony and a comment abandoned with Escape uploads nothing.
+
+For a reply that would be `addReply()`, which is synchronous and returns
+`CommentReply | null`. Awaiting an upload there changes the return type to a
+promise and breaks every existing consumer, internal ones included. That is
+the same call recorded when `onChange` arrived and the nine callbacks were
+kept: a convenience is not a reason to break the documented API.
+
+So reply attachments transform when they are picked. The rule that survives
+is still one sentence: **every image the widget itself acquires passes
+through the hook.** An `addReply()` the host calls with its own array does
+not — and does not need to, because the host is already holding those
+strings and can upload them before calling.
+
+**What this costs:** an attachment on a reply draft the user abandons leaves
+an orphan blob in the host's storage. Collectable by sweeping unreferenced
+blobs, and impossible for comments, which transform at save.
+
+**Fail-open, not fail-closed.** A rejected transform keeps the data URL and
+reports `onError(error, "transform")` — a new context rather than a reuse of
+`"capture"`, because the capture succeeded and the upload did not, and a host
+routing on context has to tell a broken renderer from a broken bucket. The
+alternative, aborting the save, turns the host's object storage into a
+dependency of writing a comment. Sending a host a record larger than it
+wanted is recoverable; losing what somebody wrote is not.
+
+**No timeout, and no spinner.** The host owns the promise and can impose its
+own deadline with `AbortSignal.timeout()`; a deadline chosen by the widget
+would discard an upload that was about to succeed, on no basis. A spinner
+would mean new UI, new strings in both locales, new styles and an
+accessibility pass — disproportionate. The submit button is disabled for the
+duration, which is the whole of the feedback.
