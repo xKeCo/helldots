@@ -1,5 +1,94 @@
 # Changelog
 
+## 0.7.0
+
+### Minor Changes
+
+- a616711: Four additions for hosts integrating the widget into a real app.
+
+  - **`onCommentModeChanged(active)`** — comment mode turned on or off, however
+    it was flipped. The keyboard shortcut is the reason: it never reaches the
+    host, so an app that has to stand down while somebody picks an element had
+    no signal at all.
+  - **`onCommentOpened(comment)`** — somebody opened a comment's thread, from
+    its marker or from the inbox detail. This is what an unread count is built
+    on; it does not fire when the inbox merely re-renders. HellDots stores no
+    read state of its own, because whose read it is depends on an identity only
+    the host can persist.
+  - **`setUser(user)`** — replaces the identity new comments, replies and
+    reactions are attributed to, without rebuilding the widget. For a session
+    that resolves after mount, or a user switching account. Nothing already
+    written is rewritten; `null` returns to the anonymous author.
+  - **`exportCommentsCsv()` / `exportMetricsCsv()` now return the CSV text** as
+    well as downloading it, so the rows can be sent somewhere instead of handed
+    to the user as a file. `printMetricsReport()` still returns nothing — what
+    it produces is a print dialog.
+
+- 57e8cda: **`transformScreenshot`** — swap every image the widget acquires for a string
+  of your own, so a ~33 KB base64 data URL per comment does not end up in your
+  database.
+
+  Called with `(dataUrl, { kind, commentId })` for the automatic viewport
+  capture (`kind: "context"`), drag-crop regions, and file attachments on
+  comments and replies (`kind: "attachment"`). Return the string to store —
+  typically a URL into your own object storage.
+
+  It runs at two moments: everything on a comment transforms as the comment is
+  saved, while a reply attachment transforms when the file is picked, because
+  `addReply()` is synchronous. Either way the record may never arrive — an
+  abandoned draft, or a box dismissed mid-upload — so sweep for unreferenced
+  blobs rather than assuming every URL you hand back gets stored.
+
+  Fail-open: a rejection, a throw, or a resolved value that is not a non-empty
+  string keeps the original data URL and reports the new
+  `onError(error, "transform")`. Not called for records passed to
+  `loadComments()`, nor for screenshots handed to `addReply()` directly.
+
+  The comment box's submit button is now disabled while a save is in flight,
+  since that save may be waiting on an upload.
+
+- 318a284: Callbacks now say who caused a change and what moved, and a shared link can
+  ask for the comment it points at.
+
+  - **`meta.origin`** — every callback takes one extra trailing argument, and
+    `onChange` events carry the same fields flattened onto them. `"user"` is
+    somebody acting inside the widget, `"host"` is your own code calling a
+    method. Multi-user apps needed this to stop echoing their own remote writes
+    back to the server. Existing handlers that ignore the argument are
+    unaffected.
+  - **`meta.from` / `meta.to` / `meta.field`** — `comment:status-changed` now
+    carries both ends of the move (so a reopen is told apart from a resolve),
+    and `comment:updated` says which of type, priority or tags it was about.
+    `field` narrows `from`/`to` in TypeScript.
+  - **`onCommentRequested(id)`** — fires when a "Copy link" URL points at a
+    comment the widget does not hold, once per id. Fetch it, hand it to
+    `loadComments()`, and the inbox opens on it; return a promise and the link
+    is retried once it settles. This is what makes loading only the linked
+    comment possible. `DEFAULT_LINK_PARAM` and `readCommentLinkParam` are also
+    exported now, for reading the id before an overlay exists.
+  - **`onReady(overlay)`** — the widget has mounted and every method is safe to
+    call. `loadComments()` before that no longer throws: the data is held and
+    applied at mount, though the counts come back as zeroes until then.
+  - **`onError(error, context)`** — failures the widget survives but only the
+    console used to hear about: `"capture"`, `"storage"`, `"load"`, `"link"`.
+  - `setCommentType`, `setCommentPriority` and `setCommentTags` now no-op when
+    the value does not change, matching `setCommentStatus`. They previously
+    wrote to storage and emitted an event for a change that did not happen.
+
+### Patch Changes
+
+- 6993d78: A save that outlives its own comment box no longer lands on a different one.
+  The guard after the awaits in `_saveCommentNow` asked whether _a_ box was
+  open rather than whether it was still _the same_ one — a window that a host's
+  `transformScreenshot` upload stretches to seconds. Dismissing the box, opening
+  a second comment elsewhere and letting the upload resolve wrote the first
+  draft onto the second one's anchor and tore the second draft down. The draft
+  is now snapshotted before the first await and compared by identity.
+
+  (The same release adds `transformScreenshot`; a reply attachment sent while
+  its upload was in flight could be dropped in the first cut of that feature,
+  and is not in any published version.)
+
 ## 0.6.0
 
 ### Minor Changes
