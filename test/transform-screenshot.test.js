@@ -21,6 +21,29 @@ const cleanupDom = () => {
   document.body.innerHTML = "";
 };
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Polls instead of betting on a fixed number of ticks: jsdom's FileReader
+// does not resolve on a schedule lined up with a bare setTimeout(0), so a
+// flat wait is exactly the intermittent failure test/overlay.test.js's own
+// `waitFor` was written to avoid.
+const until = async (predicate, label) => {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > 2000) throw new Error(`${label}: timed out`);
+    await wait(5);
+  }
+};
+
+/** A promise the test resolves when it wants the host's "upload" to finish. */
+const heldUpload = (value) => {
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  return { release, transform: vi.fn(() => held.then(() => value)) };
+};
+
 describe("transformScreenshot on the comment path", () => {
   let overlay;
 
@@ -114,6 +137,25 @@ describe("transformScreenshot on the comment path", () => {
     overlay = new CommentOverlay({
       onError,
       transformScreenshot: () => Promise.resolve(""),
+    });
+
+    const comment = await write();
+
+    expect(comment.contextScreenshot).toBe("data:image/jpeg;base64,auto");
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), "transform");
+  });
+
+  it("treats a resolved value that is truthy but not a string the same way", async () => {
+    // The likeliest version of this mistake in the wild is `return
+    // api.upload(blob)` where `upload` resolves to `{ url }` rather than to
+    // the url. Truthy, so the emptiness check above sails past it; without
+    // the `typeof` clause the object would be stored as-is and every
+    // renderer would get an `[object Object]` for a src.
+    const onError = vi.fn();
+    overlay = new CommentOverlay({
+      onError,
+      transformScreenshot: () =>
+        Promise.resolve({ url: "https://cdn.test/auto.jpg" }),
     });
 
     const comment = await write();
@@ -216,6 +258,71 @@ describe("the submit button during a save", () => {
   });
 });
 
+describe("a save that outlives the box it started in", () => {
+  let overlay;
+
+  beforeEach(() => {
+    document.elementFromPoint = () => null;
+    document.body.innerHTML = `<section id="one">One</section>
+      <section id="two">Two</section>`;
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    overlay?.cleanup?.();
+    cleanupDom();
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it("is dropped when the box was dismissed under the upload", async () => {
+    const { release, transform } = heldUpload("https://cdn.test/x");
+    overlay = new CommentOverlay({ transformScreenshot: transform });
+    await overlay._placeCommentAtPoint(10, 10);
+    overlay.commentInput.value = "first draft";
+
+    const saving = overlay.saveComment();
+    await until(() => transform.mock.calls.length > 0, "upload started");
+    overlay.hideCommentBox();
+
+    release();
+    await saving;
+
+    expect(overlay.comments).toHaveLength(0);
+  });
+
+  it("does not land on a second draft opened while it was uploading", async () => {
+    // The window between the upload starting and resolving is seconds long,
+    // which is plenty for a user to click away, re-enter comment mode and
+    // start a second comment somewhere else. A guard that only asks whether
+    // *a* box is open would write the first draft onto the second one's
+    // anchor and tear the second one down.
+    const { release, transform } = heldUpload("https://cdn.test/x");
+    overlay = new CommentOverlay({ transformScreenshot: transform });
+    await overlay._placeCommentAtPoint(10, 10);
+    overlay.commentInput.value = "first draft";
+    const first = overlay.currentPosition;
+
+    const saving = overlay.saveComment();
+    await until(() => transform.mock.calls.length > 0, "upload started");
+
+    overlay.hideCommentBox();
+    await overlay._placeCommentAtPoint(200, 200);
+    overlay.commentInput.value = "second draft";
+    const second = overlay.currentPosition;
+    expect(second).not.toBe(first);
+
+    release();
+    await saving;
+
+    expect(overlay.comments).toHaveLength(0);
+    // The second draft is exactly where the user left it.
+    expect(overlay.currentPosition).toBe(second);
+    expect(overlay.commentInput.value).toBe("second draft");
+    expect(overlay.commentMode).toBe(false);
+  });
+});
+
 describe("transformScreenshot on the reply path", () => {
   let overlay;
 
@@ -231,26 +338,30 @@ describe("transformScreenshot on the reply path", () => {
     status: "open",
   });
 
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  // Polls instead of betting on a fixed number of ticks: jsdom's FileReader
-  // does not resolve on a schedule lined up with a bare setTimeout(0), so a
-  // flat wait here is exactly the intermittent failure test/overlay.test.js's
-  // own `waitFor` was written to avoid. `settled` is the spy — either
-  // `transformScreenshot` or `onError` — that only gets called once the read
-  // and the transform have both gone through.
+  // `settled` is the spy — either `transformScreenshot` or `onError` — that
+  // only gets called once the read and the transform have both gone through.
   const pickFile = async (input, settled) => {
     Object.defineProperty(input, "files", {
       configurable: true,
       value: [new File(["x"], "shot.png", { type: "image/png" })],
     });
     input.dispatchEvent(new Event("change"));
-    const start = Date.now();
-    while (settled.mock.calls.length === 0) {
-      if (Date.now() - start > 2000) throw new Error("pickFile: timed out");
-      await wait(5);
-    }
+    await until(() => settled.mock.calls.length > 0, "pickFile");
   };
+
+  /** The composer's pending-attachment thumbnails, in order. */
+  const thumbnails = (area) =>
+    [...area.querySelectorAll(`.${CLASSES.SCREENSHOT_IMG}`)].map(
+      (img) => img.src
+    );
+
+  const send = (area, text) => {
+    area.querySelector('input[type="text"]').value = text;
+    area.querySelector(`.${CLASSES.THREAD_SUBMIT}`).click();
+  };
+
+  const popoverArea = () =>
+    overlay.activeThreadPopover.querySelector(`.${CLASSES.THREAD_INPUT_AREA}`);
 
   beforeEach(() => {
     document.elementFromPoint = () => null;
@@ -265,7 +376,7 @@ describe("transformScreenshot on the reply path", () => {
     vi.restoreAllMocks();
   });
 
-  it("transforms an attachment picked in the thread popover", async () => {
+  it("stores what the host returns for an attachment picked in the popover", async () => {
     const transformScreenshot = vi
       .fn()
       .mockResolvedValue("https://cdn.test/reply.png");
@@ -276,18 +387,32 @@ describe("transformScreenshot on the reply path", () => {
     // Scoped to the popover: the always-mounted new-comment composer has
     // its own hidden file input, and an unscoped query would hit that one
     // first since it is inserted into the shadow root before the popover.
-    const input = overlay.activeThreadPopover.querySelector(
-      `.${CLASSES.THREAD_INPUT_AREA} input[type="file"]`
+    const area = popoverArea();
+    await pickFile(
+      area.querySelector('input[type="file"]'),
+      transformScreenshot
     );
-    await pickFile(input, transformScreenshot);
 
     expect(transformScreenshot).toHaveBeenCalledWith(
       expect.stringContaining("data:"),
       { kind: "attachment", commentId: "c1" }
     );
+    // What the host returned is what the preview shows and what the reply
+    // carries — the point of the whole feature, and the part that a test
+    // asserting only the call would let regress.
+    await until(
+      () => thumbnails(area)[0] === "https://cdn.test/reply.png",
+      "thumbnail replaced"
+    );
+
+    send(area, "with an image");
+
+    expect(overlay.comments[0].replies[0].screenshots).toEqual([
+      "https://cdn.test/reply.png",
+    ]);
   });
 
-  it("transforms an attachment picked in the inbox detail", async () => {
+  it("stores what the host returns for an attachment picked in the inbox detail", async () => {
     const transformScreenshot = vi
       .fn()
       .mockResolvedValue("https://cdn.test/reply.png");
@@ -296,13 +421,28 @@ describe("transformScreenshot on the reply path", () => {
     overlay.showInbox();
     overlay.inboxView.openDetail("c1");
 
-    const input = overlay.inboxView.el.querySelector('input[type="file"]');
-    await pickFile(input, transformScreenshot);
+    const area = overlay.inboxView.el.querySelector(
+      `.${CLASSES.THREAD_INPUT_AREA}`
+    );
+    await pickFile(
+      area.querySelector('input[type="file"]'),
+      transformScreenshot
+    );
 
     expect(transformScreenshot).toHaveBeenCalledWith(
       expect.stringContaining("data:"),
       { kind: "attachment", commentId: "c1" }
     );
+    await until(
+      () => thumbnails(area)[0] === "https://cdn.test/reply.png",
+      "thumbnail replaced"
+    );
+
+    send(area, "with an image");
+
+    expect(overlay.comments[0].replies[0].screenshots).toEqual([
+      "https://cdn.test/reply.png",
+    ]);
   });
 
   it("keeps the data URL on the reply path too when the host rejects", async () => {
@@ -315,11 +455,79 @@ describe("transformScreenshot on the reply path", () => {
     overlay.showThreadPopover(null, overlay.comments[0]);
 
     // Scoped for the same reason as the test above.
-    const input = overlay.activeThreadPopover.querySelector(
-      `.${CLASSES.THREAD_INPUT_AREA} input[type="file"]`
-    );
-    await pickFile(input, onError);
+    const area = popoverArea();
+    await pickFile(area.querySelector('input[type="file"]'), onError);
 
     expect(onError).toHaveBeenCalledWith(expect.any(Error), "transform");
+    // Fail-open means the image is still there, as a data URL.
+    await until(() => thumbnails(area).length === 1, "thumbnail shown");
+    expect(thumbnails(area)[0]).toMatch(/^data:/);
+
+    send(area, "bucket is down");
+
+    const [reply] = overlay.comments[0].replies;
+    expect(reply.screenshots).toHaveLength(1);
+    expect(reply.screenshots[0]).toMatch(/^data:/);
+  });
+
+  it("does not lose an attachment sent while its upload is in flight", async () => {
+    // Neither reply surface shows that an upload is happening, so nothing
+    // stops the user from hitting Send in the middle of one. The thumbnail
+    // therefore appears immediately, holding the data URL, and the host's
+    // URL replaces it in place when it lands. A reply sent in between goes
+    // out with the data URL: degraded, never empty.
+    const { release, transform } = heldUpload("https://cdn.test/reply.png");
+    overlay = new CommentOverlay({ transformScreenshot: transform });
+    overlay.loadComments([seeded()]);
+    overlay.showThreadPopover(null, overlay.comments[0]);
+
+    const area = popoverArea();
+    await pickFile(area.querySelector('input[type="file"]'), transform);
+
+    // Visible before the upload resolves — the only signal the user gets
+    // that the file was accepted at all.
+    expect(thumbnails(area)).toHaveLength(1);
+    expect(thumbnails(area)[0]).toMatch(/^data:/);
+
+    send(area, "sent mid-upload");
+
+    release();
+    await transform.mock.results[0].value;
+    await wait(20);
+
+    const [reply] = overlay.comments[0].replies;
+    expect(reply.screenshots).toHaveLength(1);
+    expect(reply.screenshots[0]).toMatch(/^data:/);
+    // And the late arrival did not leak into the next reply's composer.
+    expect(thumbnails(area)).toHaveLength(0);
+  });
+
+  it("holds the cap when several picks are read before any upload lands", async () => {
+    // Pushing the data URL up front moved the cap check ahead of the
+    // upload; six picks in flight at once must still leave five.
+    const { release, transform } = heldUpload("https://cdn.test/reply.png");
+    overlay = new CommentOverlay({ transformScreenshot: transform });
+    overlay.loadComments([seeded()]);
+    overlay.showThreadPopover(null, overlay.comments[0]);
+
+    const area = popoverArea();
+    const input = area.querySelector('input[type="file"]');
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["x"], "shot.png", { type: "image/png" })],
+    });
+    for (let i = 0; i < 6; i++) input.dispatchEvent(new Event("change"));
+
+    await until(() => transform.mock.calls.length >= 5, "five uploads started");
+    await wait(20);
+    expect(thumbnails(area)).toHaveLength(5);
+
+    release();
+    await Promise.all(transform.mock.results.map((r) => r.value));
+    await wait(20);
+
+    expect(thumbnails(area)).toEqual(
+      Array(5).fill("https://cdn.test/reply.png")
+    );
   });
 });

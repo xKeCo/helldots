@@ -957,12 +957,20 @@ class CommentOverlay {
   }
 
   async _saveCommentNow() {
+    // Everything this save is about, read before the first await: the draft
+    // it belongs to and the text that was in the box at that moment. What
+    // has to be caught is not only "the box was dismissed" but "dismissed
+    // and a *different* one opened" — a window now seconds long, because a
+    // host's upload sits inside it. A truthiness check misses the second
+    // case and would write this comment onto the next draft's anchor.
+    const position = this.currentPosition;
+    const text = this.commentInput.value;
     // The capture kicked off when the box opened; by save time it has
     // usually resolved and this await costs nothing.
     const captured = await this._captureFlow.consumePending();
     // The box may have been dismissed (Escape) while awaiting — a save that
     // lands after that would contradict what the user sees on screen.
-    if (!this.currentPosition) return;
+    if (this.currentPosition !== position) return;
 
     // Generated ahead of the transform rather than inside the object below,
     // so a host can name its blobs after the comment they belong to.
@@ -982,17 +990,18 @@ class CommentOverlay {
     ]);
 
     // Checked again: unlike the capture above, the transform is the host's
-    // network, so the box has had a real chance to be dismissed under it.
-    if (!this.currentPosition) return;
+    // network, so the box has had a real chance to be dismissed under it —
+    // and replaced by a draft somewhere else on the page.
+    if (this.currentPosition !== position) return;
 
     const comment = {
-      text: this.commentInput.value,
-      container: this.currentPosition.container,
-      relativeX: this.currentPosition.relativeX,
-      relativeY: this.currentPosition.relativeY,
-      anchor: this.currentPosition.anchor,
+      text,
+      container: position.container,
+      relativeX: position.relativeX,
+      relativeY: position.relativeY,
+      anchor: position.anchor,
       anchorState: "anchored",
-      target: this.currentPosition.target,
+      target: position.target,
       hidden: false,
       status: "open",
       page: location.pathname,

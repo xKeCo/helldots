@@ -561,14 +561,30 @@ export const wireScreenshotInput = (
     const dataUrl = await pending;
     if (!dataUrl) return;
 
-    const value = transform ? await transform(dataUrl) : dataUrl;
-
-    // Re-checked after the awaits. The read has always sat here, and a
-    // host's upload now sits here too — long enough for two quick picks to
+    // Re-checked after the read, which is long enough for two quick picks to
     // both pass the check above and push past the cap together.
     const screenshots = getScreenshots();
     if (screenshots.length >= MAX_SCREENSHOTS) return;
-    screenshots.push(value);
+
+    // The data URL goes in first, so the thumbnail appears the moment the
+    // file is readable rather than when the host's upload finishes, and so a
+    // reply sent mid-upload carries the image instead of nothing. The array
+    // reference is held from here on: a submit reassigns the surface's
+    // pending array, and the replacement below has to land in the array this
+    // attachment was actually pushed into.
+    screenshots.push(dataUrl);
+    rerender();
+
+    if (!transform) return;
+    const value = await transform(dataUrl);
+    // Located by value rather than by index: the user may have removed an
+    // earlier thumbnail while the upload was in flight. Not found means it
+    // was removed — or that a submit took the array with it, in which case
+    // this mutates a detached array and the reply that went out keeps the
+    // data URL. Degraded, never lost.
+    const at = screenshots.indexOf(dataUrl);
+    if (at === -1) return;
+    screenshots[at] = value;
     rerender();
   });
 };
