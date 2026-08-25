@@ -34,9 +34,9 @@ win a tie.
 ## Non-goals
 
 - **No rejection of "ephemeral" targets** (dialogs, popovers). A comment
-  deliberately left on an element inside a modal *should* hide with the
+  deliberately left on an element inside a modal _should_ hide with the
   modal — that is a recorded decision (DECISIONS.md, "The playground modal
-  uses `class="modal-content"`"). The reported bug is an *accidental*
+  uses `class="modal-content"`"). The reported bug is an _accidental_
   anchor, which the region fix removes at the source.
 - **No degraded rendering** of a marker whose target is hidden. The
   marker's position is derived from the anchor, never invented; a marker
@@ -77,7 +77,7 @@ that actually represent the region:
    `document.elementsFromPoint` is not a function (jsdom — same guard as
    `_isMarkerOccluded`), fall back to today's `elementFromPoint` result.
 4. Everything downstream is unchanged: `container =
-   target.closest(SELECTORS.CONTAINER) || body`, `targetSelector` via
+target.closest(SELECTORS.CONTAINER) || body`, `targetSelector` via
    `generateElementSelector` when target ≠ container, `relativeX/Y`
    against the container rect, preview circle and comment box at the
    passed point — which is now the region's center.
@@ -143,6 +143,6 @@ specific match".
 - A selection that genuinely spans several unrelated containers still
   anchors like a click at its center — there is no "right" single element
   in that case, and the fallback is today's behaviour, not something worse.
-- The tie-break cannot recover an anchor whose ancestor was the *correct*
+- The tie-break cannot recover an anchor whose ancestor was the _correct_
   answer when a descendant ties exactly; ties of that shape are inherently
   ambiguous, and the descendant is the better default.
