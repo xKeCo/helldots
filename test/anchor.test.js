@@ -290,4 +290,39 @@ describe("resolveAnchor", () => {
     expect(result).not.toBeNull();
     expect(result.confidence).toBeCloseTo(1, 5);
   });
+
+  it("a rescue tie between ancestor and descendant resolves to the descendant", () => {
+    // Long enough that the 64-char snippet truncation makes the parent's and
+    // the child's text fingerprints identical — the tie the bug needs.
+    const text = "x".repeat(80);
+    document.body.innerHTML = `<div><div>${text}</div></div>`;
+    const inner = /** @type {HTMLElement} */ (
+      document.body.querySelector("div > div")
+    );
+
+    const anchor = createAnchor(inner, 0.5, 0.5);
+    // Simulate the field failure: the stored selector no longer matches
+    // (e.g. it captured a transient host state class), forcing the rescue.
+    anchor.selector = null;
+
+    const result = resolveAnchor(anchor);
+    expect(result?.element).toBe(inner);
+  });
+
+  it("a rescue tie between unrelated elements keeps document order", () => {
+    document.body.innerHTML =
+      "<div><span>Same text</span></div><div><span>Same text</span></div>";
+    const first = /** @type {HTMLElement} */ (
+      document.body.querySelector("span")
+    );
+
+    const anchor = createAnchor(first, 0.5, 0.5);
+    anchor.selector = null;
+
+    // Both spans are index 0 of 1 within their parents and carry identical
+    // text: an exact tie where neither contains the other. The first in
+    // document order — the original — must still win.
+    const result = resolveAnchor(anchor);
+    expect(result?.element).toBe(first);
+  });
 });

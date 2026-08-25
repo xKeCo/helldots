@@ -245,7 +245,18 @@ const bestMatch = (candidates, fingerprint) => {
   let best = null;
   for (const element of candidates) {
     const confidence = scoreElement(element, fingerprint);
-    if (!best || confidence > best.confidence) best = { element, confidence };
+    if (
+      !best ||
+      confidence > best.confidence ||
+      // On an exact tie prefer the deepest candidate. Document order yields
+      // ancestors first, and with the text snippet truncated to 64 chars a
+      // parent and its child tie systematically — the most specific element
+      // that scores the same is the better anchor (the selector cascade's
+      // intuition). Ties between unrelated elements keep document order.
+      (confidence === best.confidence && best.element.contains(element))
+    ) {
+      best = { element, confidence };
+    }
   }
   return best;
 };
