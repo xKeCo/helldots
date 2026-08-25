@@ -50,7 +50,9 @@ Every user-visible string goes into **both** `src/locales/en.js` and
 `npm run size` gates `dist/helldots.esm.js` at 50 KB gzip. New dependencies
 are weighed against it: `modern-screenshot` is `external` in the ESM bundle
 and only bundled into the UMD artifact, which sits outside the budget on
-purpose.
+purpose. It is also a **peer dependency** (mirrored in `devDependencies` for
+the local build) so external scanners — Bundlephobia, bundlejs — attribute
+it to its own package instead of counting it against this budget.
 
 ## Types are a gate
 

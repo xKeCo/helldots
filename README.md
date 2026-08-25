@@ -12,6 +12,10 @@ widget persist to `localStorage`.
 npm install helldots
 ```
 
+> `modern-screenshot` (the screenshot renderer) is a peer dependency. npm 7+,
+> pnpm 8+ and bun install it automatically; on Yarn, add it explicitly with
+> `yarn add modern-screenshot`.
+
 ## Quick start
 
 ```js

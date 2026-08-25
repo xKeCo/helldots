@@ -3169,3 +3169,33 @@ which is what gave the mechanism away. The two waits above are the answer.
 The cache-delete line could still cost an extra fetch where two different call
 sites want the same URL — an image that is both an `<img src>` and a CSS
 `background-image`, say. That is a hypothesis, untested, and recorded as one.
+
+## `modern-screenshot` moves to `peerDependencies`
+
+The ESM bundle has treated `modern-screenshot` as `external` for as long as
+the size budget has existed: `dist/helldots.esm.js` holds 44.7 KB gzip of our
+own code, under the 50 KB gate. But the gate and the world were measuring
+different things. Bundlephobia and bundlejs install the published package,
+bundle its entry, and resolve every bare import from `dependencies` — so the
+renderer rode back in and the public number read 51.6–54 KB gzip. A budget CI
+says is met while every external scanner says it is not helps nobody.
+
+Declaring the renderer a peer dependency makes the two measurements agree,
+because both scanners deliberately leave peers out (verified against
+`styled-components`, whose React peers do not appear in its bundlejs number).
+A peer is a cost the consumer can see and attribute to the package that owns
+it. This is the same statement `external` was already making at the bundler
+level, now made where package tooling can read it.
+
+What it costs: npm ≥ 7, pnpm ≥ 8 and bun install missing peers
+automatically, so `npm install helldots` behaves exactly as before — but
+Yarn does not, and a Yarn consumer now has to `yarn add modern-screenshot`
+alongside. The README says so next to the install command.
+
+The alternative — trimming ~3 KB gzip of our own code so the renderer fits
+under the gate — was rejected: it buys one release of headroom and dies on
+the next feature, while attributing the renderer to the renderer is stable.
+
+The package also stays in `devDependencies`: the UMD artifact still bundles
+it (that build is self-contained on purpose), and tests and typecheck still
+resolve it locally.
