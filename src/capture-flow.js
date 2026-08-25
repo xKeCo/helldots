@@ -22,7 +22,7 @@ export class CaptureFlow {
    *   captureTimeout?: number,
    *   onRegionCaptured: (dataUrl: string) => void,
    *   onRegionPending?: (pending: boolean) => void,
-   *   onPlace: (x: number, y: number) => Promise<void>,
+   *   onPlace: (x: number, y: number, region?: { left: number, top: number, width: number, height: number }) => Promise<void>,
    *   onError?: (error: unknown) => void,
    * }} deps `host` is where the selection rectangle mounts. `onError` is
    *   how a failed render reaches the host: a capture that silently comes
@@ -136,16 +136,21 @@ export class CaptureFlow {
       this._selectionRect?.remove();
       this._selectionRect = null;
 
-      if (width > 10 && height > 10) {
-        this.startRegionCapture({ left, top, width, height });
-      }
+      const region =
+        width > 10 && height > 10 ? { left, top, width, height } : undefined;
+      if (region) this.startRegionCapture(region);
 
       // NOT awaited any more. This used to sit behind the render, which on
       // a heavy page meant a second or more between releasing the mouse and
       // the box appearing — the gesture read as having been ignored. The
       // crop arrives through `onRegionCaptured` and drops into the slot the
       // box is already showing.
-      await this.onPlace(e.clientX, e.clientY);
+      //
+      // The point is the region's CENTER, not the mouseup pixel: the gesture
+      // names the rectangle, and anchoring to wherever the mouse happened to
+      // be released let a transient overlay under that one pixel claim the
+      // comment (see the region-anchoring design doc).
+      await this.onPlace(left + width / 2, top + height / 2, region);
     } else {
       await this.onPlace(this._dragStart.x, this._dragStart.y);
     }

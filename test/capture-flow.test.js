@@ -82,6 +82,34 @@ describe("CaptureFlow", () => {
     flow.armClickCapture();
     expect(flow.pendingCapture).toBeNull();
   });
+
+  it("a drag places at the region's center and passes the region", async () => {
+    const onPlace = vi.fn().mockResolvedValue(undefined);
+    const flow = makeFlow({ onPlace });
+
+    flow.beginDrag(down(10, 20));
+    flow.onDragMove(move(110, 100));
+    await flow.onDragEnd(up(110, 100));
+
+    expect(onPlace).toHaveBeenCalledWith(60, 60, {
+      left: 10,
+      top: 20,
+      width: 100,
+      height: 80,
+    });
+  });
+
+  it("a drag too small to capture places at its center, with no region", async () => {
+    const onPlace = vi.fn().mockResolvedValue(undefined);
+    const flow = makeFlow({ onPlace });
+
+    // Past the 5px drag threshold, under the 10px capture threshold.
+    flow.beginDrag(down(10, 10));
+    flow.onDragMove(move(18, 18));
+    await flow.onDragEnd(up(18, 18));
+
+    expect(onPlace).toHaveBeenCalledWith(14, 14, undefined);
+  });
 });
 
 describe("capture options reach both render paths", () => {
@@ -211,7 +239,12 @@ describe("a drag places the comment before its crop exists", () => {
 
     await drag(flow);
 
-    expect(onPlace).toHaveBeenCalledWith(200, 150);
+    expect(onPlace).toHaveBeenCalledWith(105, 80, {
+      left: 10,
+      top: 10,
+      width: 190,
+      height: 140,
+    });
     render.settle();
   });
 
@@ -326,7 +359,12 @@ describe("a drag places the comment before its crop exists", () => {
     render.fail(new Error("render died"));
     const captured = await flow.consumePending();
 
-    expect(onPlace).toHaveBeenCalledWith(200, 150);
+    expect(onPlace).toHaveBeenCalledWith(105, 80, {
+      left: 10,
+      top: 10,
+      width: 190,
+      height: 140,
+    });
     expect(onError).toHaveBeenCalledTimes(1);
     expect(captured).toBeNull();
   });
