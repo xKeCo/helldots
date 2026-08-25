@@ -1,5 +1,69 @@
 # Changelog
 
+## 0.8.0
+
+### Minor Changes
+
+- 4d352a8: Add `fastCapture`, an opt-in that narrows the screenshot renderer's
+  computed-style enumeration to a curated allow-list instead of every property
+  the browser exposes. That enumeration is ~91% of a capture's cost and scales
+  with element count; the list cuts the dominant phase by about 2.7x, measured
+  pixel-identical to a full capture on the pages it was verified against.
+
+  Off by default: a property the list does not name is absent from the image,
+  so the trade belongs to the host. See the README for when to turn it on.
+
+- 4d352a8: Add `skipIframeContent`, an opt-in that renders embedded documents as blank
+  instead of cloning them. A same-origin iframe's cost is invisible from the
+  host page — the renderer clones the whole embedded document, so a page of
+  242 elements can be a capture of 9 245.
+
+  The `<iframe>` element is kept, so its box and the layout below it stay
+  where the page put them. Off by default: on a same-origin frame the content
+  you lose is real.
+
+- 4d352a8: Add `captureTimeout`, bounding how long one remote asset may hold a capture
+  up while the renderer re-fetches the page's images and fonts to inline them.
+
+  The default is unchanged. A dead asset URL stalls a capture for about a
+  minute — the renderer's own 30 second deadline, paid twice because the number
+  drives two waits in sequence, one for the image on the page to load and one
+  for the fetch that inlines it — and the capture still succeeds with that asset
+  replaced by a placeholder. The wait is bounded rather than multiplied: one
+  dead asset and ten cost the same.
+
+  Left at the default because a shorter one drops assets that were only slow
+  and leaves holes in the image with nothing to say so. Set it if you have
+  measured your own page. Only a finite positive number is honoured: 0 means
+  "never give up" to the renderer, and `Infinity` is coerced to no wait at all.
+
+- 4d352a8: Dragging a region no longer waits for the screenshot. The marker and the
+  comment box appear as soon as the mouse is released, and the crop drops into
+  a "Capturing…" slot in the attachment strip when its render lands. On a
+  heavy page that removes over a second between the gesture and being able to
+  type; Send waits for the crop if you get there first.
+
+  Adds `capturingScreenshot` to both locales.
+
+### Patch Changes
+
+- 4d352a8: Fix captures coming back blank on very long pages. Past the browser's canvas
+  ceiling — 65 535px in a dimension, and an area cap besides — a canvas accepts
+  its size, hands out a context, takes every draw call and holds no pixels, so
+  every screenshot off it was empty with nothing said about it.
+
+  Renders now fit their scale to what the browser will actually paint, verify
+  that the result holds pixels, and retry smaller if it does not. Pages below
+  the ceiling are unchanged; past it the capture goes soft rather than blank,
+  and a render that cannot be produced at all reports through `onError` instead
+  of attaching an empty image.
+
+- 4d352a8: Screenshot capture no longer freezes the page. The clone traversal now hands
+  the main thread back to the browser on an 8 ms budget, so the page keeps
+  painting and accepting input while a render is in flight — on heavy pages
+  that render could block for over a second. Wall-clock capture time is
+  unchanged; what changes is that it is no longer a freeze.
+
 ## 0.7.0
 
 ### Minor Changes
