@@ -72,10 +72,17 @@ that actually represent the region:
      lands on the element the user framed.
    - Using the stack rather than walking ancestors also handles overlays
      rendered in portals, which are not ancestors of anything useful.
-3. Fallbacks: if no element in the stack reaches the coverage threshold
-   (a selection spanning unrelated sections), or if
-   `document.elementsFromPoint` is not a function (jsdom — same guard as
-   `_isMarkerOccluded`), fall back to today's `elementFromPoint` result.
+3. Fallbacks: if no element in the stack reaches the coverage threshold, or
+   if `document.elementsFromPoint` is not a function (jsdom — same guard as
+   `_isMarkerOccluded`), fall back to today's `elementFromPoint` result. In
+   a real browser the second case is effectively the only reachable one:
+   `body`/`html` sit at the bottom of every hit-test stack and nearly
+   always cover ≥60% of the region, so a selection spanning unrelated
+   containers still anchors through the coverage loop — to the smallest
+   stack element that covers the region, typically the nearest common
+   ancestor, worst case `body` (a container-relative anchor, with
+   `targetSelector: null`) — rather than by falling through to
+   `elementFromPoint`.
 4. Everything downstream is unchanged: `container =
 target.closest(SELECTORS.CONTAINER) || body`, `targetSelector` via
    `generateElementSelector` when target ≠ container, `relativeX/Y`
@@ -140,9 +147,15 @@ specific match".
 
 ## Accepted limitations
 
-- A selection that genuinely spans several unrelated containers still
-  anchors like a click at its center — there is no "right" single element
-  in that case, and the fallback is today's behaviour, not something worse.
+- A selection that genuinely spans several unrelated containers does not
+  fall through to `elementFromPoint`: `body`/`html` sit at the bottom of
+  the hit-test stack in a real browser and nearly always cover ≥60% of the
+  region, so it anchors to the smallest stack element that covers the
+  region — typically the nearest common ancestor, worst case `body` (a
+  container-relative anchor, `targetSelector: null`). The
+  `elementFromPoint` fallback is effectively reachable only when
+  `elementsFromPoint` itself is missing, and there is no "right" single
+  element to pick in either case.
 - The tie-break cannot recover an anchor whose ancestor was the _correct_
   answer when a descendant ties exactly; ties of that shape are inherently
   ambiguous, and the descendant is the better default.
