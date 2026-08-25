@@ -1145,6 +1145,7 @@ ${webkitScrollbar(
         gap: 6px;
         flex: 1;
         min-width: 0;
+        max-width: 280px;
     }
 
     .${CLASSES.THREAD_AUTHOR} {
