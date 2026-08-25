@@ -603,6 +603,67 @@ describe("CommentOverlay", () => {
       expect(overlay.currentPosition.target).toBe(el);
       expect(document.elementsFromPoint).not.toHaveBeenCalled();
     });
+
+    it("falls back to document.elementFromPoint when no stack element meets the coverage threshold", async () => {
+      overlay = makeOverlay();
+      stubBodyRect();
+
+      const region = { left: 0, top: 0, width: 100, height: 100 }; // area 10000
+      // 50x50 against the 100x100 region overlaps 2500 — 25%, well under
+      // REGION_COVERAGE_MIN. document.body is deliberately left out of the
+      // stack: a real hit-test stack always ends in it, and it would need a
+      // rect stub too (via stubBodyRect) to be measured like any other
+      // candidate, but omitting it here is what forces the coverage loop to
+      // exhaust the stack and fall through.
+      const underCoverage = document.createElement("div");
+      document.body.append(underCoverage);
+      rectOf(underCoverage, { left: 0, top: 0, width: 50, height: 50 });
+      document.elementsFromPoint = () => [underCoverage];
+
+      const fallback = document.createElement("section");
+      document.body.append(fallback);
+      document.elementFromPoint = () => fallback;
+
+      await overlay._placeCommentAtPoint(50, 50, region);
+
+      expect(overlay.currentPosition.target).toBe(fallback);
+    });
+
+    it("skips a candidate just under 60% coverage and picks one at exactly 60% (the comparison is >=)", async () => {
+      overlay = makeOverlay();
+      stubBodyRect();
+
+      const region = { left: 0, top: 0, width: 100, height: 100 }; // area 10000
+      const underThreshold = document.createElement("div");
+      const atThreshold = document.createElement("section");
+      document.body.append(underThreshold, atThreshold);
+      // 100x59 -> intersection 5900 / 10000 = 59%, just under the threshold.
+      rectOf(underThreshold, { left: 0, top: 0, width: 100, height: 59 });
+      // 100x60 -> intersection 6000 / 10000 = exactly 60%, which must qualify.
+      rectOf(atThreshold, { left: 0, top: 0, width: 100, height: 60 });
+      document.elementsFromPoint = () => [underThreshold, atThreshold];
+
+      await overlay._placeCommentAtPoint(50, 50, region);
+
+      expect(overlay.currentPosition.target).toBe(atThreshold);
+    });
+
+    it("skips the widget's own shadow host even when it fully covers the region", async () => {
+      overlay = makeOverlay();
+      stubBodyRect();
+
+      const region = { left: 0, top: 0, width: 100, height: 100 };
+      const host = document.createElement(TAG_NAME);
+      const target = document.createElement("section");
+      document.body.append(host, target);
+      rectOf(host, { left: 0, top: 0, width: 100, height: 100 });
+      rectOf(target, { left: 0, top: 0, width: 100, height: 100 });
+      document.elementsFromPoint = () => [host, target];
+
+      await overlay._placeCommentAtPoint(50, 50, region);
+
+      expect(overlay.currentPosition.target).toBe(target);
+    });
   });
 
   describe("narrow-viewport positioning", () => {
