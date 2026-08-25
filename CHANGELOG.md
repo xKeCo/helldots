@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.9.0
+
+### Minor Changes
+
+- 222d567: Declare `modern-screenshot` as a peer dependency instead of a direct one.
+
+  The ESM bundle already treated the renderer as external, but package size
+  scanners (Bundlephobia, bundlejs) resolve bare imports from `dependencies`,
+  so the published package measured 51.6–54 KB gzip against a 50 KB budget the
+  bundle itself meets at 44.7 KB. Both scanners attribute peer dependencies to
+  their own package, so the public measurement now matches the gate.
+
+  npm 7+, pnpm 8+ and bun install missing peer dependencies automatically, so
+  `npm install helldots` is unchanged. Yarn users must add
+  `modern-screenshot` alongside.
+
+### Patch Changes
+
+- b395335: Fix a blue focus ring appearing around the inbox panel when a comment is
+  opened from a copied link.
+
+  The panel takes focus as it opens so a screen reader lands inside the dialog.
+  Opened by a click that is quiet, but a link opens it during page load with no
+  pointer interaction behind it, which is enough for Chrome's `:focus-visible`
+  heuristic to paint its default ring. The panel carries `tabindex="-1"` and is
+  never reachable by Tab, so the ring marked nothing anyone could act on.
+
+  Focus still moves into the dialog; only the ring is suppressed. The focus
+  rings on the confirm dialog's buttons are untouched.
+
+- 5f21bb5: Cap the thread header's meta row at 280px so it stops claiming the full width
+  of the popover.
+
 ## 0.8.0
 
 ### Minor Changes

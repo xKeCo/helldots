@@ -1,6 +1,6 @@
 {
   "name": "helldots",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Drop-in comment overlay for web apps — click anywhere to leave a comment anchored to that element, with an automatic screenshot and environment capture",
   "keywords": [
     "comments",
