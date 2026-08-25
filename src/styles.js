@@ -384,6 +384,23 @@ ${webkitScrollbar(
         overflow: hidden;
     }
 
+    /* The panel takes focus the moment it opens so a screen reader lands
+       inside the dialog instead of at the top of the page. It carries
+       tabindex="-1", so Tab never reaches it and a ring around it marks
+       nothing anyone can act on — but Chrome paints one anyway when the
+       panel is opened from a copied link, because that happens during page
+       load with no pointer interaction behind it, and its focus-visible
+       heuristic reads that as keyboard. Opened by a click there is no ring,
+       which is why it only ever showed up on the link.
+
+       This does not reopen the focus rings reverted elsewhere for visual
+       parity (DECISIONS.md): those were on interactive controls a keyboard
+       user tabs through. This element is a focus target, not a control. */
+    .${CLASSES.INBOX_PANEL}:focus,
+    .${CLASSES.INBOX_PANEL}:focus-visible {
+        outline: none;
+    }
+
     /* 380px panel + 16px of gutter each side needs 412px to sit flush on
        the right; below that it spans the viewport instead. */
     @media (max-width: 480px) {

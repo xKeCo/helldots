@@ -208,3 +208,24 @@ describe("getGlobalStyles", () => {
     expect(css).toContain("!important");
   });
 });
+
+describe("the inbox panel's focus ring", () => {
+  // The panel is `tabindex="-1"` and takes focus programmatically when it
+  // opens, so a screen reader lands inside the dialog instead of at the top
+  // of the page. Chrome decides `:focus-visible` from what the user did last:
+  // after a click it stays quiet, but a panel opened from a copied link opens
+  // during page load with no pointer interaction behind it, so the browser
+  // paints its default ring — a blue border around the whole panel.
+  it("does not let the browser paint one", () => {
+    expect(getStyles()).toMatch(
+      new RegExp(`\\.${CLASSES.INBOX_PANEL}:focus[^{]*\\{[^}]*outline:\\s*none`)
+    );
+  });
+
+  it("leaves the confirm dialog's rings alone", () => {
+    // Those are deliberate and documented: the dialog traps Tab between two
+    // buttons, one destructive. Suppressing the panel's ring must not reach
+    // them — nor reopen the rings reverted elsewhere for visual parity.
+    expect(getStyles()).toContain("outline: 2px solid #2E90FA");
+  });
+});
