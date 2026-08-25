@@ -535,6 +535,76 @@ describe("CommentOverlay", () => {
     });
   });
 
+  describe("region anchoring", () => {
+    /** Direct assignment, same convention as stubBodyRect — see its comment. */
+    const rectOf = (el, { left, top, width, height }) => {
+      el.getBoundingClientRect = () => ({
+        left,
+        top,
+        width,
+        height,
+        right: left + width,
+        bottom: top + height,
+      });
+    };
+
+    afterEach(() => {
+      // Assigned per-test below; jsdom has no own implementation to restore.
+      delete document.elementsFromPoint;
+    });
+
+    it("targets the stack element that covers the region, not the overlay above its center", async () => {
+      overlay = makeOverlay();
+      stubBodyRect();
+
+      // A 310px-wide floating panel sits above a full-width bar — the MARLO
+      // shape. The region (553x81) is mostly bar; the panel covers ~56% of it.
+      const panel = document.createElement("div");
+      const bar = document.createElement("section");
+      document.body.append(panel, bar);
+      rectOf(panel, { left: 300, top: 0, width: 310, height: 400 });
+      rectOf(bar, { left: 0, top: 100, width: 800, height: 100 });
+      document.elementsFromPoint = () => [panel, bar, document.body];
+
+      const region = { left: 100, top: 110, width: 553, height: 81 };
+      await overlay._placeCommentAtPoint(376, 150, region);
+
+      expect(overlay.currentPosition.target).toBe(bar);
+      expect(overlay.currentPosition.container).toBe(bar);
+    });
+
+    it("falls back to the point element when elementsFromPoint is missing", async () => {
+      overlay = makeOverlay();
+      stubBodyRect();
+
+      const el = document.createElement("section");
+      document.body.append(el);
+      document.elementFromPoint = () => el;
+      // No document.elementsFromPoint at all (jsdom reality).
+
+      const region = { left: 0, top: 0, width: 100, height: 100 };
+      await overlay._placeCommentAtPoint(50, 50, region);
+
+      expect(overlay.currentPosition.target).toBe(el);
+    });
+
+    it("without a region, placement behaves exactly as before", async () => {
+      overlay = makeOverlay();
+      stubBodyRect();
+
+      const el = document.createElement("section");
+      document.body.append(el);
+      document.elementFromPoint = () => el;
+      // elementsFromPoint present but must not be consulted for a click.
+      document.elementsFromPoint = vi.fn(() => [document.body]);
+
+      await overlay._placeCommentAtPoint(50, 50);
+
+      expect(overlay.currentPosition.target).toBe(el);
+      expect(document.elementsFromPoint).not.toHaveBeenCalled();
+    });
+  });
+
   describe("narrow-viewport positioning", () => {
     // jsdom never lays anything out, so the measured width the real code
     // reads has to be stubbed. The point of these tests is the arithmetic

@@ -92,6 +92,13 @@ const normalizeTags = (tags) => {
 // in a persisted array is a silently broken thumbnail waiting to happen.
 const onlyStrings = (values) => values.filter((v) => typeof v === "string");
 
+// A drag names a region, and the region means the element that shows (most
+// of) it — not whatever sits on top of its center pixel. Coverage rather
+// than strict containment because human selections overshoot by a few
+// pixels; 60% tolerates the overshoot while still rejecting a partial
+// overlay (a floating panel, a dropdown) hovering above the framed content.
+const REGION_COVERAGE_MIN = 0.6;
+
 // Every change the host can hear about, as `type` → the specific callback
 // that has always carried it. One table so a new event cannot be added to
 // the stream while forgetting the callback (or the other way round), and so
@@ -258,7 +265,7 @@ class CommentOverlay {
         this._regionCapturePending = pending;
         this._updateScreenshotsPreview();
       },
-      onPlace: (x, y) => this._placeCommentAtPoint(x, y),
+      onPlace: (x, y, region) => this._placeCommentAtPoint(x, y, region),
       onError: (err) => this._reportError(err, "capture"),
     });
 
@@ -797,14 +804,57 @@ class CommentOverlay {
     this._captureFlow.beginDrag(e);
   }
 
-  async _placeCommentAtPoint(clientX, clientY) {
+  /**
+   * The element a drag-selected region should anchor to: the topmost element
+   * in the hit-test stack at the region's center whose intersection with the
+   * region covers at least REGION_COVERAGE_MIN of its area. Reading the
+   * stack (rather than walking ancestors) also handles overlays rendered in
+   * portals, which are not ancestors of anything useful. Null when nothing
+   * qualifies or the environment has no `elementsFromPoint` (jsdom).
+   * @param {{ left: number, top: number, width: number, height: number }} region
+   * @param {number} centerX
+   * @param {number} centerY
+   * @returns {Element | null}
+   */
+  _regionTarget(region, centerX, centerY) {
+    if (typeof document.elementsFromPoint !== "function") return null;
+    const area = region.width * region.height;
+    if (!(area > 0)) return null;
+
+    for (const el of document.elementsFromPoint(centerX, centerY)) {
+      // Our own shadow host can appear in the stack even with the overlay's
+      // pointer-events off (the toolbar, an open panel) — never a target.
+      if (el.tagName.toLowerCase() === TAG_NAME.toLowerCase()) continue;
+      const rect = el.getBoundingClientRect();
+      const overlapX =
+        Math.min(rect.right, region.left + region.width) -
+        Math.max(rect.left, region.left);
+      const overlapY =
+        Math.min(rect.bottom, region.top + region.height) -
+        Math.max(rect.top, region.top);
+      if (overlapX <= 0 || overlapY <= 0) continue;
+      if ((overlapX * overlapY) / area >= REGION_COVERAGE_MIN) return el;
+    }
+    return null;
+  }
+
+  /**
+   * @param {number} clientX
+   * @param {number} clientY
+   * @param {{ left: number, top: number, width: number, height: number }} [region]
+   *   Present when the placement comes from a drag: the selected rectangle,
+   *   in viewport coordinates. `clientX/clientY` is then its center.
+   */
+  async _placeCommentAtPoint(clientX, clientY, region) {
     // The no-drag path has no render yet — kick the background capture off
     // now so it resolves while the user types (see capture-flow.js).
     this._captureFlow.armClickCapture();
 
     const prevPointerEvents = this.overlay.style.pointerEvents;
     this.overlay.style.pointerEvents = "none";
-    const underlying = document.elementFromPoint(clientX, clientY);
+    const underlying =
+      (region ? this._regionTarget(region, clientX, clientY) : null) ||
+      document.elementFromPoint(clientX, clientY);
     this.overlay.style.pointerEvents = prevPointerEvents || "";
 
     const container =
