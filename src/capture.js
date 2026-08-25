@@ -7,7 +7,6 @@
 // showed up in captures taken further down the page). Owning the crop
 // makes that whole bug class impossible.
 
-import { domToCanvas } from "modern-screenshot";
 import { TAG_NAME } from "./root-element.js";
 import { createPaintYielder } from "./yield-to-paint.js";
 import { CAPTURE_STYLE_PROPERTIES } from "./capture-style-props.js";
@@ -16,6 +15,21 @@ import { fittingScale, paintsPixels } from "./canvas-limits.js";
 /** Automatic captures render and encode small — they live in localStorage. */
 export const AUTO_SCALE = 0.5;
 const AUTO_QUALITY = 0.7;
+
+// The renderer is the single heaviest thing this package pulls in (~10 KB
+// gzip), and most page views never take a capture — so it loads on the first
+// render, not with the host's initial bundle. A failed load is forgotten
+// rather than cached: a transient network error at capture time must not
+// poison every capture after it.
+/** @type {Promise<typeof import("modern-screenshot")> | undefined} */
+let rendererPromise;
+const loadRenderer = () => {
+  rendererPromise ??= import("modern-screenshot").catch((error) => {
+    rendererPromise = undefined;
+    throw error;
+  });
+  return rendererPromise;
+};
 
 const isUnpainted = (color) =>
   !color || color === "transparent" || color === "rgba(0, 0, 0, 0)";
@@ -203,6 +217,7 @@ export async function renderPage({
   skipIframeContent = false,
   captureTimeout,
 } = {}) {
+  const { domToCanvas } = await loadRenderer();
   const unshim = await shimUnreadableFontRules(embedCrossOriginFonts);
   const { width, height } = document.documentElement.getBoundingClientRect();
   // A page taller than the browser's canvas ceiling used to render to a

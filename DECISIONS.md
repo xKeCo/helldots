@@ -3199,3 +3199,30 @@ the next feature, while attributing the renderer to the renderer is stable.
 The package also stays in `devDependencies`: the UMD artifact still bundles
 it (that build is self-contained on purpose), and tests and typecheck still
 resolve it locally.
+
+## The renderer loads on first capture, not with the host's bundle
+
+The peer-dependency entry above fixed who the renderer's ~10 KB gzip is
+attributed to. This one fixes when anybody pays it. `capture.js` imported
+`modern-screenshot` statically, so every app bundling HellDots shipped the
+renderer in its initial JavaScript — for a code path most page views never
+take. The import is now dynamic, made inside `renderPage()`: bundlers split
+it into a chunk that downloads on the first capture, and pages where nobody
+captures never fetch it at all.
+
+The cost is one extra network round-trip inside the first capture, which the
+render itself — orders of magnitude more expensive — comfortably hides. A
+failed load rejects through `renderPage` into the host's existing `onError`
+path, and the load promise is deliberately forgotten on rejection: caching a
+transient network failure would poison every capture after it for the
+lifetime of the page.
+
+It also corrects the last external measurement: bundlejs resolves packages
+through esm.sh, which hoists a static peer import into the module graph (so
+the peer move alone left its headline at 54 KB gzip), but leaves dynamic
+imports dynamic and out of the count — verified against
+`photoswipe/lightbox`, whose dynamically-imported core does not appear in
+its 4.6 KB number.
+
+Tests are unaffected: `vi.mock("modern-screenshot")` intercepts dynamic
+imports the same way it intercepts static ones.

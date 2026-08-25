@@ -52,7 +52,9 @@ are weighed against it: `modern-screenshot` is `external` in the ESM bundle
 and only bundled into the UMD artifact, which sits outside the budget on
 purpose. It is also a **peer dependency** (mirrored in `devDependencies` for
 the local build) so external scanners — Bundlephobia, bundlejs — attribute
-it to its own package instead of counting it against this budget.
+it to its own package instead of counting it against this budget, and it is
+**lazy-loaded** (`import()` on first capture in `src/capture.js`) so hosts
+never pay for it in their initial bundle. Keep both properties.
 
 ## Types are a gate
 
