@@ -477,15 +477,20 @@ export const screenshotsOf = (entry) =>
  * @param {Element} container
  * @param {string[]} screenshots the pending array; remove splices it in place
  * @param {{ strings: typeof defaultStrings, onShow: (dataUrl: string) => void,
- *   rerender: () => void }} deps
+ *   rerender: () => void, pending?: number }} deps `pending` is how many
+ *   crops are still rendering — only the comment box passes it, because it
+ *   is the only surface that opens before its attachment exists.
  */
 export const renderScreenshotsPreview = (
   container,
   screenshots,
-  { strings, onShow, rerender }
+  { strings, onShow, rerender, pending = 0 }
 ) => {
   container.innerHTML = "";
-  container.classList.toggle(CLASSES.ACTIVE, screenshots.length > 0);
+  container.classList.toggle(
+    CLASSES.ACTIVE,
+    screenshots.length > 0 || pending > 0
+  );
 
   screenshots.forEach((dataUrl, i) => {
     const item = document.createElement("div");
@@ -512,6 +517,23 @@ export const renderScreenshotsPreview = (
     item.appendChild(removeBtn);
     container.appendChild(item);
   });
+
+  // A slot for a crop that has not landed yet. The comment box no longer
+  // waits for the render, so without this the box opens with nothing where
+  // the user's selection should be and reads as having lost it.
+  //
+  // It carries the word, not just a shape: a placeholder distinguished only
+  // by its dashed outline says nothing to a screen reader and nothing to
+  // anyone who cannot separate it from a dark thumbnail (WCAG 1.4.1). The
+  // live region is what announces it arriving and being replaced.
+  for (let i = 0; i < pending; i++) {
+    const slot = document.createElement("div");
+    slot.className = `${CLASSES.SCREENSHOT_ITEM} ${CLASSES.SCREENSHOT_PENDING}`;
+    slot.setAttribute("role", "status");
+    slot.setAttribute("aria-live", "polite");
+    slot.textContent = strings.capturingScreenshot;
+    container.appendChild(slot);
+  }
 };
 
 /**

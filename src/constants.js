@@ -65,6 +65,7 @@ export const CLASSES = {
   SCREENSHOT_REMOVE: "screenshot-remove",
   SCREENSHOTS_CONTAINER: "screenshots-container",
   SCREENSHOT_ITEM: "screenshot-item",
+  SCREENSHOT_PENDING: "screenshot-pending",
   CONFIRM: "helldots-confirm",
   CONFIRM_PANEL: "helldots-confirm-panel",
   CONFIRM_TITLE: "helldots-confirm-title",

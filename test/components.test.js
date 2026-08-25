@@ -11,6 +11,7 @@ import {
   getShortcutText,
   wireScreenshotInput,
   wireScreenshotLightbox,
+  renderScreenshotsPreview,
 } from "../src/components.js";
 import { getStrings } from "../src/i18n.js";
 import { CLASSES, IDS } from "../src/constants.js";
@@ -577,5 +578,64 @@ describe("createCommentBox", () => {
     const box = createCommentBox(getStrings("en"));
     expect(box.querySelector(`.${CLASSES.CLASSIFY_ROW}`)).not.toBeNull();
     expect(box.classify.getType()).toBeNull();
+  });
+});
+
+describe("renderScreenshotsPreview: the pending slot", () => {
+  const setup = (screenshots, opts) => {
+    const container = document.createElement("div");
+    renderScreenshotsPreview(container, screenshots, {
+      strings: getStrings("en"),
+      onShow: () => {},
+      rerender: () => {},
+      ...opts,
+    });
+    return container;
+  };
+
+  it("shows the strip for a crop that has not landed yet", () => {
+    // Without this the box opens with an empty strip after a deliberate
+    // drag, which reads as the selection having been thrown away.
+    const container = setup([], { pending: 1 });
+
+    expect(container.classList.contains(CLASSES.ACTIVE)).toBe(true);
+    expect(
+      container.querySelectorAll(`.${CLASSES.SCREENSHOT_PENDING}`)
+    ).toHaveLength(1);
+  });
+
+  it("says so in words, not only in outline", () => {
+    // WCAG 1.4.1: a placeholder told apart only by a dashed border says
+    // nothing to a screen reader and nothing to anyone who cannot separate
+    // it from a dark thumbnail.
+    const slot = setup([], { pending: 1 }).querySelector(
+      `.${CLASSES.SCREENSHOT_PENDING}`
+    );
+
+    expect(slot.textContent).toBe(getStrings("en").capturingScreenshot);
+    expect(slot.getAttribute("role")).toBe("status");
+    expect(slot.getAttribute("aria-live")).toBe("polite");
+  });
+
+  it("sits after the crops that already landed", () => {
+    const container = setup(["data:image/png;base64,a"], { pending: 1 });
+    const items = container.querySelectorAll(`.${CLASSES.SCREENSHOT_ITEM}`);
+
+    expect(items).toHaveLength(2);
+    expect(items[0].querySelector(`.${CLASSES.SCREENSHOT_IMG}`)).toBeTruthy();
+    expect(items[1].classList.contains(CLASSES.SCREENSHOT_PENDING)).toBe(true);
+  });
+
+  it("renders nothing extra when no capture is in flight", () => {
+    const container = setup(["data:image/png;base64,a"], {});
+
+    expect(
+      container.querySelectorAll(`.${CLASSES.SCREENSHOT_PENDING}`)
+    ).toHaveLength(0);
+  });
+
+  it("collapses the strip again once the crop replaces the slot", () => {
+    const container = setup([], { pending: 0 });
+    expect(container.classList.contains(CLASSES.ACTIVE)).toBe(false);
   });
 });

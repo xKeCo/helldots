@@ -1347,6 +1347,23 @@ ${webkitScrollbar(
         flex-shrink: 0;
     }
 
+    .${CLASSES.SCREENSHOT_PENDING} {
+        min-width: 50px;
+        height: 50px;
+        padding: 0 8px;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        border: 1px dashed rgba(255,255,255,0.35);
+        border-radius: 8px;
+        font-size: 10px;
+        line-height: 1.2;
+        color: rgba(255,255,255,0.7);
+        white-space: nowrap;
+    }
+
     .${CLASSES.SCREENSHOT_ITEM} .${CLASSES.SCREENSHOT_IMG} {
         width: 50px;
         height: 50px;

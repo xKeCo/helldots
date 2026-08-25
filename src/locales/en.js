@@ -50,6 +50,7 @@ export default {
   attachedScreenshot: "Attached screenshot",
   screenshotPreview: "Screenshot preview",
   removeScreenshot: "Remove screenshot",
+  capturingScreenshot: "Capturing…",
   inboxAriaLabel: "Comments inbox",
   inboxEmptyTitle: "No comments yet",
   inboxEmptyHintTemplate: "Press {n} and click anywhere on the page to start.",

@@ -50,6 +50,7 @@ export default {
   attachedScreenshot: "Captura de pantalla adjunta",
   screenshotPreview: "Vista previa de la captura",
   removeScreenshot: "Quitar captura de pantalla",
+  capturingScreenshot: "Capturando…",
   inboxAriaLabel: "Bandeja de comentarios",
   inboxEmptyTitle: "Todavía no hay comentarios",
   inboxEmptyHintTemplate:
