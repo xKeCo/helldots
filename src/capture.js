@@ -9,6 +9,9 @@
 
 import { domToCanvas } from "modern-screenshot";
 import { TAG_NAME } from "./root-element.js";
+import { createPaintYielder } from "./yield-to-paint.js";
+import { CAPTURE_STYLE_PROPERTIES } from "./capture-style-props.js";
+import { fittingScale, paintsPixels } from "./canvas-limits.js";
 
 /** Automatic captures render and encode small — they live in localStorage. */
 export const AUTO_SCALE = 0.5;
@@ -143,6 +146,31 @@ const shimUnreadableFontRules = async (enabled) => {
 };
 
 /**
+ * Builds the clone filter.
+ *
+ * `skipIframeContent` drops what lives inside an iframe while keeping the
+ * `<iframe>` element itself, and that distinction is the whole point.
+ * Filtering the iframe out by tag name — the obvious reading — removes its
+ * BOX, so everything below it slides up by the frame's height: measured at
+ * a 260px shift on a 260px frame, with the crop still taken at live page
+ * coordinates. That is the misalignment class `capture.js` exists to make
+ * impossible. Matching on `ownerDocument` leaves the box, its border and
+ * its space exactly where the page put them, and blanks only the interior.
+ *
+ * Nodes in a shadow root keep the host's `ownerDocument`, so the widget's
+ * own shadow content is unaffected by this test.
+ * @param {boolean} skipIframeContent
+ * @returns {(node: Node) => boolean}
+ */
+const captureFilter = (skipIframeContent) => (node) => {
+  // nodeName, not tagName: the filter also receives text nodes, which must
+  // be kept (and have no tagName).
+  if (node.nodeName?.toLowerCase() === TAG_NAME) return false;
+  if (skipIframeContent && node.ownerDocument !== document) return false;
+  return true;
+};
+
+/**
  * Renders the whole page to a canvas. This is the expensive call — callers
  * that need more than one image should render once and crop repeatedly.
  *
@@ -152,35 +180,93 @@ const shimUnreadableFontRules = async (enabled) => {
  * duration of the render and therefore forced callers to await the capture
  * before showing anything — with the filter, a capture can run in the
  * background while the comment box is already on screen.
- * @param {{ scale?: number, embedCrossOriginFonts?: boolean }} [options]
+ * @param {{ scale?: number, embedCrossOriginFonts?: boolean,
+ *   fastCapture?: boolean, skipIframeContent?: boolean,
+ *   captureTimeout?: number }} [options]
  *   scale 1 keeps the canvas in CSS pixels so crop rects map 1:1 to page
  *   coordinates. `embedCrossOriginFonts` opts into fetching stylesheets the
  *   renderer cannot read, so their web fonts survive into the capture.
- * @returns {Promise<any>}
+ *   `fastCapture` narrows the computed-style enumeration to a curated list
+ *   (see capture-style-props.js) — roughly 2.7x off the dominant phase, at
+ *   the cost of any property that list does not name. `skipIframeContent`
+ *   blanks embedded documents instead of cloning them. `captureTimeout`
+ *   bounds how long a single remote asset may hold the render up.
+ * @returns {Promise<{ canvas: any, scale: number }>} the render and the scale
+ *   it was ACTUALLY produced at, which is not always the one asked for — see
+ *   the canvas ceiling below. Every crop has to map through this rather than
+ *   assume the requested scale.
  */
 export async function renderPage({
   scale = 1,
   embedCrossOriginFonts = false,
+  fastCapture = false,
+  skipIframeContent = false,
+  captureTimeout,
 } = {}) {
   const unshim = await shimUnreadableFontRules(embedCrossOriginFonts);
+  const { width, height } = document.documentElement.getBoundingClientRect();
+  // A page taller than the browser's canvas ceiling used to render to a
+  // canvas that reported the right size and held nothing, so every crop off
+  // it was blank and nothing said so. Fitting the scale to the ceiling turns
+  // that into a capture that is correct and progressively softer.
+  let attempt = fittingScale(width, height, scale);
   try {
-    // documentElement, not body. The clone is re-parented into a document
-    // where the UA's `body { margin: 8px }` applies again, even on a page
-    // that zeroed it — so rendering <body> pushed every flow element 8px
-    // right and down inside a canvas that did not grow, losing 8px off the
-    // right edge and putting every crop 8px out. <html> carries no such
-    // margin, so page coordinates and canvas pixels line up 1:1, which is
-    // exactly what the crops below assume.
-    return await domToCanvas(document.documentElement, {
-      scale,
-      backgroundColor: effectiveBackgroundColor(),
-      // Dropping web fonts costs one font substitution inside the image;
-      // keeping them where they cannot be read costs the image entirely.
-      ...(canEmbedWebFonts() ? {} : { font: false }),
-      // nodeName, not tagName: the filter also receives text nodes, which
-      // must be kept (and have no tagName).
-      filter: (node) => node.nodeName?.toLowerCase() !== TAG_NAME,
-    });
+    // The ceiling differs by more than an order of magnitude between
+    // engines, so the fitted scale is a guess and the render is checked
+    // rather than trusted. Halving quarters the pixel count, so three
+    // attempts cover a 64x overshoot; past that, throwing is the honest
+    // outcome — it reaches the host through onError, where a blank image
+    // never would.
+    for (let left = 3; ; left--) {
+      // documentElement, not body. The clone is re-parented into a document
+      // where the UA's `body { margin: 8px }` applies again, even on a page
+      // that zeroed it — so rendering <body> pushed every flow element 8px
+      // right and down inside a canvas that did not grow, losing 8px off the
+      // right edge and putting every crop 8px out. <html> carries no such
+      // margin, so page coordinates and canvas pixels line up 1:1, which is
+      // exactly what the crops below assume.
+      const canvas = await domToCanvas(document.documentElement, {
+        scale: attempt,
+        backgroundColor: effectiveBackgroundColor(),
+        // Dropping web fonts costs one font substitution inside the image;
+        // keeping them where they cannot be read costs the image entirely.
+        ...(canEmbedWebFonts() ? {} : { font: false }),
+        filter: captureFilter(skipIframeContent),
+        // The clone traversal awaits this hook once per node, which makes it
+        // the one place a caller can get the main thread back mid-render —
+        // see yield-to-paint.js for why awaiting anything else does not.
+        onCloneEachNode: createPaintYielder(),
+        // Spread rather than a null: passing `includeStyleProperties: null`
+        // is the renderer's own "enumerate everything" default, so the two
+        // branches would be indistinguishable to a test reading the options.
+        ...(fastCapture
+          ? { includeStyleProperties: CAPTURE_STYLE_PROPERTIES }
+          : {}),
+        // Omitted rather than defaulted: the renderer has its own 30 000 ms,
+        // and repeating that number here would pin us to one that is theirs
+        // to change.
+        //
+        // Finite AND positive, both load-bearing, because the two values a
+        // host would reach for to mean "no deadline" each do the opposite.
+        // The renderer reads 0 as "never give up" and hangs; `Infinity`
+        // reaches `setTimeout`, which coerces it to 0 and aborts on the
+        // spot. Neither is a deadline, so neither is honoured — and a
+        // string that merely compares as a number is not one either.
+        ...(Number.isFinite(captureTimeout) && captureTimeout > 0
+          ? { timeout: captureTimeout }
+          : {}),
+      });
+
+      if (paintsPixels(canvas)) return { canvas, scale: attempt };
+      if (left <= 0) {
+        throw new Error(
+          `HellDots: the page render came back holding no pixels. ` +
+            `${Math.round(width)}x${Math.round(height)} CSS pixels is most ` +
+            `likely past this browser's canvas limit.`
+        );
+      }
+      attempt /= 2;
+    }
   } finally {
     unshim();
   }
@@ -206,12 +292,20 @@ const paintBackdrop = (ctx, width, height) => {
 
 /**
  * Crops a viewport-relative region out of a scale-1 page render.
- * @param {any} canvas full-page render from renderPage({ scale: 1 })
+ * @param {any} canvas full-page render from `renderPage`
  * @param {{ left: number, top: number, width: number, height: number }} region
  *   Viewport (client) coordinates of the drag selection.
+ * @param {{ sourceScale?: number }} [options] the scale `canvas` was actually
+ *   produced at — `renderPage` reports it, and it is not always the one asked
+ *   for. The output stays sized in CSS pixels either way, so a render the
+ *   canvas ceiling forced down comes back soft rather than the wrong size.
  * @returns {string | null} PNG data-URL, or null with no 2d context.
  */
-export function cropRegion(canvas, { left, top, width, height }) {
+export function cropRegion(
+  canvas,
+  { left, top, width, height },
+  { sourceScale = 1 } = {}
+) {
   const out = document.createElement("canvas");
   out.width = width;
   out.height = height;
@@ -221,10 +315,10 @@ export function cropRegion(canvas, { left, top, width, height }) {
   paintBackdrop(ctx, width, height);
   ctx.drawImage(
     canvas,
-    left + window.scrollX,
-    top + window.scrollY,
-    width,
-    height,
+    (left + window.scrollX) * sourceScale,
+    (top + window.scrollY) * sourceScale,
+    width * sourceScale,
+    height * sourceScale,
     0,
     0,
     width,

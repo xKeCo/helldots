@@ -5,6 +5,7 @@ import { TAG_NAME } from "../src/root-element.js";
 import { positionPopoverAtCircle } from "../src/popover-controller.js";
 import en from "../src/locales/en.js";
 import { domToCanvas } from "modern-screenshot";
+import { renderedCanvas } from "./rendered-canvas.js";
 
 vi.mock("modern-screenshot", () => ({ domToCanvas: vi.fn() }));
 
@@ -127,6 +128,9 @@ describe("CommentOverlay", () => {
     // test installs a permanent mockRejectedValue — outlived the test that
     // wanted it and starved every later capture of its canvas.
     vi.mocked(domToCanvas).mockReset();
+    // A canvas-shaped default: renderPage checks that what came back
+    // actually holds paint, and an unconfigured vi.fn() returns undefined.
+    vi.mocked(domToCanvas).mockResolvedValue(renderedCanvas(10, 10));
   });
 
   describe("construction", () => {
@@ -2649,7 +2653,7 @@ describe("automatic context capture", () => {
   };
 
   it("renders at AUTO_SCALE on the no-drag path", async () => {
-    vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
+    vi.mocked(domToCanvas).mockResolvedValue(renderedCanvas(10, 10));
     vi.spyOn(document, "createElement").mockImplementation((tag) =>
       tag === "canvas"
         ? /** @type {any} */ (fakeOutCanvas())
@@ -2667,7 +2671,7 @@ describe("automatic context capture", () => {
   });
 
   it("does not render at all when autoScreenshot is false", async () => {
-    vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
+    vi.mocked(domToCanvas).mockResolvedValue(renderedCanvas(10, 10));
     overlay = makeOverlay({ autoScreenshot: false });
     await clickAt(overlay, 50, 50);
     expect(domToCanvas).not.toHaveBeenCalled();
@@ -2683,7 +2687,7 @@ describe("automatic context capture", () => {
       filterDuringRender = options.filter;
       const host = document.querySelector(TAG_NAME);
       displayDuringRender = /** @type {HTMLElement} */ (host)?.style.display;
-      return { width: 10, height: 10 };
+      return renderedCanvas(10, 10);
     });
 
     overlay = makeOverlay();
@@ -2714,7 +2718,7 @@ describe("automatic context capture", () => {
     // The user can start typing right away — the capture is still in flight.
     expect(overlay.commentBox.style.display).toBe("block");
 
-    resolveRender({ width: 10, height: 10 });
+    resolveRender(renderedCanvas(10, 10));
     await dragEnd;
   });
 
@@ -2741,7 +2745,7 @@ describe("automatic context capture", () => {
 
     overlay.commentInput.value = "typed fast";
     const save = overlay.saveComment();
-    resolveRender({ width: 10, height: 10 });
+    resolveRender(renderedCanvas(10, 10));
     await save;
     await dragEnd;
 
@@ -2770,7 +2774,7 @@ describe("automatic context capture", () => {
     overlay.commentInput.value = "double enter";
     const first = overlay.saveComment();
     const second = overlay.saveComment();
-    resolveRender({ width: 10, height: 10 });
+    resolveRender(renderedCanvas(10, 10));
     await Promise.all([first, second]);
     await dragEnd;
 
@@ -2778,7 +2782,7 @@ describe("automatic context capture", () => {
   });
 
   it("saves the capture and the context onto the comment", async () => {
-    vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
+    vi.mocked(domToCanvas).mockResolvedValue(renderedCanvas(10, 10));
     vi.spyOn(document, "createElement").mockImplementation((tag) =>
       tag === "canvas"
         ? /** @type {any} */ (fakeOutCanvas())
@@ -2814,7 +2818,7 @@ describe("automatic context capture", () => {
   });
 
   it("does not leak a pending capture into the next comment", async () => {
-    vi.mocked(domToCanvas).mockResolvedValue({ width: 10, height: 10 });
+    vi.mocked(domToCanvas).mockResolvedValue(renderedCanvas(10, 10));
     vi.spyOn(document, "createElement").mockImplementation((tag) =>
       tag === "canvas"
         ? /** @type {any} */ (fakeOutCanvas())

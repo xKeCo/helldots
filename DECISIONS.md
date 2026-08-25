@@ -2658,3 +2658,492 @@ would discard an upload that was about to succeed, on no basis. A spinner
 would mean new UI, new strings in both locales, new styles and an
 accessibility pass — disproportionate. The submit button is disabled for the
 duration, which is the whole of the feedback.
+
+## The render yields the main thread (amends "~4× cheaper")
+
+A host integration reported the page freezing for seconds on a click or a
+drag: the marker would not appear, typing did nothing, and the queued mouse
+events all landed at once when it ended. Profiling on that page put 91% of
+the render in one phase — resolving computed styles, 116 467 property reads
+across 221 elements — and the cost scales linearly with element count, so a
+reporting screen with a few thousand live nodes spends 1.3–2.2 s there.
+
+The freeze is not the duration. `modern-screenshot`'s API is asynchronous,
+but its clone traversal awaits promises that are already resolved, and those
+settle as **microtasks**. The microtask queue drains completely before the
+browser paints or delivers input, so the entire traversal is one
+uninterrupted block from the browser's point of view. Only a macrotask
+breaks it up.
+
+That also disposes of the obvious first fix. "Open the comment box, then
+capture in the background" is what the click path has done since Fase 4, and
+it does not help on its own: the box is created inside the same task that
+starts the render, so the paint that would show it is queued _behind_ the
+microtask flood. Order is not the problem; atomicity is.
+
+`onCloneEachNode` is awaited once per cloned node, which makes it the only
+supported place to insert the pause without forking the library.
+
+**A time budget, not every N nodes.** Node cost is not a constant — a
+synthetic `<div>` clones in ~0.14 ms and a styled application node in
+~0.44 ms on the same page — so any fixed count is a stutter on one page and
+pure overhead on another. 8 ms, half a 60 Hz frame, leaves the browser room
+to paint in what is left.
+
+**A `MessageChannel` message, not `setTimeout`.** Nested timeouts are clamped
+to 4 ms by every browser; at a couple of hundred yields on a heavy page the
+clamp alone would add most of a second to the render it exists to make
+bearable. `scheduler.yield()` is preferred where it exists (Chromium only
+today) because it resumes at continuation priority, so the render keeps its
+place ahead of unrelated work the page has queued rather than going to the
+back of the task queue.
+
+**Fail-open.** A rejected yield resolves rather than propagating: this hook
+is awaited inside the traversal, so throwing would abort the render and cost
+the screenshot entirely. Failing to pause is worth strictly less than failing
+to produce the thing the widget exists to collect.
+
+### What this costs
+
+**The capture is no longer atomic.** Between yields the page can change —
+including by the user, who can now scroll and type while it runs, which is
+the entire point. A render that spans a mutation can come back internally
+inconsistent: the part cloned before it and the part cloned after, in one
+image. Nothing detects this and nothing can, short of not yielding. It is the
+right trade at the sizes where it matters, because the pages long enough to
+mutate mid-render are exactly the pages long enough to freeze.
+
+**Total time goes up slightly.** Each yield is a real task boundary and the
+browser may spend it painting. Wall-clock is not what was broken.
+
+**Rasterisation is a floor this cannot lift.** Measured on the playground
+with 9 240 elements injected, Chromium, `scale: 0.5`, longest single
+main-thread task:
+
+| Phase                    | Yield off | Yield on          |
+| ------------------------ | --------- | ----------------- |
+| Clone + style resolution | 2 719 ms  | sliced, 302 turns |
+| Rasterise the SVG        | 585 ms    | 585 ms            |
+| Total wall clock         | 3 639 ms  | 3 620 ms          |
+
+The clone phase — the 91% the profiling blamed — is gone as a block. What
+remains is one 585 ms task turning the `<foreignObject>` SVG into pixels,
+plus ~190 ms of forced layout on the first `getComputedStyle`. Both are
+single browser operations with no JS inside them, so no hook can interrupt
+either. They shrink with `scale` (this is the phase where that ~4× is real)
+and with element count, which is what points 2 and 3 of the audit are for —
+not with yielding.
+
+### The amendment
+
+The Fase 4 entry above records the click path rendering at `scale: 0.5` and
+calls it "~4× cheaper". That is wrong for the phase that actually dominates.
+`scale` only sizes the output canvas (`index.mjs:518`); the clone and the
+style reads are identical at 0.5 and at 1. What is ~4× cheaper is
+rasterisation, measured at 7 ms against 97 ms of style resolution — noise.
+
+The same correction applies to the drag path, which is _not_ the "two passes"
+it looks like: `onDragEnd` renders once and crops that one canvas twice
+(`capture.js`), so a drag and a click cost about the same in the expensive
+phase. The only real difference is that the drag path awaits, which is a
+separate fix and not this one.
+
+## `fastCapture`: the style enumeration is the render
+
+Yielding stopped the freeze without making anything faster. This is the part
+that makes it faster.
+
+`modern-screenshot` rebuilds each element by reading its computed style and
+inlining the result. A browser exposes ~527 computed properties per element
+and it reads all of them, which on the host's page was 116 467 reads for
+221 elements — 97 ms against 1 ms of cloning and 7 ms of rasterising, and it
+scales linearly with element count.
+
+**The obvious fix is already in the library, and it is not this one.** An
+audit proposed computing each `tagName`'s default style once and keeping only
+the properties that differ. `getDefaultStyle` and `getDiffStyle` do exactly
+that, cached per tag name. It does not help: the diff decides what gets
+_written_ to the clone, while `getDiffStyle` still walks `style.length` and
+calls `getPropertyValue` on every one. The reads are the cost, and they
+survive the diff untouched.
+
+What does cut them is `includeStyleProperties`, which swaps that walk for a
+caller-supplied list. The list lives in `capture-style-props.js`.
+
+**Longhands only.** The browser enumerates computed style as longhands, so
+`margin` is a lookup that answers nothing while reading as though it covered
+four sides.
+
+**Opt-in.** The clone is re-parented into a `<foreignObject>` with no cascade
+of its own, so a property the list does not name is not merely defaulted, it
+is absent. That makes the list a fidelity contract, and it cannot be proven
+complete for a page this library has never seen. `embedCrossOriginFonts` set
+the precedent for the shape: a capture-quality decision that depends on the
+host's page belongs to the host.
+
+### How the list was verified
+
+Rendering the same page twice and diffing the two canvases pixel for pixel —
+full enumeration against the list — on the playground plus an injected block
+of the cases most likely to break: gradients, `::before`/`::after`,
+`background-clip: text`, ellipsis truncation, `-webkit-line-clamp`, blend
+modes, box and text shadows, transforms, filters, grid, multi-column,
+`clip-path`, vertical writing mode, collapsed-border tables, form controls
+with `accent-color`, and inline SVG.
+
+| Enumeration                  | Pixels differing | Max channel delta |
+| ---------------------------- | ---------------- | ----------------- |
+| Full, twice (noise floor)    | 0%               | 0                 |
+| **Curated list (183 props)** | **0%**           | **0**             |
+| Five properties only         | 44.76%           | 255               |
+| List minus `background-*`    | 38.46%           | 255               |
+| List minus `border-*`        | 0.54%            | 255               |
+| List minus transforms        | 0.22%            | 158               |
+| List minus `accent-color`    | 0.06%            | 196               |
+
+The rows below the list are the point: a comparison that only ever returns
+zero proves nothing about the comparison. Each one drops a family the list is
+supposed to carry, and each one moves pixels.
+
+Clone phase on 12 284 elements, measured through `domToForeignObjectSvg` so
+rasterisation stays out of it: **2876 ms → 1113 ms**, about 2.7x. Adding the
+yield on top costs nothing measurable (1111 ms).
+
+End to end through `renderPage` itself — rasterisation included, which is
+the number a host actually waits for — 12 240 elements at `scale: 0.5`:
+4092 ms → 1672 ms and 4342 ms → 1746 ms, about 2.45x.
+
+### What this does not cover
+
+**2.7x, not the 10x the audit projected.** That figure assumed a list of a
+few dozen properties. A list that actually holds fidelity is 183 — every
+family in the table above earns its place — and 527/183 is what is left.
+
+**`stroke-*`, `fill-*` and the rest of the SVG block are unverified.**
+Removing them changed nothing, because the fixture's SVG carries its paint as
+presentation attributes, which are cloned as attributes. They are kept for
+the page that styles SVG through CSS instead, which is untested here.
+
+**`getDefaultStyle` still enumerates in full**, once per distinct tag name.
+That is a handful of enumerations against thousands, and it is what the
+diffing needs to work at all.
+
+**Rasterisation is untouched**, as recorded in the entry above.
+
+## `skipIframeContent`: the frame stays, its contents go
+
+The audit's sixth item was "skip the iframes — on pages with real
+cross-origin iframes the capture waits until the timeout." Both halves of
+that turned out to be wrong, and what replaced them is worth more.
+
+**Cross-origin frames do not stall.** `cloneIframe` reads
+`iframe.contentDocument` inside a try/catch; on a cross-origin frame that
+returns `null` — no throw, no wait — and it falls straight through to
+`iframe.cloneNode(false)`. Measured against a genuinely cross-origin frame
+(`127.0.0.1` against `localhost`): 93 ms with it, 101 ms with it filtered
+out. There is nothing there. Such a frame is also already blank in the
+output, because what the renderer produces is an SVG rasterised as an image
+and an image has no network of its own.
+
+**Same-origin frames are where the cost hides.** The renderer walks into
+them and clones the whole embedded document. On a host page of 242 elements
+holding one frame with 9 003 nodes, the clone phase was 2374 ms; blanking
+the frame took it to 82 ms. The point is not the ratio, it is that
+`document.querySelectorAll('*').length` on the host page says 242. An
+element count taken from outside cannot see this at all.
+
+**The `about:blank` case buys nothing.** The three frames on the page that
+started this investigation are `about:blank`: same-origin, three nodes each,
+100 ms against 84 ms. Worth stating plainly — this option would not have
+helped the report it came from.
+
+### Why it matches on `ownerDocument` and not on the tag name
+
+Because the obvious implementation is broken. Adding `iframe` to the filter
+removes the element, and with it its BOX. With a 260px frame between two
+markers, the marker below it moved from y=310 to y=50 — a 260px shift of
+everything underneath, in a canvas whose crop is still taken at live page
+coordinates. That is the same misalignment class the header of `capture.js`
+records having deliberately designed out.
+
+Matching on `node.ownerDocument !== document` keeps the `<iframe>` element,
+its border and its space, and drops only what lives inside. Same fixture,
+same measurement: the marker below stayed at y=310, and the clone still fell
+to 125 ms.
+
+Nodes inside a shadow root keep the host's `ownerDocument`, so this test
+cannot reach the widget's own UI. There is a regression test for that,
+because if it were ever untrue this option would silently gut the overlay.
+
+**Opt-in**, like its two neighbours: on a same-origin frame the content is
+real and losing it is a real cost, and only the host knows whether the frame
+is a video player worth capturing or an embedded grid worth 2 seconds.
+
+### The hang the audit was reaching for is real, and it is not iframes
+
+`baseFetch` puts an `AbortController` on every remote asset with
+`timeout`, default **30 000 ms**. One image URL that never answers stalls
+the capture until that fires — measured at 4101 ms with the timeout cut to
+2000, so the wait is on the order of twice the setting. On the default that
+is a capture hanging for a minute on a single dead tracking pixel.
+
+Not changed here: lowering it would drop slow-but-alive assets on a poor
+connection, which is a different trade from the one this entry is making,
+and it belongs in its own decision.
+
+## The drag stops waiting for its own render (amends Fase 4)
+
+The Fase 4 entry recorded the click path being freed from the render while
+"the drag path still awaits its render on purpose: there the region crop IS
+what the user asked for, and the box should open with the preview already
+attached."
+
+That reasoning was sound and the conclusion no longer follows. The crop being
+the point is an argument for showing that it is coming, not for withholding
+the box until it arrives — and on the page that prompted this, the wait was
+over a second between releasing the mouse and anything appearing. A gesture
+that produces nothing for a second reads as having been ignored, which is
+worse than a gesture that produces a box with a slot in it.
+
+So `onDragEnd` now starts the render and returns. The crop arrives through
+`onRegionCaptured` and lands in a placeholder the box is already showing.
+
+**This is worth nothing without the yield.** Both are needed and in that
+order: the clone traversal blocks the main thread as one uninterrupted
+microtask drain, so a box shown before the render still cannot be painted or
+typed into until the render finishes. Shipping this alone would have moved
+the freeze without removing it.
+
+### What had to come with it
+
+**`pendingCapture` is claimed synchronously.** The next thing `onDragEnd`
+does is call `onPlace`, which runs `armClickCapture`, which starts a second
+full-page render unless that slot is already taken. Assigning the promise
+before returning is what keeps one render per gesture — the property the
+split into `renderPage`/`cropRegion`/`cropViewport` existed to buy.
+
+**An identity token, not a flag.** The window between releasing the mouse and
+the crop landing is now seconds long, so what has to be caught is not only
+"the draft was dismissed" but "dismissed and a different one opened while the
+render ran". A boolean cannot tell those apart and the crop would land on the
+wrong draft. Same shape as the `currentPosition !== position` check the save
+path already carries, and for the same reason.
+
+**`consumePending` waits on the region too.** The save path reads the
+attachments array the instant it resolves. Folded into the existing call
+rather than added as a second one for the caller to remember, because
+forgetting it loses the user's deliberate selection silently. The case that
+makes it load-bearing is `autoScreenshot: false`: with no context shot there
+is nothing else to wait on, and a Send pressed early would write a comment
+with no region at all. There is a test pinned to exactly that configuration,
+because with `autoScreenshot: true` the crop wins the race anyway and the
+guard looks unnecessary.
+
+**One error, reported once.** Two chains hang off one render. The context
+chain swallows its rejection and resolves to null; the region chain owns the
+report. A host that routes on `onError` should not see one dead render twice.
+
+### What it costs
+
+**A dismissed draft can still be paying for a render.** The promise cannot be
+cancelled, so pressing Escape orphans the work rather than stopping it: the
+crop is computed and thrown away. Bounded by the render, and invisible now
+that the thread yields.
+
+**Send can wait.** If someone drags, types fast and hits Send before the crop
+lands, the save blocks on it. The submit button is already disabled for the
+duration of a save, so the feedback exists — but on a heavy page that is a
+real pause where there used to be none, moved from the start of the gesture
+to the end of it. The trade is deliberate: the wait now happens while there
+is something on screen to look at, and only for the people who out-typed
+the render.
+
+## Viewport pruning is rejected, with the numbers that say why
+
+The audit's second item was to render only the subtree containing a dragged
+region instead of rendering the page and cropping. That framing was wrong in
+a useful way, and the corrected version was still not shippable.
+
+**The right boundary is the viewport, not the region.** `renderPage` is not
+public — its only callers are `capture-flow.js`, and both crop inside the
+current viewport (`cropRegion` from client coordinates plus scroll,
+`cropViewport` from the viewport itself). So everything rendered outside the
+viewport is discarded on every path, always. That is a bigger, safer
+boundary than the audit's, and it applies to the click path too.
+
+**And it does not survive contact with a table.** Two rules were measured
+against a full render, comparing only the viewport band that actually gets
+used, on a 26 906px page of 3 573 elements:
+
+| Viewport at | Full render | Prune (keep boxes) | Prune (drop below fold) | Pixels wrong  |
+| ----------- | ----------- | ------------------ | ----------------------- | ------------- |
+| top         | 1123 ms     | 74 ms              | 57 ms                   | 0%            |
+| in a table  | 1131 ms     | 367 ms             | 93 ms                   | **6.9–11.4%** |
+| in a list   | 1121 ms     | 329 ms             | 142 ms                  | 0%            |
+| further in  | 1112 ms     | 321 ms             | 271 ms                  | 0%            |
+
+Up to 15x, and wrong. The mechanism: pruning is only safe because
+`copyCssStyles` always inlines `width` and `height`, so an emptied element
+holds its box and nothing below it moves — which is what made
+`skipIframeContent` work. **A table row does not obey that.** An emptied
+`<tr>` collapses to its minimum regardless of an inlined height, every row
+after it moves up, and the rows in frame are drawn from the wrong offset.
+`table-layout: fixed` changes nothing (6.945% against 6.947%), which rules
+out column-width recomputation and leaves row collapse.
+
+Excluding table-internal display types repairs it exactly — 0% wrong, still
+1125 ms to 504 ms — and that is the argument against shipping it, not for.
+The exclusion was found only because the fixture happened to contain a
+table. `list-item`, ruby, flex and grid items, multicol, `<details>` and
+form controls with internal layout are all unverified, and every miss is a
+screenshot that is silently wrong in a feedback tool whose entire product is
+showing what the user saw. That is the bug class the header of `capture.js`
+and the `skipIframeContent` entry both record designing out.
+
+`fastCapture` already returns 2.7x through a contract that can be read as a
+list of property names, and the yield already removed the freeze this was
+chasing. Trading those for a heuristic over CSS layout modes is the wrong
+side of the deal.
+
+### Two things the measuring turned up instead
+
+**A page taller than a canvas produces a blank capture, silently.** Chrome
+caps a canvas dimension at 65 535px. On a 92 156px page the render returns a
+1265x92 155 canvas holding no pixels at all — 0% ink — and every crop off it
+is blank. The same page cut to 3 555px gives 93.7%. `modern-screenshot`
+defaults `maximumCanvasSize` to 0, so nothing clamps it and nothing reports
+it. Not fixed here, and worth its own decision: the fix is to cap the render
+and map crops through the resulting scale, which touches the coordinate
+contract that the crop helpers rest on.
+
+**The measurement harness lied twice before it was trusted.** A first pass
+reported every rule pixel-identical everywhere; the negative control also
+reported zero, which is impossible. The band being compared was blank — the
+92 156px page above — so it was comparing nothing against nothing. Every
+number in this entry comes from a run where a deliberately broken filter
+moves 53–55% of the frame and the band carries measurable ink. Recorded
+because the failure looked exactly like success.
+
+## A page taller than a canvas used to capture nothing at all
+
+Found while measuring the pruning idea above, and worse than what that idea
+was chasing: on a page past the browser's canvas ceiling, every capture came
+back **completely blank**. No error, no warning, no clue — a comment with an
+empty screenshot attached to it.
+
+The ceiling is not enforced by an exception, which is why it went unnoticed.
+Measured in Chromium: `canvas.height = 65535` holds paint and `65536` does
+not; `16384x16384` holds and `20000x20000` does not. Past either cap the
+assignment is accepted, `width`/`height` read back exactly what was set,
+`getContext("2d")` returns a context, every draw call succeeds — and the
+canvas holds no pixels. `modern-screenshot` leaves `maximumCanvasSize` at 0,
+so nothing clamped it and nothing reported it.
+
+### Fit the scale, then check the result
+
+`renderPage` now computes the largest scale that should fit and renders at
+that instead of the one it was asked for. Area is bounded by a square root
+because scale touches both axes — halving it quarters the pixel count.
+
+The fitted scale is a guess: the dimension cap is probed one pixel wide (a
+1x65535 canvas is 256 KB and measures the dimension cap without touching the
+area cap), but the area cap cannot be probed without allocating what it is
+testing, and mobile Safari's is more than an order of magnitude below
+Chromium's. So the render is **verified rather than trusted**: one pixel's
+alpha, which works because every render is given an opaque `backgroundColor`
+that the renderer paints across the whole canvas first. A blank canvas
+retries at half scale, three times, and then throws.
+
+Throwing is the point. It reaches the host through `onError(err, "capture")`,
+where a blank image never did.
+
+### What it degrades to
+
+| Page height | Scale rendered | Canvas     |
+| ----------- | -------------- | ---------- |
+| 3 555       | 1              | 1605x3554  |
+| 23 955      | 1              | 1605x23954 |
+| 68 155      | 0.96           | 1543x65535 |
+| 139 555     | 0.47           | 753x65535  |
+| 428 555     | 0.15           | 245x65535  |
+
+Ordinary pages are untouched — nothing below the ceiling changes scale at
+all. Past it the capture goes soft in proportion to the overshoot: on the
+428 555px page a dragged region comes back framed correctly and visibly
+blurry. That is the trade, and it is one-sided against what it replaces.
+
+### Two things it dragged in
+
+**`renderPage` returns `{ canvas, scale }`.** The scale it managed is not
+always the one requested, and every crop has to map through the real one —
+`cropRegion` assumed 1:1 and would have cut the wrong rectangle out of a
+smaller image. It takes a `sourceScale` now, like `cropViewport` already did.
+The output stays sized in CSS pixels, so a forced-down render comes back soft
+rather than the wrong size.
+
+**Every suite that mocks the renderer needed a real canvas shape.** A mock of
+`{ width, height }` is indistinguishable from the failure this now detects,
+so four suites started failing — correctly. The shared fixture lives in
+`test/rendered-canvas.js` rather than being copied into each, because a stale
+copy would read as the ceiling check misfiring.
+
+### Still open
+
+`baseFetch` gives every remote asset an `AbortController` with a 30 000 ms
+default, so one image URL that never answers still stalls a capture for about
+a minute. Recorded in the `skipIframeContent` entry and still unaddressed.
+
+## `captureTimeout` is exposed, and the default is left alone
+
+The stall recorded in the `skipIframeContent` entry got measured before it got
+an opinion, and the measurements argued against the obvious fix.
+
+**It is bounded, not multiplied.** The renderer's asset fetches run
+concurrently, so one dead URL and ten cost the same: 4172 ms, 4166 ms and
+4184 ms for one, three and ten dead images at `timeout: 2000`, against 175 ms
+with none. The catastrophic reading — a page of dead tracking pixels costing
+N times the timeout — does not happen.
+
+**But it is 2x the timeout, not 1x.** Consistent across settings: ratios of
+2.16, 2.08 and 2.05 at 1000, 2000 and 3000 ms. The cause is in `contextFetch`
+— its `.catch` runs `requests.delete(rawUrl)`, dropping the failed URL from
+the request cache, so the later pass that needs the same asset starts a fresh
+fetch and waits the whole timeout again. Measured end to end on the default:
+**60 175 ms**. Worth reporting upstream; it is not ours to fix.
+
+**And the capture survives.** A dead image becomes the renderer's transparent
+placeholder and everything else renders: 99.7% ink. What the host gets is a
+slow capture, not a lost one.
+
+### Why the default does not move
+
+Lowering it trades a failure that is visible, bounded and recoverable — the
+capture takes a while — for one that is invisible and permanent: an asset
+that was merely slow rather than dead gets dropped and leaves a hole in the
+image with nothing to say so. For a tool whose entire product is evidence of
+what someone saw, that is the wrong direction, and it is the same argument
+that rejected viewport pruning and that keeps `fastCapture` opt-in.
+
+The assets being fetched are ones the page has **already loaded**, so most
+answer from cache instantly. The tail is the uncached and the large — exactly
+the ones a shorter deadline would be wrong about. Choosing a number needs the
+distribution of fetch times on the host's own network, which is not ours.
+
+The severity also dropped on its own. Before the yield and the decoupled
+drag, that minute was a frozen browser. Now the box is open, the placeholder
+says `Capturing…`, typing works, and only Send waits.
+
+### The two values that mean the opposite of what they look like
+
+Only a finite positive number is honoured, and both halves of that guard were
+earned:
+
+- **0** is what a host would pass for "do not wait". The renderer reads it as
+  "never give up" — `timeout ? setTimeout(...) : undefined` — and the render
+  hangs on a dead asset forever.
+- **`Infinity`** is what a host would pass for "no deadline". It survives a
+  `> 0` check, reaches `setTimeout`, and is coerced to 0 — aborting every
+  asset immediately. The exact opposite, silently.
+
+A loose `> 0` guard was written first and let both through, along with the
+string `"5000"`, which compares as a number. The mutation run caught it.

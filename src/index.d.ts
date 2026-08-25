@@ -324,6 +324,68 @@ export interface CommentOverlayOptions {
    */
   embedCrossOriginFonts?: boolean;
   /**
+   * Narrows the screenshot renderer's computed-style enumeration to a
+   * curated allow-list instead of every property the browser exposes.
+   *
+   * The enumeration IS the render: it is ~91% of a capture's cost and it
+   * scales with element count, so on a page with a few thousand live nodes
+   * it is the difference between a capture that finishes and one that
+   * visibly stalls. Measured at ~2.7x off that phase.
+   *
+   * Off by default because the list is a fidelity contract, and no list can
+   * be complete for a page this library has never seen: a property it does
+   * not name is simply absent from the image. Turn it on for a heavy page,
+   * then look at a capture before trusting it — and report anything that
+   * comes out wrong, since the fix is one more entry in the list.
+   */
+  fastCapture?: boolean;
+  /**
+   * Renders embedded documents as blank instead of cloning their contents.
+   *
+   * An iframe's cost is invisible from the outside: the renderer walks into
+   * a same-origin frame and clones its whole document, so a page reporting
+   * 242 elements can be a capture of 9 245. Measured at 2374 ms against
+   * 82 ms on one 9 000-node embedded frame.
+   *
+   * The `<iframe>` element itself is kept — its box, its border and the
+   * space it occupies. Removing the element instead would slide everything
+   * below it up by the frame's height and misalign the crop.
+   *
+   * Nothing to gain on a cross-origin frame: the renderer cannot read it,
+   * so it is already blank in the output (it does not stall or wait on it
+   * either). This is for same-origin frames, where the trade is real —
+   * their content is what you lose.
+   */
+  skipIframeContent?: boolean;
+  /**
+   * Milliseconds a single remote asset may hold a capture up.
+   *
+   * The renderer re-fetches the page's images, fonts and `@import`s so it can
+   * inline them, and gives each one an `AbortController` set to 30 000 ms by
+   * default. A URL that never answers stalls the capture until that fires —
+   * the capture still succeeds, with that asset replaced by a transparent
+   * placeholder, but it waits first.
+   *
+   * The wait is **bounded, not multiplied**: measured at the same ~2x the
+   * timeout whether one asset is dead or ten, because the fetches run
+   * concurrently. It is 2x rather than 1x because the renderer drops a failed
+   * URL from its request cache, so the second pass that needs it starts over
+   * and waits again. Budget accordingly — 5000 here means roughly ten
+   * seconds.
+   *
+   * Left at the renderer's default because lowering it trades a slow capture
+   * for a silently incomplete one: an asset that was merely slow, rather than
+   * dead, is dropped and leaves a hole in the image with nothing to say so.
+   * Set it only if you have measured your own page and decided which way you
+   * want that to fail.
+   *
+   * Only a finite positive number is honoured. The two values a host would
+   * reach for to mean "no deadline" both do the opposite and are ignored: the
+   * renderer reads 0 as "never give up", and `Infinity` is coerced by
+   * `setTimeout` to 0, aborting every asset immediately.
+   */
+  captureTimeout?: number;
+  /**
    * Identity used as the author of new comments and replies.
    *
    * `name` is what gets displayed. `id` is optional and never rendered: it

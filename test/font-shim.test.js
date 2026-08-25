@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { extractFontFaceRules, renderPage } from "../src/capture.js";
 import { domToCanvas } from "modern-screenshot";
+import { renderedCanvas } from "./rendered-canvas.js";
 
 vi.mock("modern-screenshot", () => ({ domToCanvas: vi.fn() }));
 
@@ -37,7 +38,7 @@ const probeReports = (embeddable) =>
   );
 
 beforeEach(() => {
-  vi.mocked(domToCanvas).mockResolvedValue(/** @type {any} */ ({ width: 1 }));
+  vi.mocked(domToCanvas).mockResolvedValue(renderedCanvas());
   probeReports(true);
 });
 
@@ -99,7 +100,7 @@ describe("renderPage font shim", () => {
       seenDuringRender = [...document.head.querySelectorAll("style")].map(
         (s) => s.textContent
       );
-      return /** @type {any} */ ({ width: 1 });
+      return renderedCanvas();
     });
 
     await renderPage({ embedCrossOriginFonts: true });
@@ -213,7 +214,7 @@ describe("embedCrossOriginFonts is opt-in", () => {
     let seenDuringRender = null;
     vi.mocked(domToCanvas).mockImplementation(async () => {
       seenDuringRender = document.head.querySelectorAll("style").length;
-      return /** @type {any} */ ({ width: 1 });
+      return renderedCanvas();
     });
 
     await renderPage({ embedCrossOriginFonts: true });

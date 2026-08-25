@@ -186,6 +186,94 @@ Three ways out, cheapest first:
 - **Leave it.** Captures of such a page stay misaligned where text is
   concerned; everything else about them is correct.
 
+### When a capture is slow
+
+A screenshot is not a screenshot. The browser does not hand that to
+JavaScript, so the renderer re-creates the page instead: it clones the DOM,
+reads every element's computed style, inlines all of it, serialises the
+result into an SVG `<foreignObject>` and rasterises that.
+
+Reading the styles is the render. A browser exposes around 527 computed
+properties per element, and the renderer reads all of them — on a page with
+a few thousand live nodes that is hundreds of thousands of property reads,
+and it is ~91% of the cost. Two things follow, in this order:
+
+- **Nothing waits for it.** Clicking or dragging places the marker and opens
+  the comment box immediately; the render runs behind it and the images drop
+  in when they land. A dragged region shows a "Capturing…" slot in the
+  attachment strip until its crop arrives, and Send waits for it if you get
+  there first. This is always on; there is nothing to configure.
+- **The page no longer freezes while it happens.** The capture hands the
+  main thread back to the browser every 8 ms, so the page keeps painting and
+  accepting keystrokes even on a render that runs for a second. Also always
+  on — and it is what makes the point above worth anything, since a box you
+  can see but cannot type into is not much better than no box.
+- **`fastCapture: true`** narrows those reads to a curated list of the
+  properties that change a pixel — measured at ~2.7x off that phase on a
+  12 000-element page, and pixel-identical to a full capture on the pages it
+  was verified against.
+
+`fastCapture` is off by default because the list is a fidelity contract, and
+no list is provably complete for a page this library has never seen: a
+property it does not name is simply absent from the image. Turn it on for a
+heavy page, look at one capture before trusting it, and open an issue if
+something comes out wrong — the fix is one more entry in the list.
+
+There is a third lever if your page embeds same-origin iframes.
+**`skipIframeContent: true`** renders them blank instead of cloning what is
+inside. An iframe's cost is invisible from the outside — the renderer walks
+into the frame and clones its whole document, so a page that reports 242
+elements can be a capture of 9 245. Measured at 2374 ms against 82 ms on one
+9 000-node embedded frame.
+
+The `<iframe>` element itself is kept: its box, its border, the space it
+occupies. That matters more than it sounds — removing the element instead
+would slide everything below it up by the frame's height while the crop is
+still taken at live page coordinates, which puts the bottom of every capture
+out of register.
+
+A cross-origin frame has nothing to gain here. The renderer cannot read into
+it, so it is already blank in the output, and contrary to a common guess it
+does not stall or wait on one either.
+
+What none of them touches is rasterisation, which is a single browser
+operation with no JavaScript inside it. On a very long page that stays a
+few hundred milliseconds of unavoidable work.
+
+### When one dead asset holds a capture up
+
+To inline the page's images and fonts the renderer re-fetches them, and gives
+each one 30 seconds before giving up. A URL that never answers stalls the
+capture until that fires. The capture still succeeds — that asset becomes a
+transparent placeholder — but it waits first.
+
+The wait is bounded rather than multiplied: one dead asset and ten cost the
+same, because the fetches run concurrently. What it is not is one times the
+timeout. The renderer drops a failed URL from its request cache, so a second
+pass that needs the same asset starts over and waits again — measured at a
+consistent ~2x. The 30 second default is therefore about a minute.
+
+**`captureTimeout: 5000`** cuts that to roughly ten seconds. It is left at
+the default because lowering it trades a slow capture for a silently
+incomplete one: an asset that was only slow, rather than dead, gets dropped
+and leaves a hole with nothing to say so. Since these are assets your page
+has already loaded, most come from cache instantly and the tail is exactly
+the large or uncached ones you would be wrong to drop. Set it if you have
+measured your own page and decided which way you would rather it failed.
+
+### Very long pages
+
+Browsers cap how large a canvas can be — 65 535 pixels in a dimension in
+Chromium, less in Firefox, and a separate and much lower area cap on mobile
+Safari. A page past that cap cannot be rendered at full scale, so HellDots
+fits the scale to what the browser will actually paint and checks that the
+result holds pixels before using it.
+
+Nothing below the cap changes. Past it the capture goes soft in proportion:
+a 68 000px page renders at 0.96, a 140 000px page at 0.47. If even the
+smallest attempt comes back empty, the capture fails through `onError`
+rather than attaching a blank image.
+
 ### Keeping screenshots out of your database
 
 Every image is stored as a base64 data URL inside the record — around 33 KB
@@ -475,6 +563,9 @@ OS: iOS 17.2
 | `persistence`           | `"localStorage"` \| `"none"`         | `"none"`            | Auto save/restore, or handle it yourself via callbacks            |
 | `autoScreenshot`        | `boolean`                            | `true`              | Capture a screenshot and environment snapshot per comment         |
 | `embedCrossOriginFonts` | `boolean`                            | `false`             | Fetch unreadable stylesheets so their web fonts reach the capture |
+| `fastCapture`           | `boolean`                            | `false`             | Read a curated style list instead of all ~527 computed properties |
+| `skipIframeContent`     | `boolean`                            | `false`             | Render embedded documents as blank instead of cloning them        |
+| `captureTimeout`        | `number`                             | `30000`             | Milliseconds one remote asset may hold a capture up               |
 | `locale`                | `string`                             | browser language    | `"en"` and `"es"` ship; anything else falls back per key          |
 | `linkParam`             | `string`                             | `"helldotsComment"` | Query param used by "Copy link" URLs                              |
 | `navigate`              | `(page: string) => void`             | full page load      | SPA router hook for the widget's cross-page jumps                 |

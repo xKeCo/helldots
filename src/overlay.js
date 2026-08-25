@@ -122,6 +122,8 @@ class CommentOverlay {
       shortcutModifier: options.shortcutModifier || "alt",
       autoScreenshot: options.autoScreenshot !== false,
       embedCrossOriginFonts: options.embedCrossOriginFonts === true,
+      fastCapture: options.fastCapture === true,
+      skipIframeContent: options.skipIframeContent === true,
       ...options,
     };
     this.locale = this.options.locale || detectLocale();
@@ -139,6 +141,9 @@ class CommentOverlay {
      * shadow root. @type {CaptureFlow | null}
      */
     this._captureFlow = null;
+
+    /** Whether a drag's region crop is still rendering. @type {boolean} */
+    this._regionCapturePending = false;
 
     /**
      * Parsed cross-page corpus, so every mutation does not pay a full
@@ -235,6 +240,9 @@ class CommentOverlay {
       host: this.shadowRoot,
       autoScreenshot: this.options.autoScreenshot,
       embedCrossOriginFonts: this.options.embedCrossOriginFonts,
+      fastCapture: this.options.fastCapture,
+      skipIframeContent: this.options.skipIframeContent,
+      captureTimeout: this.options.captureTimeout,
       // The pending-attachments array stays here, next to the comment box
       // that previews it — the flow only reports what a drag captured.
       onRegionCaptured: (dataUrl) => {
@@ -242,6 +250,13 @@ class CommentOverlay {
         if (this._pendingScreenshots.length < MAX_SCREENSHOTS) {
           this._pendingScreenshots.push(dataUrl);
         }
+      },
+      // The box opens before the crop exists now, so it has to show that
+      // one is coming — an empty attachment strip after a deliberate drag
+      // reads as the selection having been thrown away.
+      onRegionPending: (pending) => {
+        this._regionCapturePending = pending;
+        this._updateScreenshotsPreview();
       },
       onPlace: (x, y) => this._placeCommentAtPoint(x, y),
       onError: (err) => this._reportError(err, "capture"),
@@ -831,7 +846,7 @@ class CommentOverlay {
     this.createPreviewCircle(clientX, clientY);
     document.body.classList.remove(CLASSES.COMMENT_CURSOR);
 
-    if (this._pendingScreenshots && this._pendingScreenshots.length > 0) {
+    if (this._pendingScreenshots?.length > 0 || this._regionCapturePending) {
       this._updateScreenshotsPreview();
     }
 
@@ -847,11 +862,13 @@ class CommentOverlay {
       strings: this.strings,
       onShow: (dataUrl) => this.showLightbox(dataUrl),
       rerender: () => this._updateScreenshotsPreview(),
+      pending: this._regionCapturePending ? 1 : 0,
     });
   }
 
   _clearScreenshotPreview() {
     this._pendingScreenshots = [];
+    this._regionCapturePending = false;
     const container = this.commentBox.querySelector(
       `.${CLASSES.SCREENSHOTS_CONTAINER}`
     );
