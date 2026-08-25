@@ -3105,11 +3105,20 @@ with none. The catastrophic reading — a page of dead tracking pixels costing
 N times the timeout — does not happen.
 
 **But it is 2x the timeout, not 1x.** Consistent across settings: ratios of
-2.16, 2.08 and 2.05 at 1000, 2000 and 3000 ms. The cause is in `contextFetch`
-— its `.catch` runs `requests.delete(rawUrl)`, dropping the failed URL from
-the request cache, so the later pass that needs the same asset starts a fresh
-fetch and waits the whole timeout again. Measured end to end on the default:
-**60 175 ms**. Worth reporting upstream; it is not ours to fix.
+2.16, 2.08 and 2.05 at 1000, 2000 and 3000 ms, and **60 175 ms** end to end on
+the default.
+
+The reason is that one setting drives two different waits, in sequence, on the
+same asset. `createContext` opens with `waitUntilLoad`, which waits up to
+`timeout` for every `<img>` and `<video>` **already in the live page** to
+finish loading — a hanging one never fires `load` or `error`, so it burns the
+whole allowance. Only then does `embedImageElement` fetch the same URL to
+inline it, and abort after `timeout` again. The renderer's own option says so
+in as many words: "Load media timeout **and** fetch remote asset timeout".
+
+So there is nothing to report upstream. It is two deliberate waits sharing one
+number, not a bug — and both are bounded by `captureTimeout`, which is why the
+budgeting advice is unchanged.
 
 **And the capture survives.** A dead image becomes the renderer's transparent
 placeholder and everything else renders: 99.7% ink. What the host gets is a
@@ -3147,3 +3156,16 @@ earned:
 
 A loose `> 0` guard was written first and let both through, along with the
 string `"5000"`, which compares as a number. The mutation run caught it.
+
+### Correction: it is not a double fetch
+
+This entry first blamed the 2x on `contextFetch`'s `.catch` running
+`requests.delete(rawUrl)`, which drops a failed URL from the per-render
+request cache. That line is real, but it is not what was being measured.
+Counting the actual calls to `fetch` for a dead URL during one capture returns
+**one**, not two — and it starts 2411 ms into a capture with `timeout: 2000`,
+which is what gave the mechanism away. The two waits above are the answer.
+
+The cache-delete line could still cost an extra fetch where two different call
+sites want the same URL — an image that is both an `<img src>` and a CSS
+`background-image`, say. That is a hypothesis, untested, and recorded as one.

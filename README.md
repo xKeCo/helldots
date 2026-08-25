@@ -248,10 +248,11 @@ capture until that fires. The capture still succeeds — that asset becomes a
 transparent placeholder — but it waits first.
 
 The wait is bounded rather than multiplied: one dead asset and ten cost the
-same, because the fetches run concurrently. What it is not is one times the
-timeout. The renderer drops a failed URL from its request cache, so a second
-pass that needs the same asset starts over and waits again — measured at a
-consistent ~2x. The 30 second default is therefore about a minute.
+same, because they are waited on concurrently. What it is not is one times the
+timeout. The setting drives two waits in sequence on the same asset — first
+for the image already on the page to finish loading, then for the fetch that
+inlines it — so the real cost is a consistent ~2x. The 30 second default is
+therefore about a minute.
 
 **`captureTimeout: 5000`** cuts that to roughly ten seconds. It is left at
 the default because lowering it trades a slow capture for a silently

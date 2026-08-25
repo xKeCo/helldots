@@ -367,11 +367,11 @@ export interface CommentOverlayOptions {
    * placeholder, but it waits first.
    *
    * The wait is **bounded, not multiplied**: measured at the same ~2x the
-   * timeout whether one asset is dead or ten, because the fetches run
-   * concurrently. It is 2x rather than 1x because the renderer drops a failed
-   * URL from its request cache, so the second pass that needs it starts over
-   * and waits again. Budget accordingly — 5000 here means roughly ten
-   * seconds.
+   * timeout whether one asset is dead or ten, because they are waited on
+   * concurrently. It is 2x rather than 1x because this one number drives two
+   * waits in sequence on the same asset — first for the image already on the
+   * page to finish loading, then for the fetch that inlines it. Budget
+   * accordingly: 5000 here means roughly ten seconds.
    *
    * Left at the renderer's default because lowering it trades a slow capture
    * for a silently incomplete one: an asset that was merely slow, rather than
