@@ -3226,3 +3226,62 @@ its 4.6 KB number.
 
 Tests are unaffected: `vi.mock("modern-screenshot")` intercepts dynamic
 imports the same way it intercepts static ones.
+
+## `bestMatch` prefers the deepest candidate on ties, in both call sites
+
+`resolveAnchor` calls the shared `bestMatch` helper twice — once for the
+selector match, once for the tag-wide rescue search — and both scored
+candidates against the stored fingerprint while `bestMatch` kept the first
+best in document order. That order puts ancestors before descendants, and
+ties between them are systematic, not exotic: the text snippet is truncated
+to 64 characters, so a parent whose only content is the anchored child
+carries the identical snippet, and with no stable attributes the remaining
+position signal often matches too. The most specific matching element could
+never win, at either call site.
+
+The fix is one comparison: on an _exact_ confidence tie, a candidate that
+is a descendant of the current best replaces it. No weights or thresholds
+move (`SELECTOR_THRESHOLD`, `RESCUE_THRESHOLD`, the 0.8 prefix bonus stay
+put — moving them without corpus data is free risk), so any anchor that
+resolved uniquely before resolves identically now.
+
+One limitation accepted: when the ancestor was the _correct_ answer and a
+descendant ties exactly, the descendant now wins. A tie of that shape is
+inherently ambiguous — the fingerprint cannot tell the two apart — and the
+more specific element is the better default.
+
+## A drag anchors to the region it framed, not the mouseup pixel
+
+`onDragEnd` used the selection rectangle only to crop the screenshot;
+placement went through `elementFromPoint` at the released-mouse position.
+A field report showed the failure mode: a ~553×81 selection over a phase
+bar, released over an open search panel, anchored the comment's
+`targetSelector` to an input inside that panel — an element that measures
+0×0 whenever the panel is closed, so the marker was born hidden and the
+comment looked lost (it was still in the inbox).
+
+Now a drag places the comment at the region's center, and the target is
+chosen from `document.elementsFromPoint` at that center: the topmost
+element whose intersection with the region covers at least 60% of the
+region's area (`REGION_COVERAGE_MIN`).
+
+- **Coverage, not strict containment**: human selections overshoot the
+  element they mean by a few pixels; requiring the element's rect to
+  contain the region would skip to a parent almost every time. 60%
+  tolerates overshoot and still rejects partial overlays.
+- **The stack, not an ancestor walk**: an overlay rendered in a portal is
+  not an ancestor of the content it covers; the hit-test stack sees
+  through it to the element underneath.
+- **Rejected: refusing "ephemeral" targets** (dialogs, popovers) at anchor
+  time. A comment deliberately left inside a modal must hide with it —
+  that contract is already recorded ("The playground modal uses
+  `class="modal-content"`"). The bug was an _accidental_ anchor, and this
+  fix removes the accident instead of breaking the contract.
+- **Rejected: degrading a hidden-target marker** to a container-relative
+  position. The marker's position is derived from the anchor, never
+  invented.
+
+A visible UX change is accepted: the marker and the comment box open at
+the region's center rather than wherever the mouse was released — which is
+what the gesture means, and keeps the marker and the anchor pointing at
+the same thing.
