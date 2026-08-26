@@ -36,6 +36,8 @@ export default {
   daysAgoTemplate: "{n}d",
   toolbarComment: "Comment",
   toolbarInbox: "Inbox",
+  toolbarHideComments: "Hide comments",
+  toolbarShowComments: "Show comments",
   modifierAlt: "Alt",
   modifierCtrl: "Ctrl",
   modifierShift: "Shift",

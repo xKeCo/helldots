@@ -117,6 +117,36 @@ describe("components", () => {
     });
   });
 
+  describe("createToolbar visibility pill", () => {
+    it("renders the eye button in its own pill, to the right of the actions", () => {
+      const toolbar = createToolbar({}, getStrings("en"));
+
+      const pill = toolbar.querySelector(`.${CLASSES.TOOLBAR_VISIBILITY}`);
+      expect(pill).toBeTruthy();
+      // A sibling of the actions pill, not a third button inside it.
+      expect(pill.parentElement).toBe(toolbar);
+      expect(pill.closest(`.${CLASSES.TOOLBAR_ACTIONS}`)).toBeNull();
+
+      const btn = pill.querySelector(`.${CLASSES.TOOLBAR_EYE_BTN}`);
+      expect(btn).toBeTruthy();
+      expect(btn.getAttribute("aria-pressed")).toBe("false");
+      expect(btn.getAttribute("aria-label")).toBe(
+        getStrings("en").toolbarHideComments
+      );
+      expect(btn.querySelector("svg")).toBeTruthy();
+    });
+
+    it("gives the eye button the same hover tooltip pattern as the others", () => {
+      const toolbar = createToolbar({}, getStrings("es"));
+      const wrapper = toolbar
+        .querySelector(`.${CLASSES.TOOLBAR_EYE_BTN}`)
+        .closest(`.${CLASSES.TOOLBAR_ACTION_WRAPPER}`);
+
+      const label = wrapper.querySelector(`.${CLASSES.TOOLBAR_TEXT}`);
+      expect(label.textContent).toBe(getStrings("es").toolbarHideComments);
+    });
+  });
+
   describe("createCommentBox", () => {
     it("renders a hidden box with the comment input area", () => {
       const box = createCommentBox();

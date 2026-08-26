@@ -129,7 +129,8 @@ export const getStyles = () => `
         white-space: nowrap;
     }
 
-    .${CLASSES.TOOLBAR_ACTIONS} {
+    .${CLASSES.TOOLBAR_ACTIONS},
+    .${CLASSES.TOOLBAR_VISIBILITY} {
         display: flex;
         flex-direction: row;
         background: rgba(20, 20, 23, 0.95);
@@ -137,6 +138,12 @@ export const getStyles = () => `
         -webkit-backdrop-filter: blur(16px);
         border-radius: 12px;
         box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .${CLASSES.TOOLBAR_VISIBILITY} {
+        position: absolute;
+        left: calc(100% + 12px);
+        top: 0;
     }
 
     .${CLASSES.TOOLBAR_ACTION_BTN} {
