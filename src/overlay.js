@@ -1027,7 +1027,10 @@ class CommentOverlay {
     }
 
     if (this.eyeBtn) {
-      this.eyeBtn.setAttribute("aria-pressed", String(hidden));
+      // No aria-pressed here: the button's name swaps (Hide comments ↔ Show
+      // comments), and a swapping name plus a pressed state contradict each
+      // other for screen-reader users (see DECISIONS.md). The name itself
+      // carries the state, same as the icon and tooltip below.
       const label = hidden
         ? this.strings.toolbarShowComments
         : this.strings.toolbarHideComments;

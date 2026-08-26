@@ -83,6 +83,66 @@ describe("styles", () => {
     ).toBe(true);
     expect(css).toContain("border-radius: 12px");
   });
+
+  it("computes the only-child button's border-radius to a full pill, not a partial corner", () => {
+    // Behavioral companion to the string check above: a string match can't
+    // tell a real cascade winner from mere presence of the text somewhere in
+    // the sheet — only mounting the real stylesheet and reading the computed
+    // value tells us the :only-child rule actually won over :first-child /
+    // :last-child for a wrapper with exactly one button inside it.
+    const styleEl = document.createElement("style");
+    styleEl.textContent = getStyles();
+    document.head.appendChild(styleEl);
+
+    const wrapper = document.createElement("div");
+    wrapper.className = CLASSES.TOOLBAR_ACTION_WRAPPER;
+    const btn = document.createElement("button");
+    btn.className = CLASSES.TOOLBAR_ACTION_BTN;
+    wrapper.appendChild(btn);
+    document.body.appendChild(wrapper);
+
+    expect(getComputedStyle(btn).borderRadius).toBe("12px");
+
+    wrapper.remove();
+    styleEl.remove();
+  });
+});
+
+// Behavioral for the same reason as the block above: the guarantee the
+// !important on this rule exists for is that it wins over an inline
+// `display` the marker engine itself wrote during a visibility pass (see
+// marker-engine.js), not merely that the rule's text is present somewhere in
+// the sheet.
+describe("the hidden marker layer", () => {
+  /** @type {HTMLStyleElement} */
+  let styleEl;
+
+  beforeEach(() => {
+    styleEl = document.createElement("style");
+    styleEl.textContent = getStyles();
+    document.head.appendChild(styleEl);
+  });
+
+  afterEach(() => {
+    styleEl.remove();
+    document.body.innerHTML = "";
+  });
+
+  it("computes display: none for a circle even though it carries an inline display", () => {
+    const container = document.createElement("div");
+    container.classList.add(CLASSES.MARKERS_HIDDEN);
+
+    const circle = document.createElement("div");
+    circle.className = CLASSES.CIRCLE;
+    // What the marker engine actually writes on a visibility pass — the
+    // layer class has to beat this, not just a plain stylesheet default.
+    circle.style.display = "block";
+
+    container.appendChild(circle);
+    document.body.appendChild(container);
+
+    expect(getComputedStyle(circle).display).toBe("none");
+  });
 });
 
 // Behavioural, not a string match: the bug this guards against was a real

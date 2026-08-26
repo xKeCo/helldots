@@ -3397,7 +3397,8 @@ describe("marker visibility toggle", () => {
       true
     );
     expect(close).toHaveBeenCalled();
-    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    // No aria-pressed: the swapping accessible name is the state signal.
+    expect(btn.hasAttribute("aria-pressed")).toBe(false);
     expect(btn.getAttribute("aria-label")).toBe(
       getStrings("en").toolbarShowComments
     );
@@ -3440,7 +3441,7 @@ describe("marker visibility toggle", () => {
     expect(overlay.overlay.classList.contains(CLASSES.MARKERS_HIDDEN)).toBe(
       false
     );
-    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    expect(btn.hasAttribute("aria-pressed")).toBe(false);
     expect(btn.getAttribute("aria-label")).toBe(
       getStrings("en").toolbarHideComments
     );
@@ -3486,7 +3487,10 @@ describe("marker visibility toggle", () => {
     expect(overlay.overlay.classList.contains(CLASSES.MARKERS_HIDDEN)).toBe(
       true
     );
-    expect(eyeBtnOf(overlay).getAttribute("aria-pressed")).toBe("true");
+    expect(eyeBtnOf(overlay).hasAttribute("aria-pressed")).toBe(false);
+    expect(eyeBtnOf(overlay).getAttribute("aria-label")).toBe(
+      getStrings("en").toolbarShowComments
+    );
   });
 
   it("a throwing localStorage leaves the widget usable and visible", () => {

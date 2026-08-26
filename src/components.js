@@ -317,9 +317,6 @@ export const createToolbar = (options = {}, strings = defaultStrings) => {
     [visibilityLabel],
     strings.toolbarHideComments
   );
-  visibilityWrapper
-    .querySelector(`.${CLASSES.TOOLBAR_EYE_BTN}`)
-    ?.setAttribute("aria-pressed", "false");
 
   // Its own pill, out of flow: the main pill keeps its exact centered
   // position, and this one hangs off its right edge (the mockup's layout).

@@ -3364,6 +3364,19 @@ recording:
   inside that container, so the CSS rule can't reach them — both are
   dismissed imperatively instead. Floating UI anchored to an invisible
   marker is orphaned noise otherwise.
+- **The eye button carries no `aria-pressed`.** It is an action button
+  whose icon, tooltip, and `aria-label` swap together (eye / "Hide
+  comments" ↔ eye-off / "Show comments"). Adding `aria-pressed` on top of
+  that swap was tried and reverted: `aria-pressed` asserts that the
+  button's _named_ action is currently active, and with a swapping name
+  that reads backwards — a screen reader would announce "Show comments,
+  toggle button, pressed" while comments are hidden, when nothing named
+  "Show comments" is in fact active. The swapping name is already the
+  state signal, matching the swapping icon and tooltip; a `pressed` state
+  next to it does not add information, it contradicts the name. This is
+  why the comment button is different and correctly keeps `aria-pressed`:
+  its name ("Comment") never changes, so `aria-pressed` is the only thing
+  that tells the two states apart.
 
 No public API yet (`setMarkersHidden` was considered and dropped as YAGNI);
 a host that asks for it gets its own spec.

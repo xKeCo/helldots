@@ -129,7 +129,12 @@ describe("components", () => {
 
       const btn = pill.querySelector(`.${CLASSES.TOOLBAR_EYE_BTN}`);
       expect(btn).toBeTruthy();
-      expect(btn.getAttribute("aria-pressed")).toBe("false");
+      // No aria-pressed: the eye is an action button whose accessible name
+      // swaps (Hide comments ↔ Show comments) and carries the state itself —
+      // pairing that with aria-pressed would read backwards to a screen
+      // reader (see DECISIONS.md). Unlike the comment/inbox buttons, whose
+      // names are constant and so keep aria-pressed.
+      expect(btn.hasAttribute("aria-pressed")).toBe(false);
       expect(btn.getAttribute("aria-label")).toBe(
         getStrings("en").toolbarHideComments
       );
