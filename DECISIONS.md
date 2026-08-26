@@ -3227,6 +3227,25 @@ its 4.6 KB number.
 Tests are unaffected: `vi.mock("modern-screenshot")` intercepts dynamic
 imports the same way it intercepts static ones.
 
+## Reaction pills drop their hover tooltip entirely (amends "Pills never show who reacted")
+
+The pills started out with a hover bubble carrying the action, then lost it on
+the actor's own pill on the grounds that the highlight already said it was
+theirs. The remaining half is now gone too: no pill has a `data-hd-tooltip`.
+
+A pill is an emoji plus a count, and both are already on screen. Hovering a row
+of them fired a bubble per pill saying "Add your reaction" — text that restates
+what pressing an emoji obviously does, over a control small enough that the
+pointer crosses several of them on the way anywhere. The trigger beside the row
+keeps its tooltip, because a bare emoji-plus-plus icon is the one control in the
+group whose meaning is not written on it.
+
+Nothing is lost for assistive tech: the accessible name still composes the
+action, the emoji and the count ("Remove your reaction: 👍 (3)"), and
+`aria-pressed` still carries the toggle state. The `reactionToggleOn` /
+`reactionToggleOff` strings stay in both locales for exactly that reason — they
+are no longer visible copy, but they are still announced.
+
 ## `bestMatch` prefers the deepest candidate on ties, in both call sites
 
 `resolveAnchor` calls the shared `bestMatch` helper twice — once for the
