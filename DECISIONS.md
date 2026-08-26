@@ -3339,3 +3339,29 @@ A visible UX change is accepted: the marker and the comment box open at
 the region's center rather than wherever the mouse was released — which is
 what the gesture means, and keeps the marker and the anchor pointing at
 the same thing.
+
+## The eye toggle persists, and anything that needs a marker re-shows it
+
+The marker layer can now be hidden from a second pill beside the toolbar —
+a noise-control measure for pages dense with comments. Three choices worth
+recording:
+
+- **The preference persists per browser** (its own localStorage key,
+  `helldots-markers-hidden`, independent of the `persistence` option — it
+  is a viewer preference, not comment data). The risk of persistence is
+  "where did my comments go?" after a forgotten toggle; it is contained by
+  the next point.
+- **Entering comment mode re-shows the layer**, whether by the toolbar
+  button or the keyboard shortcut (both funnel through
+  `toggleCommentMode`), and so does navigating to a comment from the inbox
+  (`scrollMarkerIntoView`) — scrolling to an invisible marker would scroll
+  to nothing. The stored flag follows every automatic re-show, so a reload
+  always matches what was last on screen. Leaving comment mode does not
+  re-hide: one click hides again.
+- **Hiding is CSS-only** (a class on the mount container) and the marker
+  engine keeps running, so re-showing is instant and correctly positioned.
+  An open thread popover closes on hide — floating UI anchored to an
+  invisible marker is orphaned noise.
+
+No public API yet (`setMarkersHidden` was considered and dropped as YAGNI);
+a host that asks for it gets its own spec.

@@ -1,8 +1,9 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import CommentOverlay from "../src/overlay.js";
-import { CLASSES, IDS } from "../src/constants.js";
+import { CLASSES, IDS, MARKERS_HIDDEN_STORAGE_KEY } from "../src/constants.js";
 import { TAG_NAME } from "../src/root-element.js";
 import { positionPopoverAtCircle } from "../src/popover-controller.js";
+import { getStrings } from "../src/i18n.js";
 import en from "../src/locales/en.js";
 import { domToCanvas } from "modern-screenshot";
 import { renderedCanvas } from "./rendered-canvas.js";
@@ -3369,5 +3370,123 @@ describe("emoji reactions", () => {
 
     expect(overlay.comments[0].reactions).toEqual({ "👍": ["ana"] });
     expect(overlay.comments[0].replies[0].reactions).toEqual({ "🚀": ["bo"] });
+  });
+});
+
+describe("marker visibility toggle", () => {
+  let overlay;
+
+  const eyeBtnOf = (o) =>
+    o.toolbar.querySelector(`.${CLASSES.TOOLBAR_EYE_BTN}`);
+
+  afterEach(() => {
+    localStorage.removeItem(MARKERS_HIDDEN_STORAGE_KEY);
+    overlay?.cleanup?.();
+    cleanupDom();
+    vi.restoreAllMocks();
+  });
+
+  it("hides the marker layer, closes the popover, and persists the flag", () => {
+    overlay = makeOverlay();
+    const close = vi.spyOn(overlay, "closeThreadPopover");
+    const btn = eyeBtnOf(overlay);
+
+    btn.click();
+
+    expect(overlay.overlay.classList.contains(CLASSES.MARKERS_HIDDEN)).toBe(
+      true
+    );
+    expect(close).toHaveBeenCalled();
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(btn.getAttribute("aria-label")).toBe(
+      getStrings("en").toolbarShowComments
+    );
+    expect(localStorage.getItem(MARKERS_HIDDEN_STORAGE_KEY)).toBe("true");
+  });
+
+  it("a second click shows everything again", () => {
+    overlay = makeOverlay();
+    const btn = eyeBtnOf(overlay);
+
+    btn.click();
+    btn.click();
+
+    expect(overlay.overlay.classList.contains(CLASSES.MARKERS_HIDDEN)).toBe(
+      false
+    );
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    expect(btn.getAttribute("aria-label")).toBe(
+      getStrings("en").toolbarHideComments
+    );
+    expect(localStorage.getItem(MARKERS_HIDDEN_STORAGE_KEY)).toBe("false");
+  });
+
+  it("entering comment mode re-shows the markers (the shortcut funnels here too)", () => {
+    overlay = makeOverlay();
+    eyeBtnOf(overlay).click();
+
+    overlay.toggleCommentMode();
+
+    expect(overlay.overlay.classList.contains(CLASSES.MARKERS_HIDDEN)).toBe(
+      false
+    );
+    expect(localStorage.getItem(MARKERS_HIDDEN_STORAGE_KEY)).toBe("false");
+    // Leaving comment mode does NOT re-hide.
+    overlay.toggleCommentMode();
+    expect(overlay.overlay.classList.contains(CLASSES.MARKERS_HIDDEN)).toBe(
+      false
+    );
+  });
+
+  it("navigating to a marker from the inbox re-shows the layer first", () => {
+    overlay = makeOverlay();
+    const scroll = vi
+      .spyOn(overlay.markers, "scrollMarkerIntoView")
+      .mockImplementation(() => {});
+    eyeBtnOf(overlay).click();
+
+    overlay.scrollMarkerIntoView({ id: "c1" });
+
+    expect(overlay.overlay.classList.contains(CLASSES.MARKERS_HIDDEN)).toBe(
+      false
+    );
+    expect(scroll).toHaveBeenCalled();
+  });
+
+  it("a stored flag hides the layer from mount", () => {
+    localStorage.setItem(MARKERS_HIDDEN_STORAGE_KEY, "true");
+    overlay = makeOverlay();
+
+    expect(overlay.overlay.classList.contains(CLASSES.MARKERS_HIDDEN)).toBe(
+      true
+    );
+    expect(eyeBtnOf(overlay).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("a throwing localStorage leaves the widget usable and visible", () => {
+    const get = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new Error("blocked");
+      });
+    const set = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("blocked");
+      });
+
+    overlay = makeOverlay();
+    expect(overlay.overlay.classList.contains(CLASSES.MARKERS_HIDDEN)).toBe(
+      false
+    );
+
+    // The toggle still works for the session; only persistence is lost.
+    eyeBtnOf(overlay).click();
+    expect(overlay.overlay.classList.contains(CLASSES.MARKERS_HIDDEN)).toBe(
+      true
+    );
+
+    get.mockRestore();
+    set.mockRestore();
   });
 });

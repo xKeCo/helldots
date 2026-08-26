@@ -316,6 +316,14 @@ export const getStyles = () => `
         box-shadow: 0 0 0 5px rgba(46, 144, 250, 0.5), 0 1px 5px rgba(0,0,0,0.2);
     }
 
+    /* The eye toggle: hiding is a class on the mount container, so every
+       circle — and the hover tooltip a marker owns — vanishes as one layer.
+       The engine keeps positioning them; re-show is instant. */
+    .${CLASSES.MARKERS_HIDDEN} .${CLASSES.CIRCLE},
+    .${CLASSES.MARKERS_HIDDEN} .${CLASSES.TOOLTIP} {
+        display: none !important;
+    }
+
     .${CLASSES.TOOLTIP} {
         position: fixed;
         background: #1C1C1E;

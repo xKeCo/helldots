@@ -168,6 +168,10 @@ export const CLASSES = {
 // would weaken anchors instead of protecting them.
 export const HOST_PAGE_CLASSES = [CLASSES.COMMENT_CURSOR];
 
+// The eye toggle's persisted preference. Its own key, independent of the
+// widget's `persistence` option: it is a viewer preference, not comment data.
+export const MARKERS_HIDDEN_STORAGE_KEY = "helldots-markers-hidden";
+
 export const IDS = {
   TOOLBAR: "comment-toolbar",
   COMMENT_BOX: "comment-box",

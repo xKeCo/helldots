@@ -9,6 +9,7 @@ import {
   PRIORITIES,
   MARKER_SIZE,
   MAX_SCREENSHOTS,
+  MARKERS_HIDDEN_STORAGE_KEY,
 } from "./constants.js";
 import { getStyles, getGlobalStyles } from "./styles.js";
 import { mountStyles } from "./style-mount.js";
@@ -47,6 +48,8 @@ import {
   wireScreenshotLightbox,
   createCommentBox,
   createTooltip,
+  EYE_ICON_SVG,
+  EYE_OFF_ICON_SVG,
 } from "./components.js";
 import {
   PopoverController,
@@ -227,6 +230,9 @@ class CommentOverlay {
       `.${CLASSES.TOOLBAR_COMMENT_BTN}`
     );
     this.inboxBtn = this.toolbar.querySelector(`.${CLASSES.TOOLBAR_MENU_BTN}`);
+    this.eyeBtn = this.toolbar.querySelector(`.${CLASSES.TOOLBAR_EYE_BTN}`);
+    /** Whether the on-page marker layer is hidden (the eye toggle). */
+    this.markersHidden = false;
     /** @type {HTMLButtonElement} */
     this.submitButton = /** @type {any} */ (
       this.shadowRoot.getElementById(IDS.SUBMIT_COMMENT)
@@ -319,6 +325,16 @@ class CommentOverlay {
       onAfterPass: () => this.syncThreadPopoverToMarker(),
     });
     this.markers.start();
+
+    // The eye toggle's preference survives reloads; a blocked localStorage
+    // just means the layer starts visible.
+    try {
+      if (localStorage.getItem(MARKERS_HIDDEN_STORAGE_KEY) === "true") {
+        this._setMarkersHidden(true);
+      }
+    } catch {
+      /* storage unavailable — stay visible */
+    }
 
     // Bind event listeners
     this.bindEventListeners();
@@ -678,6 +694,9 @@ class CommentOverlay {
   bindEventListeners() {
     this.commentBtn.addEventListener("click", () => this.toggleCommentMode());
     this.inboxBtn.addEventListener("click", () => this.toggleInbox());
+    this.eyeBtn?.addEventListener("click", () =>
+      this._setMarkersHidden(!this.markersHidden)
+    );
     this.submitButton.addEventListener("click", () => this.saveComment());
 
     this.commentInput.addEventListener("keydown", (e) => {
@@ -983,6 +1002,40 @@ class CommentOverlay {
     }
   }
 
+  /**
+   * The eye toggle's single entry point: the button, the mount read, and
+   * both auto-reshow paths all land here. Hiding is CSS-only (the marker
+   * engine keeps running, so re-showing is instant and correctly placed),
+   * plus dismissing the floating UI a hidden marker would orphan.
+   * @param {boolean} hidden
+   */
+  _setMarkersHidden(hidden) {
+    this.markersHidden = hidden;
+    this.overlay.classList.toggle(CLASSES.MARKERS_HIDDEN, hidden);
+    if (hidden) this.closeThreadPopover();
+
+    if (this.eyeBtn) {
+      this.eyeBtn.setAttribute("aria-pressed", String(hidden));
+      const label = hidden
+        ? this.strings.toolbarShowComments
+        : this.strings.toolbarHideComments;
+      this.eyeBtn.setAttribute("aria-label", label);
+      this.eyeBtn.innerHTML = hidden ? EYE_OFF_ICON_SVG : EYE_ICON_SVG;
+      const text = this.eyeBtn
+        .closest(`.${CLASSES.TOOLBAR_ACTION_WRAPPER}`)
+        ?.querySelector(`.${CLASSES.TOOLBAR_TEXT}`);
+      if (text) text.textContent = label;
+    }
+
+    // Written on every change — including the automatic re-shows — so a
+    // later reload matches what the viewer last saw.
+    try {
+      localStorage.setItem(MARKERS_HIDDEN_STORAGE_KEY, String(hidden));
+    } catch {
+      /* preference just does not persist */
+    }
+  }
+
   toggleCommentMode() {
     this.commentMode = !this.commentMode;
     // The inbox is a full-height panel over the page; leaving it open would
@@ -990,6 +1043,9 @@ class CommentOverlay {
     // toolbar button already closed it as an outside click — this is what
     // covers the keyboard shortcut and the empty state's own button.
     if (this.commentMode) this.closeInbox();
+    // Someone about to comment wants to see the existing comments; the
+    // shortcut funnels through here too. Leaving the mode does not re-hide.
+    if (this.commentMode && this.markersHidden) this._setMarkersHidden(false);
     this.commentBtn?.classList.toggle(CLASSES.ACTIVE, this.commentMode);
     this.commentBtn?.setAttribute("aria-pressed", String(this.commentMode));
     this.overlay.classList.toggle(CLASSES.ACTIVE, this.commentMode);
@@ -2253,6 +2309,8 @@ class CommentOverlay {
   }
 
   scrollMarkerIntoView(comment) {
+    // Scrolling to an invisible marker would scroll to nothing.
+    if (this.markersHidden) this._setMarkersHidden(false);
     this.markers.scrollMarkerIntoView(comment);
   }
 
