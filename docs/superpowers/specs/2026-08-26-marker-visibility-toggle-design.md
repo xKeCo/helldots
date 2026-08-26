@@ -143,7 +143,7 @@ is wrapped so a blocked or full localStorage silently degrades to
   blind among invisible markers) is worse, and the stored value always
   mirrors what is actually on screen.
 - On viewports narrower than the toolbar plus the visibility pill's
-  offset (`left: calc(100% + 12px)`), the eye pill can clip off-screen.
+  offset (`left: calc(100% + 5px)`), the eye pill can clip off-screen.
   The layout is the approved mockup's positioning, and no responsive
   fallback (e.g. wrapping the pill under the toolbar, or shrinking the
   offset) is included.

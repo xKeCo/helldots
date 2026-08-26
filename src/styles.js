@@ -142,7 +142,7 @@ export const getStyles = () => `
 
     .${CLASSES.TOOLBAR_VISIBILITY} {
         position: absolute;
-        left: calc(100% + 12px);
+        left: calc(100% + 5px);
         top: 0;
     }
 
