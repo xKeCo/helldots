@@ -71,6 +71,18 @@ describe("styles", () => {
   it("does not style the comment-cursor class (that's host-page-only, see getGlobalStyles)", () => {
     expect(getStyles()).not.toContain(`.${CLASSES.COMMENT_CURSOR}`);
   });
+
+  it("rounds all corners of a single-button pill (only-child)", () => {
+    const css = getStyles();
+    // The eye button is its pill's only child, so the :first-child/:last-child
+    // rules collide. The :only-child rule must win to round all corners.
+    expect(
+      css.includes(
+        `.${CLASSES.TOOLBAR_ACTION_WRAPPER}:only-child .${CLASSES.TOOLBAR_ACTION_BTN}`
+      )
+    ).toBe(true);
+    expect(css).toContain("border-radius: 12px");
+  });
 });
 
 // Behavioural, not a string match: the bug this guards against was a real

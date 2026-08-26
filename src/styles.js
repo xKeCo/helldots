@@ -173,6 +173,12 @@ export const getStyles = () => `
         border-radius: 0 12px 12px 0;
     }
 
+    .${CLASSES.TOOLBAR_ACTION_WRAPPER}:only-child .${
+      CLASSES.TOOLBAR_ACTION_BTN
+    } {
+        border-radius: 12px;
+    }
+
     .${CLASSES.TOOLBAR_ACTION_BTN}:hover {
         background: rgba(255, 255, 255, 0.08);
         color: white;
