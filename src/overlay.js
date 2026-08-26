@@ -1004,15 +1004,27 @@ class CommentOverlay {
 
   /**
    * The eye toggle's single entry point: the button, the mount read, and
-   * both auto-reshow paths all land here. Hiding is CSS-only (the marker
-   * engine keeps running, so re-showing is instant and correctly placed),
-   * plus dismissing the floating UI a hidden marker would orphan.
+   * both auto-reshow paths all land here. The circles hide via a CSS
+   * class on the mount container (the marker engine keeps running, so
+   * re-showing is instant and correctly placed); the thread popover and
+   * any open hover tooltip are dismissed imperatively instead, since
+   * neither mounts inside that container.
    * @param {boolean} hidden
    */
   _setMarkersHidden(hidden) {
     this.markersHidden = hidden;
     this.overlay.classList.toggle(CLASSES.MARKERS_HIDDEN, hidden);
-    if (hidden) this.closeThreadPopover();
+    if (hidden) {
+      this.closeThreadPopover();
+      // Tooltips mount on the shadow root, a sibling of `this.overlay`, so
+      // the CSS hide rule never reaches them — an open one would otherwise
+      // survive a keyboard-activated hide, orphaned over a page with no
+      // visible marker to anchor it. No new tooltip can appear while
+      // hidden: a display:none circle gets no hover events.
+      this.shadowRoot
+        .querySelectorAll(`.${CLASSES.TOOLTIP}`)
+        .forEach((tooltip) => tooltip.remove());
+    }
 
     if (this.eyeBtn) {
       this.eyeBtn.setAttribute("aria-pressed", String(hidden));

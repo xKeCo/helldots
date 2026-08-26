@@ -317,10 +317,14 @@ export const getStyles = () => `
     }
 
     /* The eye toggle: hiding is a class on the mount container, so every
-       circle — and the hover tooltip a marker owns — vanishes as one layer.
-       The engine keeps positioning them; re-show is instant. */
-    .${CLASSES.MARKERS_HIDDEN} .${CLASSES.CIRCLE},
-    .${CLASSES.MARKERS_HIDDEN} .${CLASSES.TOOLTIP} {
+       circle vanishes as one layer — the engine keeps positioning them, so
+       re-show is instant. !important because circles carry inline \`display\`
+       state from the engine's visibility passes; the layer switch must win
+       over per-marker inline styles. A hover tooltip is NOT a descendant of
+       this container (it mounts on the shadow root as a sibling), so this
+       selector can't reach it; an open one is removed imperatively by
+       \`_setMarkersHidden\` instead. */
+    .${CLASSES.MARKERS_HIDDEN} .${CLASSES.CIRCLE} {
         display: none !important;
     }
 

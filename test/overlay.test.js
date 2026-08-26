@@ -3404,6 +3404,32 @@ describe("marker visibility toggle", () => {
     expect(localStorage.getItem(MARKERS_HIDDEN_STORAGE_KEY)).toBe("true");
   });
 
+  it("hiding dismisses an open marker tooltip, which does not mount inside the toggled container", () => {
+    stubBodyRect();
+    overlay = makeOverlay();
+    const comment = {
+      id: "t1",
+      text: "hello",
+      replies: [],
+      author: "Author",
+      createdAt: new Date().toISOString(),
+      container: document.body,
+    };
+    overlay.comments.push(comment);
+    overlay.renderCommentCircle(comment);
+    const circle = overlay.shadowRoot.querySelector('[data-comment-id="t1"]');
+    overlay.showCommentTooltip(circle, comment);
+    expect(
+      overlay.shadowRoot.querySelector(`.${CLASSES.TOOLTIP}[data-for="t1"]`)
+    ).toBeTruthy();
+
+    eyeBtnOf(overlay).click();
+
+    expect(
+      overlay.shadowRoot.querySelector(`.${CLASSES.TOOLTIP}[data-for="t1"]`)
+    ).toBeNull();
+  });
+
   it("a second click shows everything again", () => {
     overlay = makeOverlay();
     const btn = eyeBtnOf(overlay);

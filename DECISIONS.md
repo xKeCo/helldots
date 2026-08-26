@@ -3358,10 +3358,12 @@ recording:
   to nothing. The stored flag follows every automatic re-show, so a reload
   always matches what was last on screen. Leaving comment mode does not
   re-hide: one click hides again.
-- **Hiding is CSS-only** (a class on the mount container) and the marker
+- **Circles hide via a class on the mount container**, and the marker
   engine keeps running, so re-showing is instant and correctly positioned.
-  An open thread popover closes on hide — floating UI anchored to an
-  invisible marker is orphaned noise.
+  A hover tooltip and the thread popover mount on the shadow root, not
+  inside that container, so the CSS rule can't reach them — both are
+  dismissed imperatively instead. Floating UI anchored to an invisible
+  marker is orphaned noise otherwise.
 
 No public API yet (`setMarkersHidden` was considered and dropped as YAGNI);
 a host that asks for it gets its own spec.
