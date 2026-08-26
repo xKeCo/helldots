@@ -41,6 +41,43 @@ const formatFullDate = (date, locale) => {
   }).format(new Date(date));
 };
 
+/**
+ * The author name, clipped to the meta row, with a hover tooltip that appears
+ * only when the clipping actually hid something.
+ *
+ * Two boxes for one name because the ellipsis needs `overflow: hidden`, and an
+ * overflow-hidden box clips its own `::after` — which is exactly how the
+ * generic `[data-hd-tooltip]` draws its bubble. The outer box stays visible and
+ * carries the tooltip; the inner one truncates.
+ *
+ * The measurement runs on hover rather than at build time: nothing here is in
+ * the document yet when this function returns, so there is no layout to read,
+ * and a name that fits today stops fitting after a window resize or a page
+ * zoom. One read of `scrollWidth` on entering a name the pointer is already
+ * resting on is cheaper than watching every meta row for resizes.
+ *
+ * @param {string} name
+ * @returns {HTMLElement}
+ */
+const createAuthorElement = (name) => {
+  const el = document.createElement("span");
+  el.className = CLASSES.THREAD_AUTHOR;
+
+  const nameEl = document.createElement("span");
+  nameEl.className = CLASSES.THREAD_AUTHOR_NAME;
+  nameEl.textContent = name;
+  el.appendChild(nameEl);
+
+  el.addEventListener("mouseenter", () => {
+    // A tooltip that repeats a name already fully on screen is the noise the
+    // reaction pills were just stripped of; only truncation earns one.
+    if (nameEl.scrollWidth > nameEl.clientWidth) el.dataset.hdTooltip = name;
+    else delete el.dataset.hdTooltip;
+  });
+
+  return el;
+};
+
 export const createMetaElement = (
   author,
   createdAt,
@@ -51,9 +88,7 @@ export const createMetaElement = (
   const meta = document.createElement("div");
   meta.className = CLASSES.THREAD_META;
 
-  const authorEl = document.createElement("span");
-  authorEl.className = CLASSES.THREAD_AUTHOR;
-  authorEl.textContent = author || strings.anonymous;
+  const authorEl = createAuthorElement(author || strings.anonymous);
 
   const timeEl = document.createElement("span");
   timeEl.className = CLASSES.THREAD_TIME;

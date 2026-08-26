@@ -1162,15 +1162,34 @@ ${webkitScrollbar(
         gap: 6px;
         flex: 1;
         min-width: 0;
-        max-width: 280px;
     }
 
+    /* Two boxes for one name: the inner one truncates, the outer one hosts the
+       hover tooltip. They cannot be the same box — \`overflow: hidden\` is what
+       draws the ellipsis, and it would clip the \`::after\` bubble that
+       [data-hd-tooltip] hangs off the very same element. */
     .${CLASSES.THREAD_AUTHOR} {
         font-weight: 600;
         font-size: 13px;
+        display: flex;
+        min-width: 0;
+        max-width: 280px;
+    }
+
+    .${CLASSES.THREAD_AUTHOR_NAME} {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    /* The one tooltip allowed to wrap. Its trigger is by definition a name too
+       long for 280px, and the shared \`nowrap\` would then push a single-line
+       bubble wider than the popover it sits in. */
+    .${CLASSES.THREAD_AUTHOR}[data-hd-tooltip]::after {
+        white-space: normal;
+        max-width: 240px;
+        width: max-content;
+        text-align: center;
     }
 
     .${CLASSES.THREAD_TIME} {

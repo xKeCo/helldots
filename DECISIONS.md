@@ -3246,6 +3246,41 @@ action, the emoji and the count ("Remove your reaction: 👍 (3)"), and
 `reactionToggleOff` strings stay in both locales for exactly that reason — they
 are no longer visible copy, but they are still announced.
 
+## A truncated author name earns a hover tooltip — measured on hover
+
+The meta row clips the author at 280px with an ellipsis, and until now the
+clipped part was simply gone: nothing on screen or on hover carried the full
+name. Now the `.thread-author` box shows the generic `[data-hd-tooltip]` bubble
+with the whole name — but only when the ellipsis actually fired.
+
+**The measurement runs on `mouseenter`, not at build time.** When
+`createMetaElement` returns, nothing is in the document yet, so there is no
+layout to read — and a name that fits at one window width stops fitting at
+another. Reading `scrollWidth > clientWidth` on entering a name the pointer is
+already resting on costs one layout read per hover; the alternative, a
+`ResizeObserver` per meta row, watches every card in the inbox forever to
+answer a question only asked on hover. The attribute is set _and_ cleared on
+every entry, so a stale verdict from a previous window size never survives the
+next hover. The known cost: a `mouseenter` dispatched before the popover's
+first layout reads `clientWidth` 0 and wrongly grants a short name a tooltip —
+observed only with synthetic events; a human hover cannot arrive before layout,
+and the very next hover corrects it anyway.
+
+**Two boxes for one name.** The ellipsis needs `overflow: hidden`, and the
+bubble is an `::after` hanging off the hovered element — one box would clip its
+own tooltip. So `.thread-author` (visible, carries the tooltip) wraps
+`.thread-author-name` (truncates). The parent was already blockified as a flex
+item of `.thread-meta`, so making it `display: flex` changes nothing visually.
+
+**This bubble alone is allowed to wrap.** Its trigger is by definition a name
+wider than 280px, and the shared `white-space: nowrap` would push a single-line
+bubble wider than the popover. A scoped override caps it at 240px and lets it
+break.
+
+This does not contradict the entry above stripping tooltips from reaction
+pills: those bubbles restated what was already fully on screen; this one shows
+exactly the text the truncation removed, and only then.
+
 ## `bestMatch` prefers the deepest candidate on ties, in both call sites
 
 `resolveAnchor` calls the shared `bestMatch` helper twice — once for the

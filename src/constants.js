@@ -22,6 +22,7 @@ export const CLASSES = {
   THREAD_SCROLL: "thread-scroll",
   THREAD_META: "thread-meta",
   THREAD_AUTHOR: "thread-author",
+  THREAD_AUTHOR_NAME: "thread-author-name",
   INBOX_HEADER_ACTIONS: "inbox-header-actions",
   INBOX_METRICS_BTN: "inbox-metrics-btn",
   METRICS_VIEW: "metrics-view",

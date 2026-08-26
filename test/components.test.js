@@ -8,6 +8,7 @@ import {
   createReplyElement,
   createClassifyRow,
   createBadgeRow,
+  createMetaElement,
   getShortcutText,
   wireScreenshotInput,
   wireScreenshotLightbox,
@@ -637,5 +638,67 @@ describe("renderScreenshotsPreview: the pending slot", () => {
   it("collapses the strip again once the crop replaces the slot", () => {
     const container = setup([], { pending: 0 });
     expect(container.classList.contains(CLASSES.ACTIVE)).toBe(false);
+  });
+});
+
+describe("createMetaElement author tooltip", () => {
+  const LONG = "Bartholomew Featherstonehaugh-Villanueva del Castillo";
+
+  const metaFor = (author) =>
+    createMetaElement(author, new Date().toISOString(), getStrings("en"), "en");
+
+  /**
+   * jsdom lays nothing out, so both widths read 0 and the name would always
+   * look like it fits. These are the two numbers the real box would report.
+   */
+  const hover = (meta, { clipped }) => {
+    const nameEl = meta.querySelector(`.${CLASSES.THREAD_AUTHOR_NAME}`);
+    Object.defineProperty(nameEl, "scrollWidth", {
+      value: clipped ? 420 : 160,
+      configurable: true,
+    });
+    Object.defineProperty(nameEl, "clientWidth", {
+      value: 280,
+      configurable: true,
+    });
+    const authorEl = meta.querySelector(`.${CLASSES.THREAD_AUTHOR}`);
+    authorEl.dispatchEvent(new MouseEvent("mouseenter"));
+    return authorEl;
+  };
+
+  it("keeps the name in a box of its own, so the bubble is not clipped", () => {
+    // The ellipsis needs overflow:hidden and the bubble is an ::after on the
+    // hovered element — one box cannot do both.
+    const meta = metaFor(LONG);
+    const authorEl = meta.querySelector(`.${CLASSES.THREAD_AUTHOR}`);
+    expect(
+      authorEl.querySelector(`.${CLASSES.THREAD_AUTHOR_NAME}`).textContent
+    ).toBe(LONG);
+    expect(authorEl.textContent).toBe(LONG);
+  });
+
+  it("shows the full name only when the row clipped it", () => {
+    expect(hover(metaFor(LONG), { clipped: true }).dataset.hdTooltip).toBe(
+      LONG
+    );
+    expect(
+      hover(metaFor("Ana"), { clipped: false }).dataset.hdTooltip
+    ).toBeUndefined();
+  });
+
+  it("re-measures on every hover, both ways", () => {
+    // A name that fits at one window width stops fitting at another, and the
+    // measurement is the only thing standing between the two states.
+    const meta = metaFor(LONG);
+    expect(hover(meta, { clipped: false }).dataset.hdTooltip).toBeUndefined();
+    expect(hover(meta, { clipped: true }).dataset.hdTooltip).toBe(LONG);
+    expect(hover(meta, { clipped: false }).dataset.hdTooltip).toBeUndefined();
+  });
+
+  it("falls back to the anonymous label, tooltip included", () => {
+    const meta = metaFor("");
+    expect(hover(meta, { clipped: true }).dataset.hdTooltip).toBe(
+      getStrings("en").anonymous
+    );
   });
 });
