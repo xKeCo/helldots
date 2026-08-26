@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.10.0
+
+### Minor Changes
+
+- 3886169: Add a marker visibility toggle: an eye button in its own pill beside the
+  toolbar hides every comment marker to cut visual noise, and shows them
+  again. The preference persists per browser, and the layer re-shows itself
+  when the user enters comment mode (button or shortcut) or navigates to a
+  comment from the inbox. The icon, tooltip, and accessible name flip
+  together.
+
+### Patch Changes
+
+- 110ff07: Drop the hover tooltip from reaction pills. The emoji and the count already say
+  what a pill is, so a bubble per pill turned a dense row into a wall of popups.
+  The trigger beside the row keeps its tooltip, and the pills keep their
+  accessible name and `aria-pressed` state.
+- 87a0e72: A drag comment now anchors to the region it selected, not to the mouseup
+  pixel. The comment is placed at the rectangle's center, and the anchor
+  target is the topmost element at that point whose box covers at least 60%
+  of the region — so a floating panel that happens to sit under the released
+  mouse (and later closes) can no longer capture the anchor and leave the
+  marker invisible. Plain-click placement is unchanged.
+- 5ffb3a9: Show the full author name in a hover tooltip when the meta row truncates it.
+  The name is measured on hover, so the bubble only appears when the ellipsis
+  actually hid something — short names stay tooltip-free.
+- a4bac45: Resolve anchor-matching ties to the deepest matching element — in both the
+  selector match and the rescue search. The text fingerprint is truncated to
+  64 characters, so in nested DOMs a parent and its child score identically;
+  the strict comparison kept the first candidate in document order — always
+  the ancestor — so the most specific match could never win. Ties between
+  unrelated elements keep document order, and anchors that resolved uniquely
+  before resolve identically now.
+
 ## 0.9.1
 
 ### Patch Changes
