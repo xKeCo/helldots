@@ -42,10 +42,21 @@ main pill keeps exactly its current centered position
 
 Button states (WCAG 1.4.1 — never color alone):
 
-| state   | icon             | `aria-pressed` | tooltip + `aria-label` (en / es)    |
-| ------- | ---------------- | -------------- | ----------------------------------- |
-| visible | eye              | `"false"`      | Hide comments / Ocultar comentarios |
-| hidden  | eye with a slash | `"true"`       | Show comments / Mostrar comentarios |
+| state   | icon             | tooltip + `aria-label` (en / es)    |
+| ------- | ---------------- | ----------------------------------- |
+| visible | eye              | Hide comments / Ocultar comentarios |
+| hidden  | eye with a slash | Show comments / Mostrar comentarios |
+
+The eye is an **action button**, not a toggle button: its accessible name,
+tooltip, and icon swap together to describe the action a click performs
+next, and it carries no `aria-pressed`. This is a deliberate contrast with
+the Comment button, whose name never changes ("Comment") and which
+therefore keeps `aria-pressed` as the only thing that distinguishes its two
+states. Pairing a swapping name with `aria-pressed` would read backwards to
+a screen reader — announcing "Show comments, toggle button, pressed" while
+comments are in fact hidden, i.e. while nothing named "Show comments" is
+active. The swapping name is already the state signal, matching the
+swapping icon and tooltip; see DECISIONS.md for the full reasoning.
 
 Both strings land in `src/locales/en.js` AND `src/locales/es.js`
 (`toolbarHideComments`, `toolbarShowComments`) — the i18n regression scan
@@ -90,24 +101,30 @@ is wrapped so a blocked or full localStorage silently degrades to
 - localStorage unavailable/throws → toggle still works for the session;
   preference just does not persist.
 - Toggling with zero comments is a no-op visually but still flips state,
-  icon, ARIA, and storage — no special case.
+  icon, label, and storage — no special case.
 - `destroy()`/`cleanup()` removes the second pill with the toolbar it
   lives in (same DOM subtree; no extra teardown).
 
 ## Testing
 
 - `test/components.test.js`: `createToolbar` renders the second pill with
-  the eye button, `aria-pressed="false"`, the localized label, and the
-  tooltip wrapper.
+  the eye button, no `aria-pressed` attribute, the localized label, and
+  the tooltip wrapper.
 - `test/overlay.test.js`:
   - clicking the eye adds `CLASSES.MARKERS_HIDDEN` to the mount container,
-    flips `aria-pressed`/label/icon, and writes the storage key;
+    flips the label/icon (and confirms no `aria-pressed` is written), and
+    writes the storage key;
   - clicking again removes all of it;
   - an open thread popover closes when markers hide;
   - `toggleCommentMode()` (the shortcut path's funnel) re-shows;
   - `scrollMarkerIntoView` re-shows;
   - a stored `"true"` hides markers from mount; a throwing localStorage
     stub leaves the widget usable and visible.
+- `test/styles.test.js`: mounts the real stylesheet and asserts, via
+  `getComputedStyle`, that a `.comment-circle` carrying an inline
+  `display` (as the marker engine writes on a visibility pass) still
+  computes to `display: none` inside a `CLASSES.MARKERS_HIDDEN` container —
+  the guarantee the rule's `!important` exists for.
 
 ## Process
 
@@ -125,3 +142,8 @@ is wrapped so a blocked or full localStorage silently degrades to
   without the eye being touched. Deliberate: the alternative (commenting
   blind among invisible markers) is worse, and the stored value always
   mirrors what is actually on screen.
+- On viewports narrower than the toolbar plus the visibility pill's
+  offset (`left: calc(100% + 12px)`), the eye pill can clip off-screen.
+  The layout is the approved mockup's positioning, and no responsive
+  fallback (e.g. wrapping the pill under the toolbar, or shrinking the
+  offset) is included.
