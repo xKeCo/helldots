@@ -35,6 +35,11 @@ import {
   serializeReactions,
 } from "./reactions.js";
 import {
+  resolvePermission,
+  commentTargetOf,
+  replyTargetOf,
+} from "./permissions.js";
+import {
   buildCommentLink,
   readCommentLinkParam,
   DEFAULT_LINK_PARAM,
@@ -288,6 +293,7 @@ class CommentOverlay {
         if (this.inboxView?.isOpen()) this.inboxView.refresh();
       },
       actorKey: () => this._actorKey(),
+      can: (action, target) => this.can(action, target),
       transformScreenshot: (dataUrl, commentId) =>
         this._transformScreenshot(dataUrl, "attachment", commentId),
       // Every action below is a person clicking inside the widget, so the
@@ -1300,6 +1306,7 @@ class CommentOverlay {
             this._popover.refreshCommentViews(commentId);
           },
           actorKey: () => this._actorKey(),
+          can: (action, target) => this.can(action, target),
           onToggleCommentReaction: (id, emoji) =>
             this.toggleCommentReaction(id, emoji),
           onToggleReplyReaction: (commentId, replyId, emoji) =>
@@ -1591,6 +1598,8 @@ class CommentOverlay {
     const index =
       comment?.replies?.findIndex((r) => sameId(r.id, replyId)) ?? -1;
     if (index < 0) return false;
+    const target = replyTargetOf(comment.replies[index], comment.id);
+    if (!this._permits("delete:reply", target)) return false;
 
     const [reply] = comment.replies.splice(index, 1);
     this._syncStorage();
@@ -1620,6 +1629,7 @@ class CommentOverlay {
     const comment = this._findComment(id);
     const next = String(text ?? "").trim();
     if (!comment || !next || next === comment.text) return false;
+    if (!this._permits("edit:comment", commentTargetOf(comment))) return false;
 
     comment.text = next;
     comment.editedAt = new Date().toISOString();
@@ -1654,6 +1664,9 @@ class CommentOverlay {
     const reply = comment?.replies?.find((r) => sameId(r.id, replyId));
     const next = String(text ?? "").trim();
     if (!reply || !next || next === reply.text) return false;
+    if (!this._permits("edit:reply", replyTargetOf(reply, comment.id))) {
+      return false;
+    }
 
     reply.text = next;
     reply.editedAt = new Date().toISOString();
@@ -1834,6 +1847,46 @@ class CommentOverlay {
    */
   _actorKey() {
     return actorKeyOf(this.options.user, this.strings);
+  }
+
+  /**
+   * Whether the current actor may edit or delete the record `target` names.
+   *
+   * Public because the answer has to be askable from outside: the widget's
+   * own menus use it to decide what to render, and a host putting a delete
+   * button in its own chrome needs the same verdict from the same rule
+   * rather than a second copy of it that drifts.
+   *
+   * @param {import('./index.d.ts').PermissionAction} action
+   * @param {import('./index.d.ts').PermissionTarget} target
+   * @returns {boolean}
+   */
+  can(action, target) {
+    return resolvePermission({
+      can: this.options.can,
+      action,
+      target,
+      user: this.options.user,
+      strings: this.strings,
+    });
+  }
+
+  /**
+   * The guard the four mutators are held to — and only when the click came
+   * from inside the widget.
+   *
+   * A call from the host's own code is never refused. That is the whole
+   * reason this reads `_origin` instead of calling `can` directly: the host
+   * drives the very same public methods the inbox does, and a backend that
+   * has just authorized a moderator's delete must be able to complete it
+   * without arguing with a client-side rule it already outranks.
+   *
+   * @param {import('./index.d.ts').PermissionAction} action
+   * @param {import('./index.d.ts').PermissionTarget} target
+   * @returns {boolean}
+   */
+  _permits(action, target) {
+    return this._origin !== "user" || this.can(action, target);
   }
 
   /**
@@ -2063,7 +2116,11 @@ class CommentOverlay {
    * @returns {boolean} false when the id is unknown
    */
   deleteComment(id) {
-    if (!this._findComment(id)) return false;
+    const comment = this._findComment(id);
+    if (!comment) return false;
+    if (!this._permits("delete:comment", commentTargetOf(comment))) {
+      return false;
+    }
     this._removeComment(id);
     if (this.options.persistence === "localStorage") {
       // The merge preserves other-page entries missing from memory, which

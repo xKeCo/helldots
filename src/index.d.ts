@@ -125,6 +125,37 @@ export interface CommentContext {
  */
 export type CommentId = string | number;
 
+/**
+ * The actions `can` is consulted about — editing and deleting, at both
+ * levels, and nothing else. Classification and reactions are triage: they
+ * are reversible and shared by design, so they are never gated.
+ */
+export type PermissionAction =
+  "edit:comment" | "delete:comment" | "edit:reply" | "delete:reply";
+
+/**
+ * What `can` is told about the record an action would affect. Identity only:
+ * enough to decide, and deliberately not a live reference into widget state
+ * or a copy of the screenshots hanging off it.
+ */
+export interface PermissionTarget {
+  /** Id of the comment or of the reply, matching the action. */
+  id: CommentId;
+  /** Display name the record was written under. */
+  author: string;
+  /**
+   * Identity the record was written under; null when the host had declared
+   * no `user.id` at the time. This is the field to compare against your own
+   * session — `author` is a label and two people can share it.
+   */
+  authorId: string | null;
+  /**
+   * The parent comment's id. Present only on `edit:reply` and
+   * `delete:reply`: a reply's id is unique only inside its thread.
+   */
+  commentId?: CommentId;
+}
+
 export interface SerializedComment {
   /**
    * Version of this serialized shape. Stamped as 1 by serializeComments;
@@ -398,6 +429,32 @@ export interface CommentOverlayOptions {
    * at face value and recorded as-is.
    */
   user?: { name: string; id?: string };
+  /**
+   * Decides whether the current `user` may edit or delete a given comment or
+   * reply. Return literal `true` to allow; anything else — including the
+   * `undefined` of a branch with no return — denies, and a predicate that
+   * throws denies too.
+   *
+   * Omit it and the default rule applies: you may edit and delete what
+   * carries your identity, nobody else's. A host that never sets `user` is
+   * unaffected, since every record is then written by the same anonymous
+   * actor.
+   *
+   * Only the four destructive actions are asked about. Status, type,
+   * priority, reactions and replying stay open to everyone.
+   *
+   * This gates the widget's own menus and refuses the action when it comes
+   * from a click inside the widget. It does NOT gate your calls: the host's
+   * own `deleteComment()` always goes through, so a moderation flow your
+   * backend has already authorized is not blocked by a client-side rule.
+   * Nor is it security — the page can always reach the API directly. Check
+   * `authorId` against your session on the server.
+   *
+   * @example
+   * can: (action, target) =>
+   *   isAdmin || target.authorId === session.userId,
+   */
+  can?: (action: PermissionAction, target: PermissionTarget) => boolean;
   /**
    * Query parameter carrying a comment id in "Copy link" URLs, and read back
    * on startup to open that comment. Default: "helldotsComment". Override it
@@ -761,6 +818,15 @@ export declare class CommentOverlay {
    * an object with a non-blank `name`.
    */
   setUser(user: { name: string; id?: string } | null): boolean;
+  /**
+   * Whether the current actor may perform `action` on `target`, under the
+   * host's `can` or — without one — the default ownership rule.
+   *
+   * The same verdict the widget's own menus render from, exposed so a host
+   * putting a delete button in its own chrome asks the one rule rather than
+   * keeping a second copy of it in step.
+   */
+  can(action: PermissionAction, target: PermissionTarget): boolean;
   setCommentStatus(id: CommentId, status: CommentStatus): boolean;
   setCommentType(id: CommentId, type: CommentType | null): boolean;
   setCommentPriority(id: CommentId, priority: CommentPriority | null): boolean;

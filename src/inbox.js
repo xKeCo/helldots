@@ -48,7 +48,7 @@ export class InboxView {
    * @param {string} deps.currentPage
    * @param {() => Array<Object>} deps.getComments
    * @param {{ shortcutKey?: string, shortcutModifier?: string, linkParam?: string }} [deps.options]
-   * @param {{ onOpenDetailScroll: Function, onOpenDetail?: Function, onTransformScreenshot?: Function, onReply: Function, onDelete: Function, onDeleteReply: Function, onEditComment: Function, onEditReply: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function, actorKey: () => string, onToggleCommentReaction: Function, onToggleReplyReaction: Function, onExportComments: Function, onExportMetrics: Function, onPrintReport: Function }} deps.callbacks
+   * @param {{ onOpenDetailScroll: Function, onOpenDetail?: Function, onTransformScreenshot?: Function, onReply: Function, onDelete: Function, onDeleteReply: Function, onEditComment: Function, onEditReply: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onNavigateToPage: Function, onShowLightbox: Function, onActivateCommentMode: Function, onClose: Function, actorKey: () => string, can: (action: import("./index.d.ts").PermissionAction, target: import("./index.d.ts").PermissionTarget) => boolean, onToggleCommentReaction: Function, onToggleReplyReaction: Function, onExportComments: Function, onExportMetrics: Function, onPrintReport: Function }} deps.callbacks
    */
   constructor({
     shadowRoot,
@@ -1004,6 +1004,7 @@ export class InboxView {
   _buildCardActions(comment) {
     return createCommentActions(comment, {
       strings: this.strings,
+      can: this.callbacks.can,
       reactions: this._reactionsUi(),
       onCopy: (c) =>
         copyToClipboard(
@@ -1124,6 +1125,8 @@ export class InboxView {
         String(this.editing.replyId) === String(reply.id);
 
       const replyEl = createReplyElement(reply, this.strings, this.locale, {
+        commentId: comment.id,
+        can: this.callbacks.can,
         // Drops the row instead of re-rendering the detail: a full render
         // would also throw away whatever the user has half-typed in the
         // reply box below.

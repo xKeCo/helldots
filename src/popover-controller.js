@@ -107,6 +107,7 @@ export class PopoverController {
    *   linkParam: () => string,
    *   refreshInbox: () => void,
    *   actorKey: () => string,
+   *   can: (action: import("./index.d.ts").PermissionAction, target: import("./index.d.ts").PermissionTarget) => boolean,
    *   transformScreenshot: Function,
    *   actions: {
    *     addReply: Function, deleteReply: Function,
@@ -357,6 +358,7 @@ export class PopoverController {
     });
 
     const popover = createThreadPopover(comment, strings, locale, {
+      can: this.deps.can,
       onDeleteReply,
       onEditReply,
       reactions,
@@ -367,6 +369,7 @@ export class PopoverController {
     // status picker (RF09) and the ⋯ menu.
     const headerEl = popover.querySelector(`.${CLASSES.THREAD_HEADER}`);
     const actionsEl = createCommentActions(comment, {
+      can: this.deps.can,
       strings,
       reactions,
       onCopy: (c) =>
@@ -499,6 +502,8 @@ export class PopoverController {
       const replyEl = createReplyElement(reply, strings, locale, {
         onDelete: onDeleteReply,
         onEdit: onEditReply,
+        commentId: comment.id,
+        can: this.deps.can,
         reactions,
       });
       repliesContainer.appendChild(replyEl);

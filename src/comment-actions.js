@@ -14,6 +14,7 @@ import {
 } from "./constants.js";
 import { attachMenuToggle } from "./menus.js";
 import { confirmDialog } from "./confirm-dialog.js";
+import { commentTargetOf } from "./permissions.js";
 
 const COPY_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const CHECK_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -260,8 +261,13 @@ export const createMoreMenu = ({ label, tooltip, items }) => {
  * (react, copy its context, the ⋯ menu). The split is why the copy button
  * moved: mixed in among the pickers it read as a fourth classification.
  *
+ * `can` decides which of the destructive items the ⋯ menu is built with. It
+ * is optional and defaults to allowing both, so a caller that renders a strip
+ * without a policy — the style tests, a host embedding the component — gets
+ * the whole menu rather than a silently crippled one.
+ *
  * @param {Object} comment
- * @param {{ strings: Object, reactions?: { trigger: Function }, onCopy: Function, onCopyLink?: Function, onEdit?: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onDelete: Function }} deps
+ * @param {{ strings: Object, reactions?: { trigger: Function }, can?: (action: import("./index.d.ts").PermissionAction, target: import("./index.d.ts").PermissionTarget) => boolean, onCopy: Function, onCopyLink?: Function, onEdit?: Function, onSetStatus: Function, onSetType: Function, onSetPriority: Function, onDelete: Function }} deps
  * @returns {HTMLElement}
  */
 export const createCommentActions = (
@@ -269,6 +275,7 @@ export const createCommentActions = (
   {
     strings,
     reactions,
+    can,
     onCopy,
     onCopyLink,
     onEdit,
@@ -366,36 +373,53 @@ export const createCommentActions = (
   );
 
   // --- more (⋯) menu ---
+  // Hidden, not disabled. A greyed-out "Delete" on every one of a
+  // colleague's comments is a row of dead controls telling you the same
+  // thing over and over; the item simply is not yours to see. "Copy link"
+  // is never gated, so the menu can never come out empty.
+  const target = commentTargetOf(comment);
+  const allow = (/** @type {any} */ action) =>
+    can ? can(action, target) : true;
+
+  // Annotated because the first element alone would fix the element type,
+  // and the two conditional pushes carry fields it does not have.
+  /** @type {Parameters<typeof createMoreMenu>[0]["items"]} */
+  const items = [
+    {
+      label: strings.copyLink,
+      feedbackLabel: strings.linkCopied,
+      onSelect: () => onCopyLink?.(comment),
+    },
+  ];
+  if (allow("edit:comment")) {
+    items.push({
+      label: strings.editComment,
+      onSelect: () => onEdit?.(comment),
+    });
+  }
+  if (allow("delete:comment")) {
+    items.push({
+      label: strings.deleteComment,
+      onSelect: () => onDelete(comment),
+      confirm: () => ({
+        title: strings.confirmDeleteCommentTitle,
+        // Two wordings rather than a reply count: what matters is that a
+        // discussion is about to go with the comment, and saying so
+        // avoids pluralising a number in every locale.
+        message: comment.replies?.length
+          ? strings.confirmDeleteThreadMessage
+          : strings.confirmDeleteCommentMessage,
+        confirmLabel: strings.confirmDelete,
+        cancelLabel: strings.confirmCancel,
+      }),
+    });
+  }
+
   tools.appendChild(
     createMoreMenu({
       label: strings.commentOptions,
       tooltip: strings.moreOptions,
-      items: [
-        {
-          label: strings.copyLink,
-          feedbackLabel: strings.linkCopied,
-          onSelect: () => onCopyLink?.(comment),
-        },
-        {
-          label: strings.editComment,
-          onSelect: () => onEdit?.(comment),
-        },
-        {
-          label: strings.deleteComment,
-          onSelect: () => onDelete(comment),
-          confirm: () => ({
-            title: strings.confirmDeleteCommentTitle,
-            // Two wordings rather than a reply count: what matters is that a
-            // discussion is about to go with the comment, and saying so
-            // avoids pluralising a number in every locale.
-            message: comment.replies?.length
-              ? strings.confirmDeleteThreadMessage
-              : strings.confirmDeleteCommentMessage,
-            confirmLabel: strings.confirmDelete,
-            cancelLabel: strings.confirmCancel,
-          }),
-        },
-      ],
+      items,
     })
   );
 

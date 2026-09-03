@@ -374,6 +374,64 @@ Whatever you declare here is taken at face value and stored as-is. The record
 says what your application asserted about who acted; verifying that claim is
 your backend’s job, and `onChange` carries every mutation to it.
 
+### Who can edit and delete
+
+By default you may edit and delete what carries your identity, and nothing
+else. Somebody else’s comment simply has no Edit or Delete in its ⋯ menu.
+
+The rule compares `authorId` against your `user.id`, falling back to the
+display name when neither side has an id — so **pass `user.id` if this
+matters to you**. Two teammates sharing a display name own each other’s
+comments, and that is not a bug the widget can fix without one.
+
+A host that declares no `user` at all is unaffected: every record is written
+by the same anonymous actor, so nothing is ever hidden. Single-user setups
+and the playground behave exactly as they did.
+
+Override it with `can` when the rule is not yours — moderators, an owner
+role, a read-only viewer:
+
+```js
+createCommentOverlay({
+  user: { name: session.name, id: session.userId },
+  can: (action, target) => {
+    if (session.role === "admin") return true;
+    if (session.role === "viewer") return false;
+    return target.authorId === session.userId;
+  },
+});
+```
+
+`action` is one of `"edit:comment"`, `"delete:comment"`, `"edit:reply"` or
+`"delete:reply"`. `target` carries `{ id, author, authorId }`, plus
+`commentId` on the two reply actions. Return **literal `true`** to allow:
+anything else denies, including the `undefined` of a branch that forgot to
+return, and a `can` that throws denies while warning to the console. A
+permission predicate is the wrong place to be generous.
+
+Only those four actions are asked about. Status, type, priority, tags,
+reactions and replying stay open to everyone — triage is shared work, and
+all of it is reversible.
+
+The same verdict is readable from outside, so a delete button in your own
+chrome can ask the one rule instead of keeping a copy of it in step:
+
+```js
+overlay.can("delete:comment", { id, author, authorId }); // → boolean
+```
+
+**Your own calls are never refused.** `can` gates the widget’s menus and the
+mutations that come from a click inside it; `overlay.deleteComment(id)` from
+your code always goes through, so a moderation flow your backend has already
+authorized is not blocked by a client-side rule it outranks.
+
+> **This is not authorization.** HellDots runs in the page, so anyone with a
+> console reaches the API directly no matter what `can` returns. What it
+> removes is the accidental path — the button that should never have been
+> offered. Real enforcement belongs on your server: check `authorId` against
+> the session when the `comment:deleted` or `comment:edited` event reaches
+> your backend.
+
 ## Triage
 
 Comments carry an optional type, priority and free-form tags. All three start
@@ -565,6 +623,7 @@ OS: iOS 17.2
 | Option                  | Type                                 | Default             |                                                                   |
 | ----------------------- | ------------------------------------ | ------------------- | ----------------------------------------------------------------- |
 | `user`                  | `{ name: string, id?: string }`      | `"Anonymous"`       | Author of new comments and replies; `id` persists as `authorId`   |
+| `can`                   | `(action, target) => boolean`        | own records only    | Vetoes editing and deleting a comment or reply from the widget    |
 | `persistence`           | `"localStorage"` \| `"none"`         | `"none"`            | Auto save/restore, or handle it yourself via callbacks            |
 | `autoScreenshot`        | `boolean`                            | `true`              | Capture a screenshot and environment snapshot per comment         |
 | `embedCrossOriginFonts` | `boolean`                            | `false`             | Fetch unreadable stylesheets so their web fonts reach the capture |
@@ -735,6 +794,7 @@ overlay.setCommentTags(id, tags); // → boolean
 overlay.toggleCommentReaction(id, emoji); // → boolean
 overlay.toggleReplyReaction(commentId, replyId, emoji); // → boolean
 overlay.setUser(user); // → boolean (null returns to the anonymous author)
+overlay.can(action, target); // → boolean (may this actor edit/delete it?)
 overlay.exportCommentsCsv(comments?); // → string (and downloads it)
 overlay.exportMetricsCsv(comments?); // → string (and downloads it)
 overlay.cleanup(); // remove the widget entirely

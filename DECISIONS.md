@@ -3380,3 +3380,76 @@ recording:
 
 No public API yet (`setMarkersHidden` was considered and dropped as YAGNI);
 a host that asks for it gets its own spec.
+
+## Anyone could delete anyone's comment; `can` closes it, the server still has to
+
+The widget had identity and never consulted it. Every comment and reply
+carried `authorId`, and the ⋯ menu offered Edit and Delete on all of them to
+everybody — a colleague's report was one stranger's click from gone. Reported
+from a real integration, not found by a test.
+
+What was chosen:
+
+- **A host callback with a working default**, not one or the other. `can`
+  is a new option; without it the rule is "you own what carries your
+  identity". The default alone had no escape hatch — a moderator or an
+  owner role could not be expressed — and the callback alone would have
+  left the insecure behaviour as the out-of-the-box one, which is how the
+  bug arrived in the first place. Consistent with how the package already
+  delegates `navigate` and `transformScreenshot`: the host decides, and
+  there is something sensible for the host that has not.
+- **Scope: editing and deleting only.** Status, type, priority, tags,
+  reactions and replying stay open to everyone. Those are triage — shared
+  by design and reversible — and a team that cannot resolve each other's
+  reports has lost the point of a shared inbox. Deleting is neither.
+- **Enforced when the origin is `"user"`, never on the host's own call.**
+  `_origin` already existed to tell a click inside the widget apart from
+  the host driving the same public methods (see `_asUser`), and it is
+  exactly the seam this needs: a moderation flow the backend has already
+  authorized must not be argued with by a client-side rule it outranks.
+  The alternative — gating `deleteComment` unconditionally — would have
+  made the host's own sync code fight the guard.
+- **Hidden, not disabled.** A greyed-out Delete on every one of a
+  colleague's comments is a row of dead controls repeating the same
+  refusal. "Copy link" is never gated, so the menu can never come out
+  empty and the ⋯ never becomes a button that opens nothing.
+- **Ownership reuses `actorKeyOf`** from `reactions.js` rather than growing
+  a second resolver. "Is this mine" is one question the widget already
+  answers for reaction pills; two implementations would eventually
+  disagree, and the day they do somebody loses the delete button on their
+  own comment.
+- **`can` must return literal `true`.** Anything else denies — including
+  the `undefined` of a branch that forgot to return — and a `can` that
+  throws denies while warning. Coercing truthily would reintroduce the hole
+  on a host typo; failing closed costs a hidden button and a bug found in a
+  minute.
+- **The target is `{ id, author, authorId }`** (plus `commentId` for
+  replies), built rather than passed whole. The predicate runs on every
+  card the inbox renders, and handing it the live comment would put a
+  string of data-URL screenshots through a function that needs an id — and
+  hand the host a live reference into overlay state.
+
+What it does not do, stated in the README as a blockquote so it cannot be
+skimmed past: **this is not authorization.** HellDots runs in the page; a
+console reaches `deleteComment()` whatever `can` returns. It removes the
+accidental path and gives the host a vocabulary to mirror. Enforcement is
+the backend's, checking `authorId` against the session when `comment:deleted`
+arrives.
+
+Two limits accepted:
+
+- **No `user.id` anywhere falls back to the display name**, so two
+  teammates who share one own each other's comments. The widget genuinely
+  cannot tell them apart; the README says to pass `user.id` if this matters
+  rather than pretending the name is identity.
+- **The anonymous fallback is localised.** With no ids at all, a corpus
+  written under `en` and read under `es` compares `"Anonymous"` against
+  `"Anónimo"` and reads as somebody else's. It fails closed — a hidden
+  button, nothing destroyed — it is the same gap reactions already carry
+  for the same reason, and any host passing `user.id` never reaches that
+  branch. Not worth a locale-independent anonymous sentinel and the
+  migration it would need.
+
+Not a breaking change for hosts that never set `user`: every record is then
+written by the same anonymous actor, the keys match, and nothing is hidden.
+Hosts that do set `user` see behaviour change, which is the point.

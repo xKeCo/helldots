@@ -19,6 +19,7 @@ import {
   priorityLabelOf,
 } from "./comment-actions.js";
 import { createInlineEditor } from "./inline-editor.js";
+import { replyTargetOf } from "./permissions.js";
 
 const formatRelativeTime = (date, strings) => {
   const diff = Date.now() - new Date(date).getTime();
@@ -818,12 +819,18 @@ export const createTooltip = (comment, strings = defaultStrings, locale) => {
  * Optional for the same reason as the handlers above: a caller that never
  * wires it gets the plain row rather than controls that do nothing.
  *
+ * `can`, with the `commentId` the reply hangs off, decides which of the two
+ * the row offers. Optional and allow-all by default, matching the comment
+ * strip: a caller with no policy gets the menu it always got.
+ *
  * @param {any} reply
  * @param {object} [strings]
  * @param {string} [locale]
  * @param {{
  *   onDelete?: (reply: any, replyEl: HTMLElement) => void,
  *   onEdit?: (reply: any) => void,
+ *   commentId?: import("./index.d.ts").CommentId,
+ *   can?: (action: import("./index.d.ts").PermissionAction, target: import("./index.d.ts").PermissionTarget) => boolean,
  *   editing?: {
  *     draft: string,
  *     onInput: (text: string) => void,
@@ -837,7 +844,7 @@ export const createReplyElement = (
   reply,
   strings = defaultStrings,
   locale,
-  { onDelete, onEdit, editing = null, reactions = null } = {}
+  { onDelete, onEdit, commentId, can, editing = null, reactions = null } = {}
 ) => {
   const replyEl = document.createElement("div");
   replyEl.className = CLASSES.THREAD_REPLY;
@@ -856,10 +863,13 @@ export const createReplyElement = (
   // Same ⋯ builder the comment strip uses, so a reply is edited and deleted
   // through the control the user already learned one level up.
   const items = [];
-  if (onEdit) {
+  const target = replyTargetOf(reply, commentId);
+  const allow = (/** @type {any} */ action) =>
+    can ? can(action, target) : true;
+  if (onEdit && allow("edit:reply")) {
     items.push({ label: strings.editReply, onSelect: () => onEdit(reply) });
   }
-  if (onDelete) {
+  if (onDelete && allow("delete:reply")) {
     items.push({
       label: strings.deleteReply,
       onSelect: () => onDelete(reply, replyEl),
@@ -922,6 +932,7 @@ export const createReplyElement = (
  * @param {{
  *   onDeleteReply?: (reply: any, replyEl: HTMLElement) => void,
  *   onEditReply?: (reply: any) => void,
+ *   can?: (action: import("./index.d.ts").PermissionAction, target: import("./index.d.ts").PermissionTarget) => boolean,
  *   reactions?: import("./reactions.js").ReactionsUi | null,
  * }} [handlers]
  */
@@ -929,7 +940,7 @@ export const createThreadPopover = (
   comment,
   strings = defaultStrings,
   locale,
-  { onDeleteReply, onEditReply, reactions = null } = {}
+  { onDeleteReply, onEditReply, can, reactions = null } = {}
 ) => {
   const popover = document.createElement("div");
   popover.className = CLASSES.THREAD_POPOVER;
@@ -968,6 +979,8 @@ export const createThreadPopover = (
         createReplyElement(reply, strings, locale, {
           onDelete: onDeleteReply,
           onEdit: onEditReply,
+          commentId: comment.id,
+          can,
           reactions,
         })
       );
