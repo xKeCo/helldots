@@ -79,10 +79,29 @@ deleted.
 ## Accessibility
 
 No badge communicates meaning through color alone — every one carries text
-(WCAG 1.4.1). The Lighthouse a11y gate in CI sits at 0.9. Note that the
-widget currently ships a **known, intentional** gap: visible focus rings were
-deliberately reverted for visual parity — documented in `DECISIONS.md`, do not
-"fix" it without asking.
+(WCAG 1.4.1). The Lighthouse a11y gate in CI sits at 0.9.
+
+Focus indicators are bound to **`:focus-visible`, never `:focus`** — that
+distinction is the whole reason they exist again after having been reverted
+once for visual parity (`DECISIONS.md`). A `:focus` rule fires on a mouse
+click too, which is what broke the look the first time. Two consequences to
+keep in mind when touching `styles.js`:
+
+- The indicator block has to stay **last in `getStyles()`**. `:focus-visible`
+  is a subset of `:focus`, so both rules match at once and the suppressors
+  above it are equally specific — source order is the only thing that makes
+  the indicator win.
+- The selector is `[tabindex="0"]`, not `[tabindex]`. The inbox panel is
+  `tabindex="-1"` and its ring is suppressed on purpose.
+
+Text fields take an inset underline rather than the ring, because browsers
+match `:focus-visible` on them even on a click. `styles.test.js` guards all
+of it — a second revert fails the build instead of passing quietly.
+
+What Lighthouse cannot see, it cannot gate: 2.4.7 is not machine-detectable
+and the score reads 100 either way. Keyboard focus still ships one known
+limitation — no focus containment on the modal surfaces — recorded in
+`DECISIONS.md`.
 
 ## Running the playground
 

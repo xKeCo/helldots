@@ -297,7 +297,85 @@ describe("the inbox panel's focus ring", () => {
   it("leaves the confirm dialog's rings alone", () => {
     // Those are deliberate and documented: the dialog traps Tab between two
     // buttons, one destructive. Suppressing the panel's ring must not reach
-    // them — nor reopen the rings reverted elsewhere for visual parity.
-    expect(getStyles()).toContain("outline: 2px solid #2E90FA");
+    // them. Anchored to the class rather than to the bare declaration: the
+    // widget-wide rings below use the same colour and width, so matching the
+    // string alone would pass with these two rules deleted.
+    expect(getStyles()).toMatch(
+      new RegExp(
+        `\\.${CLASSES.CONFIRM_ACCEPT}:focus-visible[^{]*\\{[^}]*` +
+          `outline:\\s*2px solid #2E90FA`
+      )
+    );
+  });
+});
+
+describe("focus indicators (WCAG 2.1 AA, 2.4.7 Focus Visible)", () => {
+  // These rings were once added and then reverted for visual parity, because
+  // they were bound to `:focus` and so fired on a mouse click too. They are
+  // back on `:focus-visible`, which the browser only matches for keyboard
+  // focus, so both requirements hold at once. This suite exists so a second
+  // revert has to be deliberate: it fails the build instead of passing quietly.
+  const ring = /outline:\s*2px solid #2E90FA/;
+
+  it("rings every button reached by keyboard", () => {
+    expect(getStyles()).toMatch(
+      new RegExp(`button:focus-visible[^{]*\\{[^}]*${ring.source}`)
+    );
+  });
+
+  it("rings the controls that are focusable without being buttons", () => {
+    // The marker circles, the screenshot thumbnails and the inbox cards are
+    // divs and imgs carrying tabindex="0". Selecting on the attribute rather
+    // than on their classes is what keeps the next one covered for free.
+    expect(getStyles()).toMatch(
+      new RegExp(`\\[tabindex="0"\\]:focus-visible[^{]*\\{[^}]*${ring.source}`)
+    );
+  });
+
+  it("does not ring the inbox panel, which is tabindex=-1", () => {
+    // A ring around the whole panel marks nothing anyone can act on. The
+    // [tabindex="0"] selector has to stay exact for that to keep holding.
+    expect(getStyles()).not.toContain("[tabindex]:focus-visible");
+  });
+
+  it("underlines the borderless text fields instead of ringing them", () => {
+    // Browsers match :focus-visible on a text field even when it was clicked,
+    // so a ring here would come back on the pointer — the exact regression
+    // that caused the revert. An inset underline reads as a field affordance.
+    const css = getStyles();
+    [IDS.COMMENT_INPUT, CLASSES.THREAD_INPUT].forEach((selector) => {
+      expect(css).toContain(`${selector}:focus-visible`);
+    });
+    expect(css).toMatch(
+      new RegExp(
+        `${CLASSES.THREAD_INPUT}:focus-visible[^{]*\\{[^}]*` +
+          `box-shadow:\\s*inset 0 -2px 0 #2E90FA`
+      )
+    );
+  });
+
+  it("keeps the indicator rules last so the suppressors above lose", () => {
+    // `:focus-visible` is a subset of `:focus`, so both rules match at once
+    // and the cascade decides. `#comment-input:focus { box-shadow: none }`
+    // and `.thread-input:focus { outline: none }` are equally specific to
+    // their `:focus-visible` counterparts — source order is the only thing
+    // that makes the indicator win.
+    const css = getStyles();
+    expect(
+      css.lastIndexOf(`#${IDS.COMMENT_INPUT}:focus-visible`)
+    ).toBeGreaterThan(css.lastIndexOf(`#${IDS.COMMENT_INPUT}:focus {`));
+    expect(
+      css.lastIndexOf(`.${CLASSES.THREAD_INPUT}:focus-visible`)
+    ).toBeGreaterThan(css.lastIndexOf(`.${CLASSES.THREAD_INPUT}:focus {`));
+  });
+
+  it("leaves the inline editor's existing border cue alone", () => {
+    // It is the one text field with a border, and it already turns blue on
+    // focus — a visible indicator that predates this work and needs nothing.
+    expect(getStyles()).toMatch(
+      new RegExp(
+        `\\.${CLASSES.EDITOR_INPUT}:focus[^-][^{]*\\{[^}]*border-color`
+      )
+    );
   });
 });

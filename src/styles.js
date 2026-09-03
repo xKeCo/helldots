@@ -1390,7 +1390,11 @@ ${webkitScrollbar(
         overflow-x: auto;
         gap: 8px;
         margin-top: 4px;
-        padding: 4px 0;
+        /* overflow-x clips at the padding box, which would shave the focus
+           ring off the end thumbnails; the negative margin puts the strip
+           back where it was. */
+        padding: 4px;
+        margin-inline: -4px;
         scrollbar-width: none;
         -ms-overflow-style: none;
         margin-bottom: 8px;
@@ -2004,6 +2008,30 @@ ${webkitScrollbar(
         color: rgba(255,255,255,0.75);
         font-size: 13px;
         line-height: 1.4;
+    }
+
+    /* WCAG 2.1 AA, 2.4.7 Focus Visible. Bound to :focus-visible, never
+       :focus — that is what lets the rings exist again after being reverted
+       for visual parity, since :focus fired on a mouse click too. Full
+       reasoning in DECISIONS.md. Three things are load-bearing:
+
+       - This block stays LAST. :focus-visible is a subset of :focus, so both
+         match at once and the suppressors above are equally specific.
+       - [tabindex="0"], not [tabindex]: the inbox panel is -1 and its ring is
+         suppressed on purpose. Selecting by element type rather than by class
+         is what keeps the next control covered without an edit.
+       - Text fields take the underline, not the ring: browsers match
+         :focus-visible on them even on a click. .${CLASSES.EDITOR_INPUT} is
+         left out, already carrying a blue border on focus. */
+    button:focus-visible,
+    [tabindex="0"]:focus-visible {
+        outline: 2px solid #2E90FA;
+        outline-offset: 2px;
+    }
+
+    #${IDS.COMMENT_INPUT}:focus-visible,
+    .${CLASSES.THREAD_INPUT}:focus-visible {
+        box-shadow: inset 0 -2px 0 #2E90FA;
     }
 `;
 

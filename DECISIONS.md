@@ -3453,3 +3453,65 @@ Two limits accepted:
 Not a breaking change for hosts that never set `user`: every record is then
 written by the same anonymous actor, the keys match, and nothing is hidden.
 Hosts that do set `user` see behaviour change, which is the point.
+
+## The focus rings come back, on `:focus-visible` this time (reverses "Deliberate reversal of the four `:focus-visible` rules")
+
+The reversal above traded WCAG 2.1 AA criterion 2.4.7 Focus Visible for
+visual parity with `dev-v2`, and said so plainly: the widget's interactive
+elements showed no focus indicator under keyboard navigation. That entry
+stands as the record of what was decided then. This one reverses it, because
+the trade it accepted was never actually forced.
+
+**The conflict was an artefact of the selector, not of the requirement.** The
+reverted rules were bound to `:focus`, which fires however focus arrived — so
+the ring appeared on a mouse click too, and that is what failed the parity
+check. `:focus-visible` is the platform's own answer to exactly this: the
+browser matches it only when it judges focus to have come from the keyboard.
+Suppressing the ring on `:focus` for the pointer and painting it on
+`:focus-visible` for the keyboard satisfies both demands at once. There was
+no choice to make.
+
+**Selected by element type, not by a list of classes.** Everything focusable
+inside the shadow root is a `<button>`, a text field, or carries
+`tabindex="0"` — so `button:focus-visible, [tabindex="0"]:focus-visible`
+covers the toolbar, the pickers, the menu items, the filter chips, the cards,
+the marker circles and the screenshot thumbnails, and keeps covering whatever
+is added next. A hardcoded list would stop covering new classes in silence,
+which `styles.test.js` has already had to learn twice.
+
+The `"0"` in the attribute selector is load-bearing: `.inbox-panel` is
+`tabindex="-1"` and its suppressed ring is its own decision, made because a
+ring around a whole panel marks nothing anyone can act on. A bare
+`[tabindex]` would undo it. A test asserts the exact form.
+
+**Text fields get an underline, not a ring.** Browsers match `:focus-visible`
+on a text input even when it was clicked, on the assumption that typing
+follows — so the same rule there would put a ring back on the pointer and
+reintroduce the regression that caused the revert. The two borderless fields
+(`#comment-input`, `.thread-input`) take `box-shadow: inset 0 -2px 0` on
+`:focus-visible` instead: it reads as a field affordance rather than an
+accessibility artefact, and being inset it costs no layout. The inline
+editor is untouched — it is bordered and already turns its border blue on
+`:focus`, which was a compliant indicator all along.
+
+The ring is `2px solid #2E90FA` at `outline-offset: 2px`, the colour the
+confirm dialog already uses. It measures **5.25:1** against the `#1C1C1E`
+surface every panel in the widget sits on, comfortably past the 3:1 that
+1.4.11 Non-text Contrast asks of an indicator.
+
+Two things this does not do:
+
+- **The marker circles sit on the host page, whose background is arbitrary.**
+  The 5.25:1 figure is against the widget's own surface; against a blue host
+  page the ring could fall below 3:1. Accepted rather than solved: the fix
+  would be a two-tone ring (a light halo outside a dark one), and the circle
+  already carries a `2px solid #FFF` border that gives the outline something
+  to read against in practice. Revisit if a host reports it.
+- **No automated gate catches a regression in the rendered page.** 2.4.7 is
+  not machine-detectable; the Lighthouse score was 100 before this change and
+  is 100 after. What guards it is `styles.test.js`, which asserts the rules
+  exist, that the text-field treatment is the underline and not the ring, and
+  that the indicator block stays last in the sheet — because `:focus-visible`
+  is a subset of `:focus`, both rules match at once, and the suppressors above
+  are equally specific, so source order is the only thing that makes the
+  indicator win.
