@@ -21,6 +21,24 @@ const SCROLLBAR = `
         scrollbar-width: thin;
         scrollbar-color: rgba(255,255,255,0.22) transparent;`;
 
+// Every text field in the widget sits on the same surface: a padded, rounded
+// box with a hairline border. They used to be borderless and unpadded, which
+// left a focus cue nowhere to go but on top of the text — `.thread-input` is
+// an `<input>` exactly one line tall, so the `inset 0 -2px 0` underline it
+// carried was painted straight through the descenders of whatever had just
+// been typed. A padded box gives the cue its own room and makes an empty
+// field look like something you can type into.
+const FIELD_SURFACE = `
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        padding: 8px 10px;
+        color: white;
+        font-family: inherit;
+        font-size: 14px;
+        box-sizing: border-box;
+        transition: border-color 0.12s ease, box-shadow 0.12s ease;`;
+
 const webkitScrollbar = (...selectors) =>
   selectors
     .map(
@@ -235,26 +253,16 @@ export const getStyles = () => `
 
     #${IDS.COMMENT_INPUT} {
         flex: 1;
-        min-height: 20px;
-        background: #1C1C1E;
-        border: none;
+        /* One line of content, plus the padding and border around it. */
+        min-height: 38px;
         resize: none;
-        font-family: inherit;
-        color: white;
-        font-size: 14px;
         line-height: 1.4;
-        box-sizing: border-box;
         field-sizing: content;
-        padding: 8px 0;
+        margin-top: 10px;${FIELD_SURFACE}
     }
 
     #${IDS.COMMENT_INPUT}::placeholder {
         color: rgba(255, 255, 255, 0.5);
-    }
-    
-    #${IDS.COMMENT_INPUT}:focus {
-        outline: none;
-        box-shadow: none;
     }
 
     .${CLASSES.COMMENT_ACTIONS_BAR} {
@@ -1301,24 +1309,11 @@ ${webkitScrollbar(
     }
 
     .${CLASSES.THREAD_INPUT} {
-        width: 100%;
-        background: transparent;
-        border: none;
-        padding: 0;
-        color: white;
-        font-size: 14px;
-        font-family: inherit;
-        outline: none;
-        box-sizing: border-box;
+        width: 100%;${FIELD_SURFACE}
     }
 
     .${CLASSES.THREAD_INPUT}::placeholder {
         color: rgba(255,255,255,0.5);
-    }
-
-    .${CLASSES.THREAD_INPUT}:focus {
-        outline: none;
-        box-shadow: none;
     }
 
     .${CLASSES.THREAD_SUBMIT} {
@@ -1391,10 +1386,12 @@ ${webkitScrollbar(
         gap: 8px;
         margin-top: 4px;
         /* overflow-x clips at the padding box, which would shave the focus
-           ring off the end thumbnails; the negative margin puts the strip
-           back where it was. */
+           ring off the end thumbnails, so the strip carries 4px of padding
+           for it. That padding is NOT pulled back with a negative inline
+           margin: it made the strip 8px wider than its containing block, and
+           the .thread-scroll it sits in — overflow-y: auto, so overflow-x
+           computes to auto too — answered with a horizontal scrollbar. */
         padding: 4px;
-        margin-inline: -4px;
         scrollbar-width: none;
         -ms-overflow-style: none;
         margin-bottom: 8px;
@@ -1618,33 +1615,37 @@ ${webkitScrollbar(
     .${CLASSES.LIGHTBOX_CLOSE}:hover {
         background: rgba(255,255,255,0.3);
     }
+
+    /* One rule for all three fields. The browser's own focus ring is dropped
+       here and replaced below, in the indicator block: a blue border that
+       reads as a field affordance on the pointer, and the glow around it that
+       makes it a compliant indicator for the keyboard. */
+    #${IDS.COMMENT_INPUT}:focus,
+    .${CLASSES.THREAD_INPUT}:focus,
+    .${CLASSES.EDITOR_INPUT}:focus {
+        outline: none;
+        border-color: rgba(46, 144, 250, 0.7);
+    }
+
     /* --- inline editor --- */
 
+    /* The 3px of inline padding is room for the focus glow on the field
+       below. This is the one text field that sits inside .thread-scroll,
+       which clips at its padding box and has none of its own — without it
+       the glow would show above and below the field but not beside it. */
     .${CLASSES.EDITOR} {
         display: flex;
         flex-direction: column;
         gap: 8px;
         margin: 4px 0 2px;
+        padding-inline: 3px;
     }
 
     .${CLASSES.EDITOR_INPUT} {
         width: 100%;
-        box-sizing: border-box;
         resize: vertical;
         min-height: 60px;
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.14);
-        border-radius: 8px;
-        padding: 8px 10px;
-        color: white;
-        font-size: 14px;
-        font-family: inherit;
-        line-height: 1.45;
-        outline: none;${SCROLLBAR}
-    }
-
-    .${CLASSES.EDITOR_INPUT}:focus {
-        border-color: rgba(46,144,250,0.7);
+        line-height: 1.45;${FIELD_SURFACE}${SCROLLBAR}
     }
 
     .${CLASSES.EDITOR_ACTIONS} {
@@ -2020,9 +2021,12 @@ ${webkitScrollbar(
        - [tabindex="0"], not [tabindex]: the inbox panel is -1 and its ring is
          suppressed on purpose. Selecting by element type rather than by class
          is what keeps the next control covered without an edit.
-       - Text fields take the underline, not the ring: browsers match
-         :focus-visible on them even on a click. .${CLASSES.EDITOR_INPUT} is
-         left out, already carrying a blue border on focus. */
+       - Text fields light up their own edge instead of taking the ring:
+         browsers match :focus-visible on them even on a click, so whatever
+         goes here shows on the pointer too and has to read as a field
+         affordance. A blue border plus a soft glow around the same rounded
+         box does; the "inset 0 -2px 0" underline this replaces did not — it
+         was painted through the text in the one-line .thread-input. */
     button:focus-visible,
     [tabindex="0"]:focus-visible {
         outline: 2px solid #2E90FA;
@@ -2030,8 +2034,10 @@ ${webkitScrollbar(
     }
 
     #${IDS.COMMENT_INPUT}:focus-visible,
-    .${CLASSES.THREAD_INPUT}:focus-visible {
-        box-shadow: inset 0 -2px 0 #2E90FA;
+    .${CLASSES.THREAD_INPUT}:focus-visible,
+    .${CLASSES.EDITOR_INPUT}:focus-visible {
+        border-color: #2E90FA;
+        box-shadow: 0 0 0 3px rgba(46, 144, 250, 0.28);
     }
 `;
 

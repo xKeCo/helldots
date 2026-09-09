@@ -338,20 +338,30 @@ describe("focus indicators (WCAG 2.1 AA, 2.4.7 Focus Visible)", () => {
     expect(getStyles()).not.toContain("[tabindex]:focus-visible");
   });
 
-  it("underlines the borderless text fields instead of ringing them", () => {
+  it("lights the text fields' own edge instead of ringing them", () => {
     // Browsers match :focus-visible on a text field even when it was clicked,
     // so a ring here would come back on the pointer — the exact regression
-    // that caused the revert. An inset underline reads as a field affordance.
+    // that caused the revert. A blue border with a glow around the field's
+    // own rounded box reads as a field affordance instead.
     const css = getStyles();
-    [IDS.COMMENT_INPUT, CLASSES.THREAD_INPUT].forEach((selector) => {
-      expect(css).toContain(`${selector}:focus-visible`);
-    });
+    [IDS.COMMENT_INPUT, CLASSES.THREAD_INPUT, CLASSES.EDITOR_INPUT].forEach(
+      (selector) => {
+        expect(css).toContain(`${selector}:focus-visible`);
+      }
+    );
     expect(css).toMatch(
       new RegExp(
         `${CLASSES.THREAD_INPUT}:focus-visible[^{]*\\{[^}]*` +
-          `box-shadow:\\s*inset 0 -2px 0 #2E90FA`
+          `box-shadow:\\s*0 0 0 3px rgba\\(46, 144, 250`
       )
     );
+  });
+
+  it("does not put the cue back inside the field, on top of the text", () => {
+    // The cue this replaces was `box-shadow: inset 0 -2px 0`. `.thread-input`
+    // is an <input> one line tall, so with no padding of its own the bar was
+    // painted straight through the descenders of what had just been typed.
+    expect(getStyles()).not.toContain("inset 0 -2px 0 #2E90FA");
   });
 
   it("keeps the indicator rules last so the suppressors above lose", () => {
@@ -363,19 +373,41 @@ describe("focus indicators (WCAG 2.1 AA, 2.4.7 Focus Visible)", () => {
     const css = getStyles();
     expect(
       css.lastIndexOf(`#${IDS.COMMENT_INPUT}:focus-visible`)
-    ).toBeGreaterThan(css.lastIndexOf(`#${IDS.COMMENT_INPUT}:focus {`));
+    ).toBeGreaterThan(css.lastIndexOf(`#${IDS.COMMENT_INPUT}:focus,`));
     expect(
       css.lastIndexOf(`.${CLASSES.THREAD_INPUT}:focus-visible`)
-    ).toBeGreaterThan(css.lastIndexOf(`.${CLASSES.THREAD_INPUT}:focus {`));
+    ).toBeGreaterThan(css.lastIndexOf(`.${CLASSES.THREAD_INPUT}:focus,`));
   });
 
-  it("leaves the inline editor's existing border cue alone", () => {
-    // It is the one text field with a border, and it already turns blue on
-    // focus — a visible indicator that predates this work and needs nothing.
+  it("turns every field's border blue on plain :focus too", () => {
+    // The border is the half of the cue that survives a clipping ancestor,
+    // so it carries the affordance on the pointer on its own. All three
+    // fields share the rule — the inline editor had it first.
     expect(getStyles()).toMatch(
       new RegExp(
         `\\.${CLASSES.EDITOR_INPUT}:focus[^-][^{]*\\{[^}]*border-color`
       )
     );
+  });
+});
+
+describe("the screenshot strip", () => {
+  const strip = () =>
+    getStyles().match(
+      new RegExp(`\\.${CLASSES.SCREENSHOTS_CONTAINER} \\{[^}]*\\}`)
+    )[0];
+
+  it("keeps the padding that stops overflow-x shaving the focus ring", () => {
+    // The strip scrolls horizontally, and overflow clips at the padding box.
+    // Without an inset the ring on the first and last thumbnail is cut off.
+    expect(strip()).toContain("padding: 4px");
+  });
+
+  it("does not pull that padding back with a negative inline margin", () => {
+    // It used to. That made the strip 8px wider than its containing block,
+    // and `.thread-scroll` — `overflow-y: auto`, so `overflow-x` computes to
+    // `auto` as well — answered with a horizontal scrollbar across the whole
+    // thread. The 4px inset is cheaper than the scrollbar it was buying.
+    expect(strip()).not.toMatch(/margin-inline:\s*-/);
   });
 });

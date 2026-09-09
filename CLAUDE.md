@@ -94,9 +94,13 @@ keep in mind when touching `styles.js`:
 - The selector is `[tabindex="0"]`, not `[tabindex]`. The inbox panel is
   `tabindex="-1"` and its ring is suppressed on purpose.
 
-Text fields take an inset underline rather than the ring, because browsers
-match `:focus-visible` on them even on a click. `styles.test.js` guards all
-of it — a second revert fails the build instead of passing quietly.
+Text fields light their own edge — a blue border plus a soft glow around the
+same rounded box — rather than taking the ring, because browsers match
+`:focus-visible` on them even on a click, so the cue has to read as a field
+affordance on the pointer too. It must not be painted _inside_ the field:
+the `inset 0 -2px 0` underline this replaces struck through the descenders
+of `.thread-input`, which is one line tall. `styles.test.js` guards all of
+it — a second revert fails the build instead of passing quietly.
 
 What Lighthouse cannot see, it cannot gate: 2.4.7 is not machine-detectable
 and the score reads 100 either way. Keyboard focus still ships one known

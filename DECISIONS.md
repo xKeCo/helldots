@@ -3515,3 +3515,67 @@ Two things this does not do:
   is a subset of `:focus`, both rules match at once, and the suppressors above
   are equally specific, so source order is the only thing that makes the
   indicator win.
+
+## Text fields get a surface, and the focus cue moves outside them (revises "Text fields get an underline, not a ring")
+
+`#comment-input` and `.thread-input` were borderless, unpadded and — in the
+thread's case — transparent. An empty reply box was a caption and a caret
+with nothing around them, and the focus cue the entry above chose for them,
+`box-shadow: inset 0 -2px 0 #2E90FA`, had nowhere to go but on top of the
+text: `.thread-input` is an `<input>` with `padding: 0`, so its border box is
+one 17px line, and a 2px inset bar at the bottom of it is painted through the
+descenders of whatever was just typed. The reasoning in that entry still
+holds — a hard ring at an offset does belong to the keyboard, and a text
+field matches `:focus-visible` on a click — but the conclusion assumed the
+only place left for a cue was inside the field. That was a consequence of the
+fields having no box, not of the requirement.
+
+**All three fields now share one surface.** `FIELD_SURFACE` in `styles.js` is
+`rgba(255,255,255,0.05)` on a `rgba(255,255,255,0.12)` hairline, 10px radius,
+`8px 10px` of padding. The inline editor already looked like this and was the
+one field nobody complained about; the other two now match it, which is also
+why the constant exists rather than three near-copies. The padding is what
+gives the cue somewhere to be that is not the text.
+
+**The cue is the field's own edge.** `:focus` turns the border
+`rgba(46,144,250,0.7)`; the indicator block at the end of the sheet takes it
+to solid `#2E90FA` and adds `box-shadow: 0 0 0 3px rgba(46,144,250,0.28)` —
+a glow following the same 10px radius. Both halves show on a pointer click,
+which is the point: this reads as a field waking up, not as an accessibility
+artefact bolted to it. `#2E90FA` still measures 5.25:1 against `#1C1C1E`, so
+1.4.11 Non-text Contrast holds on the border alone.
+
+**The glow is ink, so a clipping ancestor eats it.** Box shadows do not
+contribute to scrollable overflow, so this cannot bring back a scrollbar —
+but `overflow` clips at the padding box, and `.thread-scroll` has no padding.
+`.editor` is the one field inside it, and it takes `padding-inline: 3px`, the
+exact width of the glow. The alternative was padding on `.thread-scroll`
+itself, which would have offset the whole scrolled column against the pinned
+header and reply box; a 3px inset on a transient edit box is cheaper. The
+inbox is fine as it is — `.inbox-detail` already carries 12px.
+
+What this does not solve: the cue is the same for pointer and keyboard, so
+`:focus-visible` no longer buys a _different_ look here, only the same one
+under a stricter selector. It stays on `:focus-visible` anyway — the rule in
+`CLAUDE.md` is worth more than the 40 bytes saved by merging it into the
+`:focus` block, and a future field that is not a text input would need the
+distinction back.
+
+## The screenshot strip stops paying for its focus ring with a scrollbar
+
+`.screenshots-container` scrolls horizontally, and `overflow` clips at the
+padding box, so the ring on the first and last thumbnail needed an inset to
+survive: `padding: 4px`. That inset was then cancelled with
+`margin-inline: -4px` to put the strip back where it had been.
+
+The negative margin made the strip 8px wider than its containing block. In
+the thread popover the strip is a child of `.thread-scroll`, which is
+`overflow-y: auto` — and `overflow-x: visible` computes to `auto` when the
+other axis is not `visible`, so the browser answered the 4px of unreachable
+overflow with a horizontal scrollbar across the entire thread, replies and
+all. The strip did not scroll; the thread did.
+
+The margin is gone and the padding stays. The strip now sits 4px in from the
+content edge — measurable, not noticeable, and paid once by thumbnails rather
+than by every element in the scroll container. `styles.test.js` asserts both
+halves: that the padding is still there, and that nothing pulls it back.
