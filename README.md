@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/xKeCo/helldots/main/assets/brand/helldots-mark.png" alt="" width="72" height="72">
+
 # HellDots
 
 Drop-in comment overlay for web apps. Your team clicks anywhere on a page,

@@ -303,7 +303,7 @@ describe("the inbox panel's focus ring", () => {
     expect(getStyles()).toMatch(
       new RegExp(
         `\\.${CLASSES.CONFIRM_ACCEPT}:focus-visible[^{]*\\{[^}]*` +
-          `outline:\\s*2px solid #2E90FA`
+          `outline:\\s*2px solid #2563EB`
       )
     );
   });
@@ -315,7 +315,7 @@ describe("focus indicators (WCAG 2.1 AA, 2.4.7 Focus Visible)", () => {
   // back on `:focus-visible`, which the browser only matches for keyboard
   // focus, so both requirements hold at once. This suite exists so a second
   // revert has to be deliberate: it fails the build instead of passing quietly.
-  const ring = /outline:\s*2px solid #2E90FA/;
+  const ring = /outline:\s*2px solid #2563EB/;
 
   it("rings every button reached by keyboard", () => {
     expect(getStyles()).toMatch(
@@ -352,7 +352,7 @@ describe("focus indicators (WCAG 2.1 AA, 2.4.7 Focus Visible)", () => {
     expect(css).toMatch(
       new RegExp(
         `${CLASSES.THREAD_INPUT}:focus-visible[^{]*\\{[^}]*` +
-          `box-shadow:\\s*0 0 0 3px rgba\\(46, 144, 250`
+          `box-shadow:\\s*0 0 0 3px rgba\\(37, 99, 235`
       )
     );
   });
@@ -361,7 +361,7 @@ describe("focus indicators (WCAG 2.1 AA, 2.4.7 Focus Visible)", () => {
     // The cue this replaces was `box-shadow: inset 0 -2px 0`. `.thread-input`
     // is an <input> one line tall, so with no padding of its own the bar was
     // painted straight through the descenders of what had just been typed.
-    expect(getStyles()).not.toContain("inset 0 -2px 0 #2E90FA");
+    expect(getStyles()).not.toContain("inset 0 -2px 0 #2563EB");
   });
 
   it("keeps the indicator rules last so the suppressors above lose", () => {

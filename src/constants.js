@@ -266,7 +266,7 @@ export const Z_INDEX = {
 // `stdDeviation=5` it needed ~15px of margin the 32px canvas does not have.
 // The white 2px stroke is what carries contrast against any background; the
 // shadow was a 16%-opacity blue glow that barely registered.
-export const CURSOR_SVG = `data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><g transform="translate(-4,-4)"><path d="M6 8C6 6.89543 6.89543 6 8 6H20C27.732 6 34 12.268 34 20V20C34 27.732 27.732 34 20 34V34C12.268 34 6 27.732 6 20V8Z" fill="%232E90FA"/><path d="M8 7H20C27.1797 7 33 12.8203 33 20C33 27.1797 27.1797 33 20 33C12.8203 33 7 27.1797 7 20V8C7 7.44772 7.44772 7 8 7Z" stroke="white" stroke-width="2"/></g></svg>`;
+export const CURSOR_SVG = `data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><g transform="translate(-4,-4)"><path d="M6 8C6 6.89543 6.89543 6 8 6H20C27.732 6 34 12.268 34 20V20C34 27.732 27.732 34 20 34V34C12.268 34 6 27.732 6 20V8Z" fill="%232563EB"/><path d="M8 7H20C27.1797 7 33 12.8203 33 20C33 27.1797 27.1797 33 20 33C12.8203 33 7 27.1797 7 20V8C7 7.44772 7.44772 7 8 7Z" stroke="white" stroke-width="2"/></g></svg>`;
 
 // Where the pointer actually points: the teardrop's sharp top-left tip.
 export const CURSOR_HOTSPOT = "2 2";

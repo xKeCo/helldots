@@ -203,8 +203,8 @@ export const getStyles = () => `
     }
 
     .${CLASSES.TOOLBAR_COMMENT_BTN}.${CLASSES.ACTIVE} {
-        color: #2E90FA;
-        background: rgba(46, 144, 250, 0.1);
+        color: #2563EB;
+        background: rgba(37, 99, 235, 0.1);
     }
 
     
@@ -293,7 +293,7 @@ export const getStyles = () => `
         position: absolute;
         width: ${MARKER_SIZE}px;
         height: ${MARKER_SIZE}px;
-        background: #2E90FA;
+        background: #2563EB;
         border-radius: 0% 100% 100% 100%;
         border: 2px solid #FFF;
         cursor: pointer;
@@ -305,13 +305,13 @@ export const getStyles = () => `
 
     .${CLASSES.CIRCLE}:hover {
         transform: translate(-50%, -50%) scale(1.2) !important;
-        background: rgb(0, 123, 255);
+        background: #3B82F6;
     }
 
     .${CLASSES.CIRCLE}.${CLASSES.HIGHLIGHT} {
         transform: translate(-50%, -50%) scale(1.2) !important;
-        background: rgb(0, 123, 255);
-        box-shadow: 0 0 0 4px rgba(46, 144, 250, 0.35), 0 1px 5px rgba(0,0,0,0.2);
+        background: #3B82F6;
+        box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.35), 0 1px 5px rgba(0,0,0,0.2);
     }
 
     /* The marker whose thread is open. Grows like hover does — the pointer
@@ -320,8 +320,8 @@ export const getStyles = () => `
        not colour alone (WCAG 1.4.1). */
     .${CLASSES.CIRCLE}.${CLASSES.CIRCLE_ACTIVE} {
         transform: translate(-50%, -50%) scale(1.2) !important;
-        background: rgb(0, 123, 255);
-        box-shadow: 0 0 0 5px rgba(46, 144, 250, 0.5), 0 1px 5px rgba(0,0,0,0.2);
+        background: #3B82F6;
+        box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.5), 0 1px 5px rgba(0,0,0,0.2);
     }
 
     /* The eye toggle: hiding is a class on the mount container, so every
@@ -926,11 +926,11 @@ ${webkitScrollbar(
        stands alone: the count is text and aria-pressed says the rest
        (WCAG 1.4.1). */
     .${CLASSES.REACTION_PILL_MINE} {
-        border-color: #2E90FA;
-        background: rgba(46, 144, 250, 0.16);
+        border-color: #2563EB;
+        background: rgba(37, 99, 235, 0.16);
     }
     .${CLASSES.REACTION_PILL_MINE}:hover {
-        background: rgba(46, 144, 250, 0.24);
+        background: rgba(37, 99, 235, 0.24);
     }
     /* The platform emoji face, named explicitly: the widget's own stack is a
        UI sans that renders some of these as monochrome glyphs. */
@@ -1319,7 +1319,7 @@ ${webkitScrollbar(
     .${CLASSES.THREAD_SUBMIT} {
         background: none;
         border: none;
-        color: #2E90FA;
+        color: #2563EB;
         cursor: pointer;
         display: flex;
         align-items: center;
@@ -1329,8 +1329,8 @@ ${webkitScrollbar(
     }
 
     .${CLASSES.THREAD_SUBMIT}:hover {
-        background: rgba(46, 144, 250, 0.15);
-        color: #1570D6;
+        background: rgba(37, 99, 235, 0.15);
+        color: #1D4ED8;
     }
 
     .${CLASSES.CLOSE_TOOLTIP} {
@@ -1351,8 +1351,8 @@ ${webkitScrollbar(
     }
 
     @keyframes helldots-pulse {
-        0%, 100% { box-shadow: 0 0 0 0 rgba(46, 144, 250, 0.4), 0 1px 5px rgba(0,0,0,0.2); }
-        50% { box-shadow: 0 0 0 8px rgba(46, 144, 250, 0), 0 1px 5px rgba(0,0,0,0.2); }
+        0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4), 0 1px 5px rgba(0,0,0,0.2); }
+        50% { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0), 0 1px 5px rgba(0,0,0,0.2); }
     }
 
     .${CLASSES.COMMENT_OVERLAY} {
@@ -1373,8 +1373,8 @@ ${webkitScrollbar(
 
     .${CLASSES.SELECTION_RECT} {
         position: fixed;
-        border: 2px solid #2E90FA;
-        background: rgba(46, 144, 250, 0.1);
+        border: 2px solid #2563EB;
+        background: rgba(37, 99, 235, 0.1);
         pointer-events: none;
         z-index: ${Z_INDEX.TOOLTIP};
         box-sizing: border-box;
@@ -1545,7 +1545,7 @@ ${webkitScrollbar(
        the rings that were reverted elsewhere for visual parity. */
     .${CLASSES.CONFIRM_CANCEL}:focus-visible,
     .${CLASSES.CONFIRM_ACCEPT}:focus-visible {
-        outline: 2px solid #2E90FA;
+        outline: 2px solid #2563EB;
         outline-offset: 2px;
     }
 
@@ -1624,7 +1624,7 @@ ${webkitScrollbar(
     .${CLASSES.THREAD_INPUT}:focus,
     .${CLASSES.EDITOR_INPUT}:focus {
         outline: none;
-        border-color: rgba(46, 144, 250, 0.7);
+        border-color: rgba(37, 99, 235, 0.7);
     }
 
     /* --- inline editor --- */
@@ -1676,12 +1676,12 @@ ${webkitScrollbar(
     }
 
     .${CLASSES.EDITOR_SAVE} {
-        background: #2E90FA;
+        background: #2563EB;
         color: white;
     }
 
     .${CLASSES.EDITOR_SAVE}:hover:not(:disabled) {
-        background: #57A6FB;
+        background: #3B82F6;
     }
 
     /* Blanking a body is not a way to delete — the comment would keep its
@@ -2029,15 +2029,15 @@ ${webkitScrollbar(
          was painted through the text in the one-line .thread-input. */
     button:focus-visible,
     [tabindex="0"]:focus-visible {
-        outline: 2px solid #2E90FA;
+        outline: 2px solid #2563EB;
         outline-offset: 2px;
     }
 
     #${IDS.COMMENT_INPUT}:focus-visible,
     .${CLASSES.THREAD_INPUT}:focus-visible,
     .${CLASSES.EDITOR_INPUT}:focus-visible {
-        border-color: #2E90FA;
-        box-shadow: 0 0 0 3px rgba(46, 144, 250, 0.28);
+        border-color: #2563EB;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.28);
     }
 `;
 
