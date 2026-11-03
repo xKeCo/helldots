@@ -3579,3 +3579,31 @@ The margin is gone and the padding stays. The strip now sits 4px in from the
 content edge — measurable, not noticeable, and paid once by thumbnails rather
 than by every element in the scroll container. `styles.test.js` asserts both
 halves: that the padding is still there, and that nothing pulls it back.
+
+## The README becomes a landing page; the docs site holds the depth
+
+The README had reached 863 lines, and nearly every section had a twin on
+https://helldots.kcollazos.me/docs — captures, identity, triage, metrics,
+deep links, realtime, the full option, event and method references. Two
+copies of the same prose drift, and the README was the one nobody re-read
+after a docs edit.
+
+Two shapes were on the table. Keep the README exhaustive and treat the site
+as a nicer rendering of it, or cut the README to what a first visit needs and
+link out for the rest. The second won, with one constraint: the README is
+also the package page on npm, and many readers never click through, so it
+stays self-sufficient for the basic path — install, quick start, wiring a
+backend, SSR and SPA setup, the common options. Everything beyond that lives
+on the site, one link per guide.
+
+Before cutting, every removed section was checked against its docs page.
+The handful of facts that existed only in the README (screenshot size range,
+where reactions and history appear, the rasterisation floor, the advice on
+lowering `captureTimeout`) moved to the docs, and one wording conflict was
+settled against the code: `authorId` on a record written before the field
+existed loads as `null`.
+
+The demo GIF and every link are absolute URLs on `main`, because npm renders
+neither relative paths nor SVG. The accepted cost: the GIF only resolves once
+the change reaches `main`, and it has to be re-recorded by hand when the UI
+changes visibly.
